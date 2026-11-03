@@ -194,17 +194,17 @@ test('個人總戰績跨團累計、同名文件在不同團仍各算一場',()=
   assert.equal(r.byGroup.find(x=>x.groupId==='gamma').wins,1);
 });
 test('帳號牌組僅允許持有者寫入、舊戰團牌組變成唯讀',()=>{
-  assert.ok(currentRules.includes('match /users/{uid}/decks/{deckId}'));
-  assert.ok(currentRules.includes('request.resource.data.ownerUid == uid'));
-  assert.ok(currentRules.includes('allow create, update, delete: if false;'));
-  assert.ok(firebaseAdapterSource.includes('async function migrateMyLegacyDecks'));
-  assert.ok(firebaseAdapterSource.includes('personalDeckRef(uid,legacy.id)'));
-  assert.ok(firebaseAdapterSource.includes('if(old.ownerUid!==uid||old.active===false)continue;'));
+  assert.ok(securityRules.includes('match /users/{uid}/decks/{deckId}'));
+  assert.ok(securityRules.includes('request.resource.data.ownerUid == uid'));
+  assert.ok(securityRules.includes('allow create, update, delete: if false;'));
+  assert.ok(authAdapterCode.includes('async function migrateMyLegacyDecks'));
+  assert.ok(authAdapterCode.includes('personalDeckRef(uid,legacy.id)'));
+  assert.ok(authAdapterCode.includes('if(old.ownerUid!==uid||old.active===false)continue;'));
 });
 test('個人名片獨立於私人使用者資料，僅本人可編輯',()=>{
-  assert.ok(currentRules.includes('match /playerCards/{uid}'));
-  assert.ok(currentRules.includes('uid == request.auth.uid'));
-  assert.ok(currentRules.includes("'showGroupStats','showOverallStats'"));
-  assert.ok(firebaseAdapterSource.includes('async savePlayerCard(uid,card)'));
-  assert.ok(firebaseAdapterSource.includes('showBio:!!card.showBio'));
+  assert.ok(securityRules.includes('match /playerCards/{uid}'));
+  assert.ok(securityRules.includes('uid == request.auth.uid'));
+  assert.ok(securityRules.includes("'showGroupStats','showOverallStats'"));
+  assert.ok(authAdapterCode.includes('async savePlayerCard(uid,card)'));
+  assert.ok(authAdapterCode.includes('showBio:!!card.showBio'));
 });

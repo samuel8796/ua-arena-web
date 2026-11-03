@@ -1,0 +1,10 @@
+# Local tooling and credentials
+node_modules/
+.firebase/
+.env
+.env.*
+*.local
+*service-account*.json
+*adminsdk*.json
+.DS_Store
+Thumbs.db

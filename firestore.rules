@@ -1,0 +1,238 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function member(gid) {
+      return signedIn() && exists(/databases/$(database)/documents/groups/$(gid)/members/$(request.auth.uid));
+    }
+    function groupOwner(gid) {
+      return signedIn() && get(/databases/$(database)/documents/groups/$(gid)).data.createdBy == request.auth.uid;
+    }
+    function memberExists(gid, uid) {
+      return exists(/databases/$(database)/documents/groups/$(gid)/members/$(uid));
+    }
+    function activeDeck(gid, deckId, playerId) {
+      let deck = get(/databases/$(database)/documents/groups/$(gid)/decks/$(deckId)).data;
+      return deck.ownerUid == playerId && deck.active == true;
+    }
+    function validDeckData(d) {
+      return d.keys().hasAll(['name','color','imageData','ownerUid','createdBy','active','createdAt','updatedAt'])
+        && d.keys().hasOnly(['name','color','imageData','ownerUid','createdBy','active','createdAt','updatedAt'])
+        && d.name is string && d.name.size() > 0 && d.name.size() <= 42
+        && d.color in ['RED','BLUE','GREEN','YELLOW','PURPLE','MULTI','OTHER']
+        && d.imageData is string && d.imageData.size() <= 160000
+        && d.ownerUid is string && d.createdBy is string && d.active is bool;
+    }
+    match /users/{uid} {
+      allow get: if signedIn() && uid == request.auth.uid;
+      allow list: if false;
+      allow create, update: if signedIn() && uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['nickname','groups','updatedAt'])
+        && request.resource.data.groups is list
+        && request.resource.data.groups.size() <= 50;
+      allow delete: if false;
+    }
+    match /groups/{gid} {
+      // Knowing the random invite URL permits reading only the group name/metadata.
+      // It does NOT grant access to player, deck or match collections.
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['name','createdBy','createdAt'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 2
+        && request.resource.data.name.size() <= 40
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdAt == request.time;
+      allow update: if groupOwner(gid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 2
+        && request.resource.data.name.size() <= 40;
+      allow delete: if false;
+
+      match /members/{uid} {
+        allow get: if signedIn() && (uid == request.auth.uid || member(gid));
+        allow list: if member(gid);
+        allow create: if signedIn() && uid == request.auth.uid
+          && request.resource.data.keys().hasOnly(['uid','nickname','role','joinedAt'])
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.nickname is string
+          && request.resource.data.nickname.size() > 0
+          && request.resource.data.nickname.size() <= 24
+          && request.resource.data.joinedAt == request.time
+          && request.resource.data.role == (groupOwner(gid) ? 'owner' : 'member');
+        allow update: if signedIn() && uid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nickname'])
+          && request.resource.data.nickname is string
+          && request.resource.data.nickname.size() > 0
+          && request.resource.data.nickname.size() <= 24;
+        allow delete: if false;
+      }
+      match /decks/{deckId} {
+        allow get, list: if member(gid);
+        allow create: if member(gid)
+          && validDeckData(request.resource.data)
+          && memberExists(gid,request.resource.data.ownerUid)
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.active == true
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+        allow update: if member(gid)
+          && (resource.data.ownerUid == request.auth.uid || resource.data.createdBy == request.auth.uid || groupOwner(gid))
+          && resource.data.active == true
+          && validDeckData(request.resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','color','imageData','active','updatedAt'])
+          && request.resource.data.updatedAt == request.time;
+        allow delete: if false;
+      }
+      // Persisted Quick Match sessions: synchronized by Firestore transactions.
+      // Timings are client-observed and must be treated as friendly estimates, not tournament-grade adjudication.
+      match /quickMatches/{quickId} {
+        allow get, list: if member(gid);
+        allow create: if member(gid)
+          && request.resource.data.keys().hasAll(['playerA','playerB','deckA','deckB','timerEnabled','status','createdBy','createdAt','createdAtMs','updatedAt','updatedBy','startedAtMs','activePlayer','activeSinceMs','turns','finishedAtMs','resultMatchId','revision','lastActionAtMs'])
+          && request.resource.data.keys().hasOnly(['playerA','playerB','deckA','deckB','timerEnabled','status','createdBy','createdAt','createdAtMs','updatedAt','updatedBy','startedAtMs','activePlayer','activeSinceMs','turns','finishedAtMs','resultMatchId','revision','lastActionAtMs'])
+          && request.resource.data.timerEnabled == true
+          && request.resource.data.playerA != request.resource.data.playerB
+          && memberExists(gid,request.resource.data.playerA)
+          && memberExists(gid,request.resource.data.playerB)
+          && activeDeck(gid,request.resource.data.deckA,request.resource.data.playerA)
+          && activeDeck(gid,request.resource.data.deckB,request.resource.data.playerB)
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.createdAtMs is int
+          && request.resource.data.createdAtMs >= request.time.toMillis() - 60000
+          && request.resource.data.createdAtMs <= request.time.toMillis() + 60000
+          && request.resource.data.status == 'ready'
+          && request.resource.data.startedAtMs == 0
+          && request.resource.data.activeSinceMs == 0
+          && request.resource.data.activePlayer == ''
+          && request.resource.data.turns == []
+          && request.resource.data.finishedAtMs == 0
+          && request.resource.data.resultMatchId == ''
+          && request.resource.data.revision == 0
+          && request.resource.data.lastActionAtMs == request.resource.data.createdAtMs;
+        allow update: if member(gid)
+          && resource.data.status in ['ready','running']
+          && request.resource.data.keys().hasOnly(['playerA','playerB','deckA','deckB','timerEnabled','status','createdBy','createdAt','createdAtMs','updatedAt','updatedBy','startedAtMs','activePlayer','activeSinceMs','turns','finishedAtMs','resultMatchId','revision','lastActionAtMs'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','startedAtMs','activePlayer','activeSinceMs','turns','finishedAtMs','resultMatchId','revision','lastActionAtMs','updatedAt','updatedBy'])
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.revision == resource.data.revision + 1
+          && request.resource.data.lastActionAtMs is int
+          && request.resource.data.lastActionAtMs >= resource.data.lastActionAtMs
+          && request.resource.data.lastActionAtMs >= request.time.toMillis() - 60000
+          && request.resource.data.lastActionAtMs <= request.time.toMillis() + 60000
+          && request.resource.data.startedAtMs is int
+          && request.resource.data.activeSinceMs is int
+          && request.resource.data.turns is list
+          && request.resource.data.turns.size() <= 200
+          && request.resource.data.finishedAtMs is int
+          && request.resource.data.resultMatchId is string
+          && request.resource.data.activePlayer in ['',resource.data.playerA,resource.data.playerB]
+          && request.resource.data.status in ['running','finished','cancelled']
+          && (
+            // Start turn: no active turn yet, cannot alter closed turn history.
+            (request.resource.data.status == 'running'
+              && resource.data.activePlayer == ''
+              && request.resource.data.activePlayer in [resource.data.playerA,resource.data.playerB]
+              && request.resource.data.activeSinceMs == request.resource.data.lastActionAtMs
+              && request.resource.data.startedAtMs == (resource.data.startedAtMs == 0 ? request.resource.data.activeSinceMs : resource.data.startedAtMs)
+              && request.resource.data.turns == resource.data.turns
+              && request.resource.data.finishedAtMs == 0
+              && request.resource.data.resultMatchId == '')
+            ||
+            // End turn: close the currently running player's turn.
+            (request.resource.data.status == 'running'
+              && resource.data.activePlayer != ''
+              && request.resource.data.activePlayer == ''
+              && request.resource.data.activeSinceMs == 0
+              && request.resource.data.startedAtMs == resource.data.startedAtMs
+              && request.resource.data.turns.size() == resource.data.turns.size() + 1
+              && request.resource.data.turns[resource.data.turns.size()].playerId == resource.data.activePlayer
+              && request.resource.data.turns[resource.data.turns.size()].startedAtMs == resource.data.activeSinceMs
+              && request.resource.data.turns[resource.data.turns.size()].endedAtMs == request.resource.data.lastActionAtMs
+              && request.resource.data.turns[resource.data.turns.size()].durationMs == request.resource.data.lastActionAtMs - resource.data.activeSinceMs
+              && request.resource.data.finishedAtMs == 0
+              && request.resource.data.resultMatchId == '')
+            ||
+            // Finish: match and timer result must commit atomically.
+            (request.resource.data.status == 'finished'
+              && request.resource.data.activePlayer == ''
+              && request.resource.data.activeSinceMs == 0
+              && request.resource.data.startedAtMs == resource.data.startedAtMs
+              && request.resource.data.finishedAtMs == request.resource.data.lastActionAtMs
+              && request.resource.data.resultMatchId.size() > 0
+              && request.resource.data.turns.size() == resource.data.turns.size() + (resource.data.activePlayer == '' ? 0 : 1)
+              && (resource.data.activePlayer == '' || (
+                request.resource.data.turns[resource.data.turns.size()].playerId == resource.data.activePlayer
+                && request.resource.data.turns[resource.data.turns.size()].startedAtMs == resource.data.activeSinceMs
+                && request.resource.data.turns[resource.data.turns.size()].endedAtMs == request.resource.data.lastActionAtMs
+                && request.resource.data.turns[resource.data.turns.size()].durationMs == request.resource.data.lastActionAtMs - resource.data.activeSinceMs
+              ))
+              && getAfter(/databases/$(database)/documents/groups/$(gid)/matches/$(request.resource.data.resultMatchId)).data.quickMatchId == quickId)
+            ||
+            (request.resource.data.status == 'cancelled'
+              && request.resource.data.activePlayer == ''
+              && request.resource.data.activeSinceMs == 0
+              && request.resource.data.startedAtMs == resource.data.startedAtMs
+              && request.resource.data.finishedAtMs == request.resource.data.lastActionAtMs
+              && request.resource.data.turns == resource.data.turns
+              && request.resource.data.resultMatchId == '')
+          );
+        allow delete: if false;
+      }
+      match /matches/{matchId} {
+        allow get, list: if member(gid);
+        allow create: if member(gid)
+          && request.resource.data.keys().hasAll(['playerA','deckA','playerB','deckB','winner','note','recordedBy','status','createdAt'])
+          && request.resource.data.keys().hasOnly(['playerA','deckA','playerB','deckB','winner','note','recordedBy','status','createdAt','quickMatchId','timing'])
+          && request.resource.data.playerA is string && request.resource.data.playerB is string
+          && request.resource.data.playerA != request.resource.data.playerB
+          && memberExists(gid,request.resource.data.playerA)
+          && memberExists(gid,request.resource.data.playerB)
+          && activeDeck(gid,request.resource.data.deckA,request.resource.data.playerA)
+          && activeDeck(gid,request.resource.data.deckB,request.resource.data.playerB)
+          && request.resource.data.winner in [request.resource.data.playerA,request.resource.data.playerB]
+          && request.resource.data.note is string && request.resource.data.note.size() <= 200
+          && request.resource.data.recordedBy == request.auth.uid
+          && request.resource.data.status == 'active'
+          && request.resource.data.createdAt == request.time
+          && ('quickMatchId' in request.resource.data) == ('timing' in request.resource.data)
+          && (!('quickMatchId' in request.resource.data) || (
+            request.resource.data.quickMatchId is string
+            && request.resource.data.timing is map
+            && request.resource.data.timing.keys().hasAll(['enabled','limitMs','elapsedMs','playerAMs','playerBMs','unattributedMs','turns','expired'])
+            && request.resource.data.timing.keys().hasOnly(['enabled','limitMs','elapsedMs','playerAMs','playerBMs','unattributedMs','turns','expired'])
+            && request.resource.data.timing.enabled == true
+            && request.resource.data.timing.limitMs == 1800000
+            && request.resource.data.timing.elapsedMs is int
+            && request.resource.data.timing.elapsedMs >= 0
+            && request.resource.data.timing.playerAMs is int
+            && request.resource.data.timing.playerAMs >= 0
+            && request.resource.data.timing.playerBMs is int
+            && request.resource.data.timing.playerBMs >= 0
+            && request.resource.data.timing.unattributedMs is int
+            && request.resource.data.timing.unattributedMs >= 0
+            && request.resource.data.timing.turns is int
+            && request.resource.data.timing.turns >= 0
+            && request.resource.data.timing.turns <= 200
+            && request.resource.data.timing.expired is bool
+            && getAfter(/databases/$(database)/documents/groups/$(gid)/quickMatches/$(request.resource.data.quickMatchId)).data.status == 'finished'
+            && getAfter(/databases/$(database)/documents/groups/$(gid)/quickMatches/$(request.resource.data.quickMatchId)).data.resultMatchId == matchId
+          ));
+        // Soft void only: no stealth edits of score or participants.
+        allow update: if member(gid)
+          && resource.data.status == 'active'
+          && (resource.data.recordedBy == request.auth.uid || groupOwner(gid))
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','cancelledAt'])
+          && request.resource.data.status == 'void'
+          && request.resource.data.cancelledAt == request.time;
+        allow delete: if false;
+      }
+    }
+  }
+}

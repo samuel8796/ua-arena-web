@@ -67,3 +67,62 @@ test('不可在已完成的對戰繼續開始回合',()=>{
   const q=changeQuickMatch(makeQuick(),'finish',{uid:'c',matchId:'done',now:origin+1000});
   assert.throws(()=>changeQuickMatch(q,'start',{uid:'c',playerId:'a',now:origin+2000}));
 });
+
+import { TOURNAMENT_MAX_PLAYERS,createBracket,startTournament,recordTournamentWinner,addTournamentEntrant,removeTournamentEntrant,publicTournamentSnapshot } from './tournament-core.mjs';
+const entrants=[{uid:'a',nickname:'Amy'},{uid:'b',nickname:'Ben'},{uid:'c',nickname:'Chris'},{uid:'d',nickname:'Dana'}];
+const tourney=(people=entrants)=>({title:'週末盃',description:'友誼賽',hostName:'Amy',createdBy:'a',publicId:'public1234567890',status:'registration',participants:people,rounds:[],champion:''});
+test('賽事容許 2 至 32 人單敗淘汰',()=>{
+  assert.equal(TOURNAMENT_MAX_PLAYERS,32);
+  assert.equal(createBracket(entrants,()=>.999).length,2);
+  assert.throws(()=>createBracket(entrants.slice(0,1)));
+  assert.throws(()=>createBracket(Array.from({length:33},(_,i)=>({uid:String(i),nickname:'P'+i}))));
+});
+test('房主能建立賽程並自動晉級',()=>{
+  let t=startTournament(tourney(),()=>.999);
+  assert.equal(t.status,'running');
+  t=recordTournamentWinner(t,0,0,t.rounds[0][0].a);
+  t=recordTournamentWinner(t,0,1,t.rounds[0][1].a);
+  assert.ok(t.rounds[1][0].a && t.rounds[1][0].b);
+  const winner=t.rounds[1][0].a;
+  t=recordTournamentWinner(t,1,0,winner);
+  assert.equal(t.status,'completed');assert.equal(t.champion,winner);
+});
+test('3 人賽事的輪空不會提前產生冠軍',()=>{
+  let t=startTournament(tourney(entrants.slice(0,3)),()=>.999);
+  assert.equal(t.status,'running');assert.equal(t.champion,'');
+  const playable=t.rounds[0].findIndex(m=>m.a&&m.b);
+  t=recordTournamentWinner(t,0,playable,t.rounds[0][playable].a);
+  assert.ok(t.rounds[1][0].a && t.rounds[1][0].b);
+});
+test('5 人賽程會安排 3 個輪空',()=>{
+  const arr=[...entrants,{uid:'e',nickname:'Eve'}];
+  const t=startTournament(tourney(arr),()=>.999);
+  assert.equal(t.rounds[0].filter(m=>m.bye).length,3);
+  assert.equal(t.status,'running');
+});
+test('不能重複登錄勝者或讓非參賽者勝出',()=>{
+  let t=startTournament(tourney(),()=>.999);
+  assert.throws(()=>recordTournamentWinner(t,0,0,'outsider'));
+  t=recordTournamentWinner(t,0,0,t.rounds[0][0].a);
+  assert.throws(()=>recordTournamentWinner(t,0,0,t.rounds[0][0].a));
+});
+test('截止報名後不能任意加入參賽者',()=>{
+  const t=addTournamentEntrant(tourney(entrants.slice(0,2)),entrants[2]);
+  assert.equal(t.participants.length,3);
+  assert.throws(()=>addTournamentEntrant(t,entrants[2]));
+  const removed=removeTournamentEntrant(t,entrants[2].uid);
+  assert.equal(removed.participants.length,2);
+  assert.throws(()=>addTournamentEntrant(startTournament(tourney()),{uid:'z',nickname:'Z'}));
+});
+test('公開觀賽資料不暴露 UID、群組 ID 或私人牌組',()=>{
+  let t=startTournament(tourney(),()=>.999);
+  const projected=publicTournamentSnapshot({...t,groupId:'SECRET-GROUP',privateEmail:'a@example.com',deckA:'private-deck'});
+  const serialized=JSON.stringify(projected);
+  assert.ok(serialized.includes('Amy'));
+  for(const confidential of ['SECRET-GROUP','a@example.com','private-deck','"uid"','groupId'])assert.ok(!serialized.includes(confidential));
+});
+test('同名參賽者不會繞過 UID 去重驗證',()=>{
+  const same=[{uid:'a',nickname:'Sam'},{uid:'a',nickname:'Sam'}];
+  assert.throws(()=>createBracket(same));
+});
+console.log('Tournament tests completed.');

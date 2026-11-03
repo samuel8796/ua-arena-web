@@ -200,3 +200,42 @@ UA_Arena_Web_v1_1/
 ## 升級建議
 
 可在下一版增加：個人檔案管理、牌組對戰相性、賽季篩選、CSV 匯入舊 Google Sheets、管理員核准邀請、圖片獨立儲存、正式官方 FAQ RAG、帳號忘記密碼與通知。
+
+---
+
+# v1.2 更新：個人資料、多對戰團、錦標賽與公開觀賽
+
+## 功能
+
+- 側邊欄「個人資料」：查看 Email、驗證狀態、所屬對戰團與當前團內戰績；修改全站暱稱與僅本人可見的簡介。暱稱會同步更新目前加入的各團玩家名單。
+- 側邊欄「我的對戰團」：同一個 Email 可加入多個獨立團，快速切換或新增／加入團；戰績與牌組仍按群組隔離。
+- 側邊欄「錦標賽」：團員建立賽事成為房主、其他團員提出報名、房主核准（或直接選入團員）；2–32 人單敗淘汰、抽籤、輪空、自動晉級、登錄最終冠軍。
+- 錦標賽公開觀賽連結：`?watch=<publicTournamentId>`，無須登入。公開 Firestore 文件只含賽事名稱、房主暱稱、參賽暱稱、賽程及勝者，不含玩家 UID、email、團 ID、私人牌組與戰績。即時監聽主持人更新。
+- 觀賽連結與加入對戰團邀請連結為兩種獨立網址。觀賽不授予加入團的權限。
+
+## 重要：第一次部署 v1.2 必須更新 Firestore Rules
+
+GitHub Pages 的部署只更新網站，**不會自動發佈 Firestore 安全規則**。新版登入及原有戰績保留，但若尚未更新 Rules，點「建立錦標賽」或儲存個人簡介會出現 `permission-denied`。
+
+1. 開啟 <https://console.firebase.google.com/project/ua-arena-web/firestore/rules>。
+2. 將目前 GitHub 專案根目錄的 `firestore.rules` **整份**貼入，不能只貼新增片段。
+3. 點 **Publish**，確認成功。舊的 groups、decks、matches、quickMatches 權限均保留。
+4. 建立一場測試錦標賽，確認參賽、核准、抽籤、公開觀賽及晉級。觀賽使用無痕模式、不登入 Firebase 進行驗證。
+
+**賽事房主**為建立該錦標賽的對戰團成員；可以編輯參賽名單、核准報名、抽籤、記錄勝者。**參賽者**為對戰團成員；可以送出報名申請，由房主核准；賽程開始後只能查看狀態，勝者由房主確認。**訪客**不需帳號，可透過公開連結唯讀觀看。
+
+## AI 規則助手：需額外一段 Firebase Console 設定
+
+依 Firebase 官方文件，2026-11-02 起 Firebase AI Logic 已要求 Firebase App Check。前端已接好 SDK 與 UA 規則提示詞，但**未設定 App Check 網站金鑰時仍會停用送出按鈕**，以防止公開 GitHub Pages 被濫用。
+
+1. 在 Firebase Console 選擇 **AI Logic** → **Get started**，選擇 **Gemini Developer API**，按照步驟啟用；不需要將 Gemini API Key 複製到網頁或 GitHub。
+2. 到 **Security → App Check**，將已註冊的 Firebase Web App 設成 **reCAPTCHA Enterprise** 提供者，新增允許網站的網域 `samuel8796.github.io`，取得**公開 Site Key**。
+3. 在 App Check → APIs，確認 **Firebase AI Logic** 已強制執行 App Check。
+4. 將可公開的 reCAPTCHA Enterprise Site Key 填進 `firebase-config.js` 的 `aiSettings.recaptchaEnterpriseSiteKey`，GitHub Pages 會重新部署。不要填秘密金鑰。可能需要先完成 Google Cloud reCAPTCHA Enterprise 網站金鑰註冊。
+5. 使用正式網站問一個 UA 規則問題。系統會顯示「AI 已啟用」。**AI 仍沒有官方規則文件的檢索資料庫**，對不確定的裁定會說明無法確認，不應當成官方判決。
+
+官方操作說明：<https://firebase.google.com/docs/ai-logic/get-started?platform=web> 、<https://firebase.google.com/docs/ai-logic/app-check>。
+
+## 錦標賽與 Quick Match 的關係
+
+目前 v1.2 錦標賽由房主在賽程中直接選勝者，未自動綁定 Quick Match 計時紀錄；一般戰績與 Quick Match 仍沿用原有獨立資料。未來可以再增加「指定一場 Quick Match 作為錦標賽對戰」以保留每回合時間證據。

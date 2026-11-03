@@ -1,8 +1,9 @@
 import { createQuickMatch, changeQuickMatch, quickMatchResult } from './quick-core.mjs';
+import { addTournamentEntrant, removeTournamentEntrant, startTournament, recordTournamentWinner, publicTournamentSnapshot } from './tournament-core.mjs';
 const K='ua-arena-demo-v1-1';
 const SAMPLE_IMAGE='';
 function seed(){
-  return {quickMatches:[],groups:{demo:{id:'demo',name:'UA 週末對戰團',createdBy:'demo-user',createdAt:Date.now()}},members:[
+  return {quickMatches:[],tournaments:[],tournamentRequests:[],profile:{nickname:'Samuel',bio:''},groups:{demo:{id:'demo',name:'UA 週末對戰團',createdBy:'demo-user',createdAt:Date.now()}},members:[
     {id:'demo-user',uid:'demo-user',nickname:'Samuel',role:'owner'},
     {id:'friend-1',uid:'friend-1',nickname:'Alex',role:'member'},
     {id:'friend-2',uid:'friend-2',nickname:'Kevin',role:'member'},
@@ -22,7 +23,7 @@ function seed(){
 }
 let data;
 function read(){try{data=JSON.parse(localStorage.getItem(K))||seed();}catch{data=seed()}return data;}
-function save(){try{localStorage.setItem(K,JSON.stringify(data))}catch{}listeners.forEach(cb=>cb({members:data.members,decks:data.decks,matches:data.matches,quickMatches:data.quickMatches||[]}));}
+function save(){try{localStorage.setItem(K,JSON.stringify(data))}catch{}listeners.forEach(cb=>cb({members:data.members,decks:data.decks,matches:data.matches,quickMatches:data.quickMatches||[],tournaments:data.tournaments||[]}));}
 const listeners=new Set();
 read();
 const demoUser={uid:'demo-user',displayName:'Samuel',email:'demo@ua-arena.local'};
@@ -31,10 +32,13 @@ export const demoAdapter={
   onAuth(cb){queueMicrotask(()=>cb(demoUser));return ()=>{};},
   async signIn(){return demoUser},async signUp(){return demoUser},async signInGoogle(){return demoUser},async signOut(){},
   async getMyGroups(){return Object.keys(data.groups)},
+  async getProfile(){return data.profile||{};},
+  async saveProfile(uid,nickname,bio){data.profile={nickname,bio};demoUser.displayName=nickname;data.members.filter(m=>m.uid===uid).forEach(m=>m.nickname=nickname);save();return {failures:[]};},
+  subscribePublicTournament(id,cb){const publish=()=>cb(data.tournaments.find(t=>t.publicId===id)?{...publicTournamentSnapshot(data.tournaments.find(t=>t.publicId===id)),id}:null);publish();const fn=()=>publish();listeners.add(fn);return ()=>listeners.delete(fn);},
   async getGroup(gid){return data.groups[gid]||data.groups.demo},
   async createGroup(uid,nickname,title){const id=`demo-${Date.now().toString(36)}`;data.groups[id]={id,name:title,createdBy:uid};data.members.push({id:uid,uid,nickname,role:'owner'});save();return id;},
   async joinGroup(uid,nickname,gid){if(!data.groups[gid])throw new Error('沒有這個示範群組');save();return gid;},
-  subscribe(gid,cb){listeners.add(cb);queueMicrotask(()=>cb({members:data.members,decks:data.decks,matches:data.matches,quickMatches:data.quickMatches||[]}));return ()=>listeners.delete(cb);},
+  subscribe(gid,cb){listeners.add(cb);queueMicrotask(()=>cb({members:data.members,decks:data.decks,matches:data.matches,quickMatches:data.quickMatches||[],tournaments:data.tournaments||[]}));return ()=>listeners.delete(cb);},
   async addDeck(gid,uid,d){data.decks.push({...d,id:`d-${Date.now().toString(36)}`,createdBy:uid,active:true,createdAt:Date.now()});save();},
   async updateDeck(gid,id,d){Object.assign(data.decks.find(x=>x.id===id),d);save();},
   async archiveDeck(gid,id){data.decks.find(x=>x.id===id).active=false;save();},
@@ -54,6 +58,26 @@ export const demoAdapter={
     data.matches.unshift({id:matchId,playerA:before.playerA,playerB:before.playerB,deckA:before.deckA,deckB:before.deckB,
       winner,note,recordedBy:uid,status:'active',createdAt:Date.now(),quickMatchId:id,timing:quickMatchResult(next,next.finishedAtMs)});
     save();},
+
+  subscribeTournamentRequests(gid,id,cb){const fn=()=>cb((data.tournamentRequests||[]).filter(r=>r.tournamentId===id));fn();listeners.add(fn);return ()=>listeners.delete(fn);},
+  async hasTournamentRequest(gid,id,uid){return (data.tournamentRequests||[]).some(r=>r.tournamentId===id&&r.uid===uid);},
+  async requestTournamentJoin(gid,id,uid,nickname){data.tournamentRequests||=[];data.tournamentRequests.push({tournamentId:id,uid,nickname,status:'pending'});save();},
+  async approveTournamentRequest(gid,id,uid,hostUid){await this.changeTournament(gid,id,hostUid,'add',uid);data.tournamentRequests=data.tournamentRequests.filter(r=>!(r.tournamentId===id&&r.uid===uid));save();},
+  async createTournament(gid,uid,title,description,hostName){
+    const id=`t-${Date.now().toString(36)}`,publicId=`p-${id}`;
+    data.tournaments ||= [];data.tournaments.push({id,publicId,title,description,hostName,status:'registration',createdBy:uid,participants:[],rounds:[],champion:'',createdAt:Date.now()});save();return id;
+  },
+  async changeTournament(gid,id,uid,action,arg){
+    const idx=data.tournaments.findIndex(t=>t.id===id);if(idx<0)throw new Error('賽事不存在。');
+    const cur=data.tournaments[idx];if(cur.createdBy!==uid)throw new Error('只有房主可操作。');let next;
+    if(action==='add')next=addTournamentEntrant(cur,data.members.find(p=>p.uid===arg)||{uid:arg,nickname:'參賽者'});
+    else if(action==='remove')next=removeTournamentEntrant(cur,arg);
+    else if(action==='start')next=startTournament(cur);
+    else if(action==='result')next=recordTournamentWinner(cur,arg.round,arg.match,arg.winner);
+    else if(action==='cancel'&&cur.status==='registration')next={...cur,status:'cancelled'};
+    else throw new Error('操作不允許。');
+    data.tournaments[idx]={...next,id,publicId:cur.publicId};save();
+  },
 
   async askRule(){throw new Error('展示模式尚未連接 Gemini。');}
 };

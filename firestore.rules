@@ -27,9 +27,51 @@ service cloud.firestore {
       allow get: if signedIn() && uid == request.auth.uid;
       allow list: if false;
       allow create, update: if signedIn() && uid == request.auth.uid
-        && request.resource.data.keys().hasOnly(['nickname','groups','updatedAt'])
+        && request.resource.data.keys().hasOnly(['nickname','bio','groups','updatedAt'])
+        && request.resource.data.nickname is string
+        && request.resource.data.nickname.size() >= 2
+        && request.resource.data.nickname.size() <= 24
+        && (!('bio' in request.resource.data) || (request.resource.data.bio is string && request.resource.data.bio.size() <= 160))
         && request.resource.data.groups is list
         && request.resource.data.groups.size() <= 50;
+      allow delete: if false;
+    }
+    // Public read-only tournament projection. No email, UID of entrants, group
+    // invite code, or private matches/decks are written into these documents.
+    // Only a signed-in tournament host can publish/modify a projection.
+    match /publicTournaments/{publicId} {
+      allow get: if resource.data.public == true;
+      allow list: if false;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasAll(['title','description','hostName','status','public','createdBy','participants','rounds','champion','createdAt','updatedAt'])
+        && request.resource.data.keys().hasOnly(['title','description','hostName','status','public','createdBy','participants','rounds','champion','createdAt','updatedAt'])
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.public == true
+        && request.resource.data.title is string
+        && request.resource.data.title.size() >= 2
+        && request.resource.data.title.size() <= 60
+        && request.resource.data.description is string
+        && request.resource.data.description.size() <= 240
+        && request.resource.data.hostName is string
+        && request.resource.data.hostName.size() <= 24
+        && request.resource.data.status == 'registration'
+        && request.resource.data.participants == []
+        && request.resource.data.rounds == []
+        && request.resource.data.champion == ''
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if signedIn()
+        && resource.data.createdBy == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participants','rounds','status','champion','updatedAt'])
+        && request.resource.data.public == true
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.participants is list
+        && request.resource.data.participants.size() <= 32
+        && request.resource.data.rounds is list
+        && request.resource.data.rounds.size() <= 5
+        && request.resource.data.champion is string
+        && request.resource.data.champion.size() <= 24
+        && request.resource.data.status in ['registration','running','completed','cancelled'];
       allow delete: if false;
     }
     match /groups/{gid} {
@@ -68,6 +110,62 @@ service cloud.firestore {
           && request.resource.data.nickname.size() > 0
           && request.resource.data.nickname.size() <= 24;
         allow delete: if false;
+      }
+      // Private tournament; only this group's members may list/read.
+      // The host owns the bracket and results. Public spectators get a separately
+      // projected document (display names only) under /publicTournaments.
+      match /tournaments/{tournamentId} {
+        allow get, list: if member(gid);
+        allow create: if member(gid)
+          && request.resource.data.keys().hasAll(['title','description','hostName','status','createdBy','publicId','participants','rounds','champion','createdAt','updatedAt'])
+          && request.resource.data.keys().hasOnly(['title','description','hostName','status','createdBy','publicId','participants','rounds','champion','createdAt','updatedAt'])
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.title is string
+          && request.resource.data.title.size() >= 2
+          && request.resource.data.title.size() <= 60
+          && request.resource.data.description is string
+          && request.resource.data.description.size() <= 240
+          && request.resource.data.hostName is string
+          && request.resource.data.hostName.size() <= 24
+          && request.resource.data.publicId is string
+          && request.resource.data.publicId.size() >= 12
+          && request.resource.data.status == 'registration'
+          && request.resource.data.participants == []
+          && request.resource.data.rounds == []
+          && request.resource.data.champion == ''
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+        allow update: if member(gid)
+          && resource.data.createdBy == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participants','rounds','status','champion','updatedAt'])
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.participants is list
+          && request.resource.data.participants.size() <= 32
+          && request.resource.data.rounds is list
+          && request.resource.data.rounds.size() <= 5
+          && request.resource.data.status in ['registration','running','completed','cancelled']
+          && request.resource.data.champion is string
+          && request.resource.data.champion.size() <= 128
+          && (
+            (resource.data.status == 'registration' && request.resource.data.status in ['registration','running','cancelled'])
+            || (resource.data.status == 'running' && request.resource.data.status in ['running','completed'])
+          );
+        allow delete: if false;
+        match /requests/{uid} {
+          allow get: if member(gid) && (uid == request.auth.uid || get(/databases/$(database)/documents/groups/$(gid)/tournaments/$(tournamentId)).data.createdBy == request.auth.uid);
+          allow list: if member(gid) && get(/databases/$(database)/documents/groups/$(gid)/tournaments/$(tournamentId)).data.createdBy == request.auth.uid;
+          allow create: if member(gid)
+            && uid == request.auth.uid
+            && get(/databases/$(database)/documents/groups/$(gid)/tournaments/$(tournamentId)).data.status == 'registration'
+            && request.resource.data.keys().hasOnly(['uid','nickname','status','createdAt'])
+            && request.resource.data.uid == uid
+            && request.resource.data.nickname == get(/databases/$(database)/documents/groups/$(gid)/members/$(uid)).data.nickname
+            && request.resource.data.status == 'pending'
+            && request.resource.data.createdAt == request.time;
+          allow update: if false;
+          allow delete: if member(gid)
+            && (uid == request.auth.uid || get(/databases/$(database)/documents/groups/$(gid)/tournaments/$(tournamentId)).data.createdBy == request.auth.uid);
+        }
       }
       match /decks/{deckId} {
         allow get, list: if member(gid);

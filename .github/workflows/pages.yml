@@ -24,7 +24,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist/assets
-          cp index.html app.js core.mjs quick-core.mjs demo-adapter.js firebase-adapter.js firebase-config.js styles.css .nojekyll dist/
+          cp index.html app.js core.mjs tournament-core.mjs quick-core.mjs demo-adapter.js firebase-adapter.js firebase-config.js styles.css .nojekyll dist/
           cp assets/favicon.svg dist/assets/
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v4

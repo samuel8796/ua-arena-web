@@ -1,5 +1,5 @@
-// Firebase Web App 公開設定。身分與資料權限由 Firebase Authentication 和 Firestore Security Rules 控制。
-// 切勿將 Firebase service account、管理員金鑰、或 Gemini Developer API Key 寫入此檔案。
+// 公開 Firebase Web config；帳號與資料權限受 Authentication / Firestore Rules 控制。
+// 禁止將 Service Account、管理員私鑰、Gemini API key 寫入此檔案。
 export const firebaseConfig = {
   apiKey: "AIzaSyDq_x2ZXD7P_Ep1uG4o2OpGKmuUjTxujXM",
   authDomain: "ua-arena-web.firebaseapp.com",
@@ -10,9 +10,10 @@ export const firebaseConfig = {
   measurementId: "G-5XW9LYB2SN"
 };
 
-// 規則問答須另行啟用 Firebase AI Logic / App Check 並驗證來源。
+// AI Logic 已預留；必須在 Firebase Console 啟用 AI Logic 並設定 App Check。
+// 將公用的 reCAPTCHA Enterprise 網站金鑰填入後，方會啟用問答功能。
 export const aiSettings = {
-  enabled: false,
+  enabled: true,
   model: 'gemini-2.5-flash',
   recaptchaEnterpriseSiteKey: ''
 };

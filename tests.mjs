@@ -180,3 +180,31 @@ test('防止註冊和登入 callback 重複建立同一個人戰團',()=>{
   assert.ok(authAdapterCode.includes("const personalGroupTasks = new Map();"));
   assert.ok(authAdapterCode.includes("if(pending)return pending;"));
 });
+
+import { aggregatePersonalStats } from './core.mjs';
+test('個人總戰績跨團累計、同名文件在不同團仍各算一場',()=>{
+  const r=aggregatePersonalStats('a',{
+    alpha:[{id:'same',playerA:'a',playerB:'b',winner:'a',status:'active'},{id:'bad',playerA:'a',playerB:'b',winner:'a',status:'void'}],
+    beta:[{id:'same',playerA:'a',playerB:'c',winner:'c',status:'active'},{id:'irrelevant',playerA:'b',playerB:'c',winner:'b',status:'active'}],
+    gamma:[{id:'wild',playerA:'a',playerB:'__ua_guest__',winner:'a',status:'active'}]
+  });
+  assert.equal(r.games,3);assert.equal(r.wins,2);assert.equal(r.losses,1);assert.equal(r.rate,67);
+  assert.equal(r.byGroup.find(x=>x.groupId==='alpha').games,1);
+  assert.equal(r.byGroup.find(x=>x.groupId==='beta').losses,1);
+  assert.equal(r.byGroup.find(x=>x.groupId==='gamma').wins,1);
+});
+test('帳號牌組僅允許持有者寫入、舊戰團牌組變成唯讀',()=>{
+  assert.ok(currentRules.includes('match /users/{uid}/decks/{deckId}'));
+  assert.ok(currentRules.includes('request.resource.data.ownerUid == uid'));
+  assert.ok(currentRules.includes('allow create, update, delete: if false;'));
+  assert.ok(firebaseAdapterSource.includes('async function migrateMyLegacyDecks'));
+  assert.ok(firebaseAdapterSource.includes('personalDeckRef(uid,legacy.id)'));
+  assert.ok(firebaseAdapterSource.includes('if(old.ownerUid!==uid||old.active===false)continue;'));
+});
+test('個人名片獨立於私人使用者資料，僅本人可編輯',()=>{
+  assert.ok(currentRules.includes('match /playerCards/{uid}'));
+  assert.ok(currentRules.includes('uid == request.auth.uid'));
+  assert.ok(currentRules.includes("'showGroupStats','showOverallStats'"));
+  assert.ok(firebaseAdapterSource.includes('async savePlayerCard(uid,card)'));
+  assert.ok(firebaseAdapterSource.includes('showBio:!!card.showBio'));
+});

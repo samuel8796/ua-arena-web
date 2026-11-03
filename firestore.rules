@@ -11,9 +11,15 @@ service cloud.firestore {
     function memberExists(gid, uid) {
       return exists(/databases/$(database)/documents/groups/$(gid)/members/$(uid));
     }
+    // New decks live in the player's library. Existing group decks remain
+    // readable as a fallback so old matches and in-flight migrations survive.
     function activeDeck(gid, deckId, playerId) {
-      let deck = get(/databases/$(database)/documents/groups/$(gid)/decks/$(deckId)).data;
-      return deck.ownerUid == playerId && deck.active == true;
+      return exists(/databases/$(database)/documents/users/$(playerId)/decks/$(deckId))
+        ? (get(/databases/$(database)/documents/users/$(playerId)/decks/$(deckId)).data.ownerUid == playerId
+          && get(/databases/$(database)/documents/users/$(playerId)/decks/$(deckId)).data.active == true)
+        : (exists(/databases/$(database)/documents/groups/$(gid)/decks/$(deckId))
+          && get(/databases/$(database)/documents/groups/$(gid)/decks/$(deckId)).data.ownerUid == playerId
+          && get(/databases/$(database)/documents/groups/$(gid)/decks/$(deckId)).data.active == true);
     }
     function validDeckData(d) {
       return d.keys().hasAll(['name','color','imageData','ownerUid','createdBy','active','createdAt','updatedAt'])
@@ -47,6 +53,72 @@ service cloud.firestore {
             || (d.playerB == '__ua_guest__' && d.playerA == request.auth.uid
               && d.deckB == '__ua_guest_deck__' && activeDeck(gid,d.deckA,d.playerA)))
       );
+    }
+    // Account-owned deck library: not tied to any play group.
+    // Other signed-in users may READ deck cards for opponent selections.
+    // Only the owner may create, edit or archive them.
+    match /users/{uid}/decks/{deckId} {
+      allow get, list: if signedIn();
+      allow create: if signedIn() && uid == request.auth.uid
+        && validDeckData(request.resource.data)
+        && request.resource.data.ownerUid == uid
+        && request.resource.data.createdBy == uid
+        && request.resource.data.active == true
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if signedIn() && uid == request.auth.uid
+        && resource.data.ownerUid == uid
+        && request.resource.data.ownerUid == uid
+        && validDeckData(request.resource.data)
+        && resource.data.active == true
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['name','color','imageData','active','updatedAt'])
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+    }
+    // Opt-in public player card; it intentionally stores no email or private
+    // group identifiers. A hidden field is not copied to this document.
+    match /playerCards/{uid} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create, update: if signedIn() && uid == request.auth.uid
+        && request.resource.data.keys().hasAll([
+             'nickname','bio','showBio','showGroupStats','showOverallStats',
+             'showFavoriteDeck','favoriteDeck','totalStats','updatedAt'
+           ])
+        && request.resource.data.keys().hasOnly([
+             'nickname','bio','showBio','showGroupStats','showOverallStats',
+             'showFavoriteDeck','favoriteDeck','totalStats','updatedAt'
+           ])
+        && request.resource.data.nickname is string
+        && request.resource.data.nickname.size() >= 2
+        && request.resource.data.nickname.size() <= 24
+        && request.resource.data.bio is string
+        && request.resource.data.bio.size() <= 160
+        && request.resource.data.showBio is bool
+        && request.resource.data.showGroupStats is bool
+        && request.resource.data.showOverallStats is bool
+        && request.resource.data.showFavoriteDeck is bool
+        && request.resource.data.favoriteDeck is map
+        && request.resource.data.favoriteDeck.keys().hasOnly(['name','color'])
+        && request.resource.data.favoriteDeck.name is string
+        && request.resource.data.favoriteDeck.name.size() <= 42
+        && request.resource.data.favoriteDeck.color in ['RED','BLUE','GREEN','YELLOW','PURPLE','MULTI','OTHER']
+        && request.resource.data.totalStats is map
+        && request.resource.data.totalStats.keys().hasAll(['games','wins','losses','rate'])
+        && request.resource.data.totalStats.keys().hasOnly(['games','wins','losses','rate'])
+        && request.resource.data.totalStats.games is int
+        && request.resource.data.totalStats.wins is int
+        && request.resource.data.totalStats.losses is int
+        && request.resource.data.totalStats.rate is int
+        && request.resource.data.totalStats.games >= 0
+        && request.resource.data.totalStats.wins >= 0
+        && request.resource.data.totalStats.losses >= 0
+        && request.resource.data.totalStats.rate >= 0
+        && request.resource.data.totalStats.rate <= 100
+        && request.resource.data.totalStats.games == request.resource.data.totalStats.wins + request.resource.data.totalStats.losses
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
     }
     match /users/{uid} {
       allow get: if signedIn() && uid == request.auth.uid;
@@ -205,22 +277,11 @@ service cloud.firestore {
             && (uid == request.auth.uid || get(/databases/$(database)/documents/groups/$(gid)/tournaments/$(tournamentId)).data.createdBy == request.auth.uid);
         }
       }
+      // Legacy group decks are read-only. Signed-in owners migrate them into
+      // /users/{uid}/decks without deleting or rewriting old history.
       match /decks/{deckId} {
         allow get, list: if member(gid);
-        allow create: if member(gid)
-          && validDeckData(request.resource.data)
-          && memberExists(gid,request.resource.data.ownerUid)
-          && request.resource.data.createdBy == request.auth.uid
-          && request.resource.data.active == true
-          && request.resource.data.createdAt == request.time
-          && request.resource.data.updatedAt == request.time;
-        allow update: if member(gid)
-          && (resource.data.ownerUid == request.auth.uid || resource.data.createdBy == request.auth.uid || groupOwner(gid))
-          && resource.data.active == true
-          && validDeckData(request.resource.data)
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','color','imageData','active','updatedAt'])
-          && request.resource.data.updatedAt == request.time;
-        allow delete: if false;
+        allow create, update, delete: if false;
       }
       // Persisted Quick Match sessions: synchronized by Firestore transactions.
       // Timings are client-observed and must be treated as friendly estimates, not tournament-grade adjudication.

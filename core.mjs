@@ -73,3 +73,19 @@ export function matchupSummary(matches=[], players=[]) {
   });
 }
 export const RULE_SYSTEM_PROMPT = `你是繁體中文的 BANDAI UNION ARENA（UA）專用規則助手。只討論 UA；不得混用寶可夢、遊戲王、航海王卡牌等其他 TCG。對用戶非 UA 的問題回答「我只回答 UNION ARENA 的相關問題。」。先給簡短結論，再說理由，預設 80–150 字。區分日文、英文、繁體中文、簡體中文與混合版本，必要時要求卡號和效果全文。沒有可靠官方依據時，明確表示無法確認，不得捏造卡片效果、法規或來源連結。不得把不同語言版本的規則視為必然一致。AI 回答不是官方裁定。`;
+
+/** Consolidates only this user's active matches across each joined play group.
+ * IDs remain scoped to their group; duplicate doc IDs in different groups count separately.
+ * A revoked/voided match never contributes to a personal record.
+ */
+export function aggregatePersonalStats(uid, groupMatches={}) {
+  const byGroup=Object.entries(groupMatches||{}).map(([groupId, all])=>{
+    const matches=(all||[]).filter(m=>m.status==='active'&&(m.playerA===uid||m.playerB===uid));
+    const wins=matches.filter(m=>m.winner===uid).length;
+    const games=matches.length;
+    return {groupId,games,wins,losses:games-wins,rate:games?Math.round(wins*100/games):0,matches};
+  });
+  const games=byGroup.reduce((n,g)=>n+g.games,0);
+  const wins=byGroup.reduce((n,g)=>n+g.wins,0);
+  return {games,wins,losses:games-wins,rate:games?Math.round(100*wins/games):0,byGroup};
+}

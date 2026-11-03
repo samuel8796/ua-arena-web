@@ -42,6 +42,13 @@ export const demoAdapter={
     return Object.keys(data.groups);
   },
   async getProfile(){return data.profile||{};},
+  subscribePersonalHistory(groupIds,uid,cb){
+    const publish=()=>cb(Object.fromEntries(groupIds.map(gid=>[gid,(data.matches||[]).filter(m=>(m.groupId||'demo')===gid&&(m.playerA===uid||m.playerB===uid))])));
+    publish();listeners.add(publish);return ()=>listeners.delete(publish);
+  },
+  async getPlayerCard(uid){return (data.playerCards||{})[uid]||null;},
+  async savePlayerCard(uid,card){data.playerCards||={};data.playerCards[uid]={...card,updatedAt:Date.now()};save();},
+
   async saveProfile(uid,nickname,bio){data.profile={nickname,bio};demoUser.displayName=nickname;data.members.filter(m=>m.uid===uid).forEach(m=>m.nickname=nickname);save();return {failures:[]};},
   subscribePublicTournament(id,cb){const publish=()=>cb(data.tournaments.find(t=>t.publicId===id)?{...publicTournamentSnapshot(data.tournaments.find(t=>t.publicId===id)),id}:null);publish();const fn=()=>publish();listeners.add(fn);return ()=>listeners.delete(fn);},
   async getGroup(gid){return data.groups[gid]||data.groups.demo},
@@ -55,7 +62,7 @@ export const demoAdapter={
       tournaments:gid===personalGroupId(demoUser.uid)?[]:(data.tournaments||[])});
     send();listeners.add(send);return ()=>listeners.delete(send);
   },
-  async addDeck(gid,uid,d){data.decks.push({...d,id:`d-${Date.now().toString(36)}`,createdBy:uid,active:true,createdAt:Date.now()});save();},
+  async addDeck(gid,uid,d){if(d.ownerUid!==uid)throw new Error('只能建立自己的牌組');data.decks.push({...d,id:`d-${Date.now().toString(36)}`,createdBy:uid,active:true,createdAt:Date.now()});save();},
   async updateDeck(gid,id,d){Object.assign(data.decks.find(x=>x.id===id),d);save();},
   async archiveDeck(gid,id){data.decks.find(x=>x.id===id).active=false;save();},
   async addMatch(gid,uid,m){data.matches.unshift({...m,groupId:gid,id:`m-${Date.now().toString(36)}`,recordedBy:uid,status:'active',createdAt:Date.now()});save();},

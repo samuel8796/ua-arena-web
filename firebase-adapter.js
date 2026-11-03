@@ -4,7 +4,7 @@ import { createQuickMatch, changeQuickMatch, quickMatchResult } from './quick-co
 import { addTournamentEntrant, removeTournamentEntrant, startTournament, recordTournamentWinner, publicTournamentSnapshot } from './tournament-core.mjs';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js';
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signOut, updateProfile } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js';
-import { getFirestore, doc, collection, getDoc, setDoc, updateDoc, addDoc, onSnapshot, serverTimestamp, arrayUnion, runTransaction, writeBatch } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js';
+import { getFirestore, doc, collection, getDoc, getDocs, setDoc, updateDoc, addDoc, onSnapshot, serverTimestamp, arrayUnion, runTransaction, writeBatch } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js';
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-app-check.js';
 import { getAI, getGenerativeModel, GoogleAIBackend } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-ai.js';
 
@@ -19,6 +19,9 @@ const googleProvider = new GoogleAuthProvider();
 const groupRef = id => doc(db,'groups',id);
 const memberRef = (gid,uid) => doc(db,'groups',gid,'members',uid);
 const userRef = uid => doc(db,'users',uid);
+const personalDeckRef = (uid,id) => doc(db,'users',uid,'decks',id);
+const personalDeckCol = uid => collection(db,'users',uid,'decks');
+const playerCardRef = uid => doc(db,'playerCards',uid);
 const publicTournamentRef = id => doc(db,'publicTournaments',id);
 const publicTournamentOwnerRef = id => doc(db,'publicTournamentOwners',id);
 const tournamentRef = (gid,id) => doc(db,'groups',gid,'tournaments',id);
@@ -50,6 +53,36 @@ async function ensurePersonalGroup(uid, nickname){
   try{return await task;}
   finally{if(personalGroupTasks.get(uid)===task)personalGroupTasks.delete(uid);}
 }
+
+// Existing matches keep referencing original IDs. Copy owned group decks to
+// the account library using the SAME IDs; leave the group documents untouched.
+// This is idempotent and only the owner can execute canonical writes.
+async function migrateMyLegacyDecks(uid,groupIds){
+  let copied=0;
+  for(const gid of groupIds){
+    try{
+      const list=await getDocs(colRef(gid,'decks'));
+      for(const legacy of list.docs){
+        const old=legacy.data();
+        if(old.ownerUid!==uid||old.active===false)continue;
+        const target=personalDeckRef(uid,legacy.id);
+        if((await getDoc(target)).exists())continue;
+        await setDoc(target,{
+          ownerUid:uid,createdBy:uid,name:String(old.name||'舊牌組').slice(0,42)||'舊牌組',
+          color:['RED','BLUE','GREEN','YELLOW','PURPLE','MULTI','OTHER'].includes(old.color)?old.color:'OTHER',
+          imageData:old.imageData||'',active:old.active!==false,
+          createdAt:serverTimestamp(),updatedAt:serverTimestamp()
+        });
+        copied++;
+      }
+    }catch(err){
+      // A legacy group may no longer exist or a newly published ruleset may
+      // still be propagating. Never block sign-in or delete source records.
+      console.warn('Legacy deck migration skipped for group',gid,err);
+    }
+  }
+  return copied;
+}
 export const firebaseAdapter = {
   mode:'cloud',
   aiEnabled:Boolean(aiSettings.enabled && aiSettings.recaptchaEnterpriseSiteKey),
@@ -69,7 +102,10 @@ export const firebaseAdapter = {
     const nickname=display||auth.currentUser?.displayName||auth.currentUser?.email?.split('@')[0]||'玩家';
     await ensurePersonalGroup(uid,nickname);
     const current=await getDoc(userRef(uid));
-    return current.exists()?(current.data().groups||[]):[];
+    const groupIds=current.exists()?(current.data().groups||[]):[];
+    // Run best-effort migration without delaying account sign-in.
+    void migrateMyLegacyDecks(uid,groupIds).catch(err=>console.warn('Deck migration',err));
+    return groupIds;
   },
   async getProfile(uid){const snap=await getDoc(userRef(uid));return snap.exists()?snap.data():{};},
   async saveProfile(uid,nickname,bio,groupIds){
@@ -100,20 +136,77 @@ export const firebaseAdapter = {
     return gid;
   },
   subscribe(gid,onChange,onError){
-    const keys=['members','decks','matches','quickMatches','tournaments'];
+    const keys=['decks','matches','quickMatches','tournaments'];
     const current={members:[],decks:[],matches:[],quickMatches:[],tournaments:[]};
-    const unsubscribe=keys.map(k=>onSnapshot(colRef(gid,k),snapshot=>{
-      current[k]=snapshot.docs.map(tidy);onChange({...current});
+    const personal=new Map(), personalUnsubs=new Map();
+    const emit=()=>{
+      // Legacy decks are fallback until the owner logs in. Account-owned decks
+      // win when an ID exists in both places.
+      const joined=new Map(current.decks.map(d=>[d.id,{...d,legacy:true}]));
+      for(const entries of personal.values())for(const d of entries)joined.set(d.id,{...d,personal:true});
+      onChange({...current,decks:[...joined.values()]});
+    };
+    const unsubs=keys.map(k=>onSnapshot(colRef(gid,k),snapshot=>{
+      current[k]=snapshot.docs.map(tidy);emit();
     },onError));
-    return ()=>unsubscribe.forEach(fn=>fn());
+    unsubs.push(onSnapshot(colRef(gid,'members'),snapshot=>{
+      current.members=snapshot.docs.map(tidy);
+      const ids=new Set(current.members.map(x=>x.id));
+      for(const [uid,stop] of personalUnsubs){
+        if(!ids.has(uid)){stop();personalUnsubs.delete(uid);personal.delete(uid);}
+      }
+      for(const uid of ids){
+        if(personalUnsubs.has(uid))continue;
+        personalUnsubs.set(uid,onSnapshot(personalDeckCol(uid),snapshot=>{
+          personal.set(uid,snapshot.docs.map(tidy));emit();
+        },onError));
+      }
+      emit();
+    },onError));
+    return ()=>{unsubs.forEach(fn=>fn());personalUnsubs.forEach(fn=>fn());personalUnsubs.clear();};
+  },
+  // Listen to the current account's records from EVERY joined group. Only
+  // matches involving the account are used for its overall statistics.
+  subscribePersonalHistory(groupIds,uid,onChange,onError){
+    const byGroup={};
+    const unsubs=groupIds.map(gid=>onSnapshot(colRef(gid,'matches'),snapshot=>{
+      byGroup[gid]=snapshot.docs.map(tidy).filter(m=>m.playerA===uid||m.playerB===uid);
+      onChange({...byGroup});
+    },onError));
+    return ()=>unsubs.forEach(fn=>fn());
+  },
+  async getPlayerCard(uid){
+    const snap=await getDoc(playerCardRef(uid));
+    return snap.exists()?snap.data():null;
+  },
+  async savePlayerCard(uid,card){
+    if(auth.currentUser?.uid!==uid)throw new Error('只能修改自己的公開名片。');
+    await setDoc(playerCardRef(uid),{
+      nickname:String(card.nickname||'玩家').trim().slice(0,24),
+      bio:card.showBio?String(card.bio||'').trim().slice(0,160):'',
+      showBio:!!card.showBio,showGroupStats:!!card.showGroupStats,
+      showOverallStats:!!card.showOverallStats,showFavoriteDeck:!!card.showFavoriteDeck,
+      favoriteDeck:card.showFavoriteDeck?{name:card.favoriteDeck?.name||'',color:card.favoriteDeck?.color||'OTHER'}:{name:'',color:'OTHER'},
+      totalStats:{games:Number(card.totalStats?.games||0),wins:Number(card.totalStats?.wins||0),
+        losses:Number(card.totalStats?.losses||0),rate:Number(card.totalStats?.rate||0)},
+      updatedAt:serverTimestamp()
+    });
   },
   async addDeck(gid,uid,d){
-    await addDoc(colRef(gid,'decks'),{ownerUid:d.ownerUid,createdBy:uid,name:d.name.trim(),color:d.color,imageData:d.imageData||'',active:true,createdAt:serverTimestamp(),updatedAt:serverTimestamp()});
+    if(d.ownerUid!==uid)throw new Error('牌組只能新增到自己的帳號。');
+    await addDoc(personalDeckCol(uid),{ownerUid:uid,createdBy:uid,name:d.name.trim(),color:d.color,
+      imageData:d.imageData||'',active:true,createdAt:serverTimestamp(),updatedAt:serverTimestamp()});
   },
   async updateDeck(gid,id,d){
-    await updateDoc(doc(db,'groups',gid,'decks',id),{name:d.name.trim(),color:d.color,imageData:d.imageData||'',updatedAt:serverTimestamp()});
+    const uid=auth.currentUser?.uid;
+    if(!uid||d.ownerUid!==uid)throw new Error('只能修改自己的牌組。');
+    await updateDoc(personalDeckRef(uid,id),{name:d.name.trim(),color:d.color,imageData:d.imageData||'',updatedAt:serverTimestamp()});
   },
-  async archiveDeck(gid,id){await updateDoc(doc(db,'groups',gid,'decks',id),{active:false,updatedAt:serverTimestamp()});},
+  async archiveDeck(gid,id){
+    const uid=auth.currentUser?.uid;
+    if(!uid)throw new Error('請先登入。');
+    await updateDoc(personalDeckRef(uid,id),{active:false,updatedAt:serverTimestamp()});
+  },
   async addMatch(gid,uid,m){
     await addDoc(colRef(gid,'matches'),{playerA:m.playerA,deckA:m.deckA,playerB:m.playerB,deckB:m.deckB,winner:m.winner,
       ...(m.guestDeck?{guestDeck:{name:m.guestDeck.name.trim(),color:m.guestDeck.color}}:{}),

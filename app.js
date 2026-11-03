@@ -1,5 +1,5 @@
 import { firebaseConfig, aiSettings } from './firebase-config.js';
-import { COLORS, colorOf, safeText as e, shortId, formatDate, assertMatch, computeStats, GUEST_PLAYER_ID, GUEST_DECK_ID, guestPlayer, personalGroupId, isGuestMatch, guestDeckLabel } from './core.mjs';
+import { COLORS, colorOf, safeText as e, shortId, formatDate, assertMatch, computeStats, aggregatePersonalStats, GUEST_PLAYER_ID, GUEST_DECK_ID, guestPlayer, personalGroupId, isGuestMatch, guestDeckLabel } from './core.mjs';
 import { demoAdapter } from './demo-adapter.js';
 import { QUICK_MATCH_LIMIT_MS, quickClock, mmss } from './quick-core.mjs';
 
@@ -9,8 +9,8 @@ const safeStoreSet=(k,v)=>{try{localStorage.setItem(k,v)}catch{}};
 const app=$('#app');
 const configured=Boolean(firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId);
 const params=new URLSearchParams(location.search);
-let adapter=null, unsub=()=>{}, tournamentRequestUnsub=()=>{}, toastTimer;
-const state={user:null,profile:{},groupDetails:{},tournaments:[],tournamentRequests:[],myTournamentRequest:false,tournamentId:'',publicTournament:null,publicWatchError:'',groupId:'',groupIds:[],group:null,players:[],decks:[],matches:[],tab:'overview',modal:null,draft:{},filter:'ALL',playerFilter:'',inviteId:params.get('join')||'',authMode:'login',preview:false,rulesReply:'',rulesQuestion:'',rulesEdition:'繁體中文版',busy:false,quickMatches:[],quickSessionId:'',quickCreate:true,quickDraft:{},quickPending:null,quickResultOpen:false};
+let adapter=null, unsub=()=>{}, historyUnsub=()=>{}, tournamentRequestUnsub=()=>{}, toastTimer;
+const state={user:null,profile:{},personalHistory:{},historyReady:false,myCard:null,playerCard:null,groupDetails:{},tournaments:[],tournamentRequests:[],myTournamentRequest:false,tournamentId:'',publicTournament:null,publicWatchError:'',groupId:'',groupIds:[],group:null,players:[],decks:[],matches:[],tab:'overview',modal:null,draft:{},filter:'ALL',playerFilter:'',inviteId:params.get('join')||'',authMode:'login',preview:false,rulesReply:'',rulesQuestion:'',rulesEdition:'繁體中文版',busy:false,quickMatches:[],quickSessionId:'',quickCreate:true,quickDraft:{},quickPending:null,quickResultOpen:false};
 const player=id=>state.players.find(x=>x.id===id);
 const playerName=id=>player(id)?.nickname||'未知玩家';
 const deck=id=>state.decks.find(x=>x.id===id);
@@ -19,6 +19,7 @@ const battleDeckName=(m,side)=>guestDeckLabel(m,side)||deckName(m[side==='A'?'de
 const icon={overview:'◈',matches:'⚔',decks:'▤',players:'♟',rules:'✦',quick:'⏱',tournaments:'🏆',groups:'⇄',profile:'◉',more:'☰'};
 const pathIcon=(i)=>icon[i]||'◈';
 const getStats=()=>computeStats(state.players,state.decks,state.matches);
+const ownStats=()=>aggregatePersonalStats(state.user?.uid||'',state.personalHistory);
 const isOwner=()=>state.group?.createdBy===state.user?.uid;
 const isPersonal=()=>state.groupId===personalGroupId(state.user?.uid||'');
 const guardedImage=src=>typeof src==='string' && /^data:image\/(webp|jpeg);base64,[A-Za-z0-9+/=]+$/.test(src) ? src : '';
@@ -53,7 +54,7 @@ function shell(content){
 }
 function overviewPage(){
   const s=getStats(),me=s.players.find(x=>x.id===state.user?.uid)||{games:0,wins:0,rate:0,favorite:null};
-  return `<div class="page-head"><div><div class="label-up">DASHBOARD / OVERVIEW</div><h1 style="margin-top:7px">歡迎回到競技場，${e(userLabel())}。</h1><p>你的每一次對決，都在這裡留下足跡。</p></div><button class="btn btn-primary" data-action="new-match">＋ 登錄對戰</button></div><section class="hero"><div class="hero-content"><div class="eyebrow">YOUR NEXT MATCH STARTS HERE</div><h2>下一場，誰會拿下勝利？</h2><p>不論是你自己參戰，還是幫朋友代填，都能快速登錄兩位玩家的對戰結果。</p><button class="btn btn-primary btn-sm" data-action="open-quick">⏱ Quick Match</button></div></section><div class="metrics"><div class="metric"><div class="metric-label">團隊累積對戰</div><div class="metric-num">${n(s.totalMatches)}</div><div class="metric-foot">ALL MATCHES</div></div><div class="metric"><div class="metric-label">我的勝率</div><div class="metric-num mint">${percent(me.rate)}</div><div class="metric-foot">PERSONAL WIN RATE</div></div><div class="metric"><div class="metric-label">我的勝場</div><div class="metric-num purple">${n(me.wins)}</div><div class="metric-foot">VICTORIES</div></div><div class="metric"><div class="metric-label">牌組收藏數</div><div class="metric-num gold">${n(state.decks.filter(x=>x.active!==false).length)}</div><div class="metric-foot">ALL ACTIVE DECKS</div></div></div><div class="two-col"><section class="card"><div class="section-head"><h3>⚔ 最近對戰</h3><button class="text-link" data-tab="matches">查看全部 →</button></div>${recentList(s.activeMatches.slice().sort((a,b)=>dateNum(b.createdAt)-dateNum(a.createdAt)).slice(0,6))}</section><section class="card"><div class="section-head"><h3>♛ 勝場排行榜</h3><button class="text-link" data-tab="players">完整排行 →</button></div>${leaderRows(s.leaderboard.slice(0,5))}</section></div>`;
+  return `<div class="page-head"><div><div class="label-up">DASHBOARD / OVERVIEW</div><h1 style="margin-top:7px">歡迎回到競技場，${e(userLabel())}。</h1><p>你的每一次對決，都在這裡留下足跡。</p></div><button class="btn btn-primary" data-action="new-match">＋ 登錄對戰</button></div><section class="hero"><div class="hero-content"><div class="eyebrow">YOUR NEXT MATCH STARTS HERE</div><h2>下一場，誰會拿下勝利？</h2><p>不論是你自己參戰，還是幫朋友代填，都能快速登錄兩位玩家的對戰結果。</p><button class="btn btn-primary btn-sm" data-action="open-quick">⏱ Quick Match</button></div></section><div class="metrics"><div class="metric"><div class="metric-label">團隊累積對戰</div><div class="metric-num">${n(s.totalMatches)}</div><div class="metric-foot">ALL MATCHES</div></div><div class="metric"><div class="metric-label">我的勝率</div><div class="metric-num mint">${percent(me.rate)}</div><div class="metric-foot">PERSONAL WIN RATE</div></div><div class="metric"><div class="metric-label">我的勝場</div><div class="metric-num purple">${n(me.wins)}</div><div class="metric-foot">VICTORIES</div></div><div class="metric"><div class="metric-label">牌組收藏數</div><div class="metric-num gold">${n(state.decks.filter(x=>x.active!==false&&x.ownerUid===state.user?.uid).length)}</div><div class="metric-foot">ALL ACTIVE DECKS</div></div></div><div class="two-col"><section class="card"><div class="section-head"><h3>⚔ 最近對戰</h3><button class="text-link" data-tab="matches">查看全部 →</button></div>${recentList(s.activeMatches.slice().sort((a,b)=>dateNum(b.createdAt)-dateNum(a.createdAt)).slice(0,6))}</section><section class="card"><div class="section-head"><h3>♛ 勝場排行榜</h3><button class="text-link" data-tab="players">完整排行 →</button></div>${leaderRows(s.leaderboard.slice(0,5))}</section></div>`;
 }
 function dateNum(d){return d?.seconds?d.seconds*1000:(d?.toDate?.()?.getTime?.()||new Date(d||0).getTime()||0)}
 function recentList(matches){if(!matches.length)return `<div class="empty"><span class="empty-icon">⚔</span><h3>還沒有對戰紀錄</h3><p>先記錄第一場，讓戰績開始累積。</p><button class="btn btn-primary btn-sm" data-action="new-match">登錄第一場</button></div>`;
@@ -66,10 +67,10 @@ function matchesPage(){
   return `<div class="page-head"><div><div class="label-up">MATCH HISTORY / BATTLE LOG</div><h1 style="margin-top:7px">對戰紀錄</h1><p>完整追蹤每一場勝負，不論誰是參賽者，都能由一位成員代為填寫。</p></div><button class="btn btn-primary" data-action="new-match">＋ 新增戰績</button></div><div class="filter-row"><select id="match-filter"><option value="">所有玩家</option>${state.players.map(p=>`<option value="${e(p.id)}" ${state.playerFilter===p.id?'selected':''}>${e(p.nickname)}</option>`).join('')}</select><span class="tag">${selected.filter(m=>m.status==='active').length} 場有效對戰</span></div><section class="card table-wrap">${!rows?'<div class="empty">目前沒有對戰紀錄</div>':`<table class="table"><thead><tr><th>比賽</th><th>玩家 A</th><th></th><th>玩家 B</th><th>勝利者</th><th>雙方用時 A / B</th><th>紀錄者</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table>`}</section>`;
 }
 function decksPage(){
-  const filtered=state.decks.filter(d=>d.active!==false && (state.filter==='ALL'||d.color===state.filter));
-  return `<div class="page-head"><div><div class="label-up">DECK COLLECTION / LIBRARY</div><h1 style="margin-top:7px">牌組收藏</h1><p>收藏你與朋友的牌組，圖片、名稱與顏色，一目了然。</p></div><button class="btn btn-primary" data-action="new-deck">＋ 新增牌組</button></div><div class="filter-row"><button class="tab-chip ${state.filter==='ALL'?'active':''}" data-color-filter="ALL">全部 · ${state.decks.filter(x=>x.active!==false).length}</button>${COLORS.map(c=>`<button class="tab-chip ${state.filter===c.id?'active':''}" data-color-filter="${c.id}"><span class="dot" style="background:${c.hex};margin-right:5px"></span>${c.name}</button>`).join('')}</div><div class="deck-grid">${filtered.length?filtered.map(deckCard).join(''):`<div class="empty" style="grid-column:1/-1"><span class="empty-icon">▤</span><h3>還沒有牌組</h3><p>新增圖片、名稱與顏色，建立你的第一副牌組。</p><button class="btn btn-primary btn-sm" data-action="new-deck">新增牌組</button></div>`}</div>`;
+  const filtered=state.decks.filter(d=>d.ownerUid===state.user?.uid&&d.active!==false&&(state.filter==='ALL'||d.color===state.filter));
+  return `<div class="page-head"><div><div class="label-up">ACCOUNT DECK LIBRARY / PERSONAL</div><h1 style="margin-top:7px">牌組收藏</h1><p>你建立的牌組跟著帳號，加入新戰團後直接共用，不必重新上傳。</p></div><button class="btn btn-primary" data-action="new-deck">＋ 新增牌組</button></div><div class="filter-row"><button class="tab-chip ${state.filter==='ALL'?'active':''}" data-color-filter="ALL">全部 · ${state.decks.filter(x=>x.active!==false&&x.ownerUid===state.user?.uid).length}</button>${COLORS.map(c=>`<button class="tab-chip ${state.filter===c.id?'active':''}" data-color-filter="${c.id}"><span class="dot" style="background:${c.hex};margin-right:5px"></span>${c.name}</button>`).join('')}</div><div class="deck-grid">${filtered.length?filtered.map(deckCard).join(''):`<div class="empty" style="grid-column:1/-1"><span class="empty-icon">▤</span><h3>還沒有牌組</h3><p>新增圖片、名稱與顏色，建立你的第一副牌組。</p><button class="btn btn-primary btn-sm" data-action="new-deck">新增牌組</button></div>`}</div>`;
 }
-function deckCard(d){const cover=guardedImage(d.imageData),canEdit=d.createdBy===state.user?.uid||d.ownerUid===state.user?.uid||isOwner();return `<article class="deck-card"><div class="deck-cover">${cover?`<img src="${cover}" alt="${e(d.name)} 封面">`:'<span class="deck-placeholder">UA</span>'}<span class="deck-color"><span class="dot" style="background:${colorOf(d.color).hex}"></span> ${e(colorOf(d.color).name)}</span></div><div class="deck-info"><h3>${e(d.name)}</h3><p>持有者：${e(playerName(d.ownerUid))}</p><div class="deck-actions">${canEdit?`<button class="btn btn-ghost btn-sm" data-action="edit-deck" data-id="${e(d.id)}">編輯</button><button class="btn btn-ghost btn-sm" data-action="archive-deck" data-id="${e(d.id)}">封存</button>`:'<span class="tag">朋友的牌組</span>'}</div></div></article>`}
+function deckCard(d){const cover=guardedImage(d.imageData),canEdit=d.ownerUid===state.user?.uid&&!d.legacy;return `<article class="deck-card"><div class="deck-cover">${cover?`<img src="${cover}" alt="${e(d.name)} 封面">`:'<span class="deck-placeholder">UA</span>'}<span class="deck-color"><span class="dot" style="background:${colorOf(d.color).hex}"></span> ${e(colorOf(d.color).name)}</span></div><div class="deck-info"><h3>${e(d.name)}</h3><p>持有者：${e(playerName(d.ownerUid))}</p><div class="deck-actions">${canEdit?`<button class="btn btn-ghost btn-sm" data-action="edit-deck" data-id="${e(d.id)}">編輯</button><button class="btn btn-ghost btn-sm" data-action="archive-deck" data-id="${e(d.id)}">封存</button>`:'<span class="tag">朋友的牌組</span>'}</div></div></article>`}
 function playersPage(){
   const s=getStats();const ranked=[...s.players].sort((a,b)=>b.rate-a.rate||b.wins-a.wins);
   return `<div class="page-head"><div><div class="label-up">PLAYERS / LEADERBOARD</div><h1 style="margin-top:7px">玩家戰績榜</h1><p>勝率、常用牌組與對戰成績，所有成員都能查看。</p></div><button class="btn btn-ghost" data-action="share-invite">↗ 邀請朋友加入</button></div><div class="player-grid">${ranked.map(p=>`<button class="player-card" data-action="player-detail" data-id="${e(p.id)}" style="text-align:left;color:inherit"><div class="player-line"><span class="avatar">${e(p.nickname?.[0]||'?')}</span><div><strong>${e(p.nickname)}</strong><p class="muted sm">${p.id===state.user?.uid?'你自己':p.role==='owner'?'群組建立者':'對戰成員'}</p></div></div><div class="big-rate">${p.rate}% <span class="muted sm">WIN RATE</span></div><div class="bar-track"><div class="bar-fill" style="width:${p.rate}%"></div></div><div class="row-stats" style="margin-top:15px"><span><b>${p.games}</b> 場</span><span><b>${p.wins}</b> 勝</span><span><b>${p.losses}</b> 敗</span><span>${e(p.favorite?.name||'尚無牌組')}</span></div></button>`).join('')||'<div class="empty">尚無玩家</div>'}</div>`;
@@ -89,18 +90,83 @@ function matchModalBody(){
   const pa=player(d.playerA),pb=player(d.playerB);
   return `<div class="mode-note">⚔ 每場只需要一個人填寫。${isPersonal()?'個人戰團可選「訪客玩家」，不需邀請對方註冊。訪客牌組僅保存於本場結果中。':'玩家 A 預設為你，也能代填群組內兩人的對戰。'}</div><form data-form="new-match"><div class="form-grid"><div class="field"><label>玩家 A</label><select name="playerA" id="player-a">${pickerOptions(state.players,d.playerA,'',isPersonal())}</select></div><div class="field"><label>玩家 B</label><select name="playerB" id="player-b">${pickerOptions(state.players,d.playerB,d.playerA,isPersonal())}</select></div>${deckInputFor(d.playerA,'A',d.deckA,d.guestDeck)}${deckInputFor(d.playerB,'B',d.deckB,d.guestDeck)}<div class="field field-full"><label>本場勝者</label><div class="winner-options"><button class="winner-option ${d.winner===d.playerA?'selected':''}" type="button" data-action="pick-winner" data-winner="A">🏆 ${e(pa?.nickname||'玩家 A')}</button><button class="winner-option ${d.winner===d.playerB?'selected':''}" type="button" data-action="pick-winner" data-winner="B">🏆 ${e(pb?.nickname||'玩家 B')}</button></div></div><div class="field field-full"><label>備註（選填）</label><textarea name="note" maxlength="200" placeholder="例如：野場、三局兩勝…">${e(d.note||'')}</textarea></div></div><div class="modal-footer"><button type="button" class="btn btn-ghost" data-action="close-modal">取消</button><button type="submit" class="btn btn-primary" ${state.players.length<2?'disabled':''}>儲存戰績 →</button></div></form>`;
 }
-function deckModalBody(){const d=state.draft;return `<form data-form="save-deck"><div class="field"><label>牌組圖片</label><div class="upload" id="deck-upload">${guardedImage(d.imageData)?`<img src="${guardedImage(d.imageData)}" alt="牌組圖片預覽">`:'<div style="font-size:33px">▧</div><strong>點擊上傳牌組圖片</strong><span class="sm muted">將壓縮後儲存，建議使用自己的照片或獲授權圖片</span>'}<input name="cover" type="file" accept="image/*" aria-label="上傳牌組圖片" /></div></div><div class="field mt"><label>牌組名稱</label><input name="name" required minlength="1" maxlength="42" value="${e(d.name||'')}" placeholder="例如：紫色魯夫" /></div><div class="field mt"><label>牌組持有者</label><select name="ownerUid">${pickerOptions(state.players,d.ownerUid)}</select><div class="hint">可替群組內其他人建立牌組；實際建立者會另外記錄。</div></div><div class="field mt"><label>牌組顏色</label><div class="color-choices">${COLORS.map(c=>`<button type="button" class="color-choice ${d.color===c.id?'selected':''}" data-action="pick-deck-color" data-color="${c.id}"><span class="dot" style="background:${c.hex}"></span>${c.name}</button>`).join('')}</div></div><div class="modal-footer"><button class="btn btn-ghost" type="button" data-action="close-modal">取消</button><button class="btn btn-primary" type="submit">${d.id?'儲存修改':'建立牌組'} →</button></div></form>`}
-function playerModalBody(){const stats=getStats().players.find(p=>p.id===state.draft.id);if(!stats)return '<div class="empty">找不到玩家</div>';const de=stats.deckStats.sort((a,b)=>b.games-a.games);return `<div class="player-line"><span class="avatar" style="width:52px;height:52px;font-size:22px">${e(stats.nickname?.[0]||'?')}</span><div><h2>${e(stats.nickname)}</h2><p class="muted sm">${stats.id===state.user?.uid?'你的個人戰績':'群組玩家戰績'}</p></div></div><div class="stats-detail"><div class="stats-cell"><b>${stats.games}</b><span>總場次</span></div><div class="stats-cell"><b>${stats.wins}</b><span>勝場</span></div><div class="stats-cell"><b>${stats.rate}%</b><span>勝率</span></div></div><div class="section-head"><h3>牌組表現</h3></div><div class="match-row"><div class="match-pair">最常用的牌組</div><strong class="sm">${e(stats.favorite?.name||'尚無資料')}</strong></div><div class="match-row"><div class="match-pair">勝場最多的牌組</div><strong class="sm">${e(stats.mostWins?.name||'尚無資料')}</strong></div><div class="match-row"><div class="match-pair">敗場最多的牌組</div><strong class="sm">${e(stats.mostLosses?.name||'尚無資料')}</strong></div>${de.length?`<div class="divider"></div><h3 style="margin-bottom:15px">各牌組成績</h3>${de.map(d=>`<div class="match-row"><div class="match-pair"><strong>${e(d.name)}</strong><small>${d.games} 場 · ${d.wins} 勝 ${d.losses} 敗</small></div><span class="win-badge">${Math.round(d.wins/d.games*100)}%</span></div>`).join('')}`:''}`}
+function deckModalBody(){const d=state.draft;return `<form data-form="save-deck"><div class="field"><label>牌組圖片</label><div class="upload" id="deck-upload">${guardedImage(d.imageData)?`<img src="${guardedImage(d.imageData)}" alt="牌組圖片預覽">`:'<div style="font-size:33px">▧</div><strong>點擊上傳牌組圖片</strong><span class="sm muted">將壓縮後儲存，建議使用自己的照片或獲授權圖片</span>'}<input name="cover" type="file" accept="image/*" aria-label="上傳牌組圖片" /></div></div><div class="field mt"><label>牌組名稱</label><input name="name" required minlength="1" maxlength="42" value="${e(d.name||'')}" placeholder="例如：紫色魯夫" /></div><div class="field mt"><label>牌組持有者</label><input name="ownerUid" type="hidden" value="${e(state.user.uid)}"><div class="mode-note">${e(userLabel())} · 個人牌組庫（所有已加入戰團共用）</div></div><div class="field mt"><label>牌組顏色</label><div class="color-choices">${COLORS.map(c=>`<button type="button" class="color-choice ${d.color===c.id?'selected':''}" data-action="pick-deck-color" data-color="${c.id}"><span class="dot" style="background:${c.hex}"></span>${c.name}</button>`).join('')}</div></div><div class="modal-footer"><button class="btn btn-ghost" type="button" data-action="close-modal">取消</button><button class="btn btn-primary" type="submit">${d.id?'儲存修改':'建立牌組'} →</button></div></form>`}
+
+function playerModalBody(){
+  const stats=getStats().players.find(p=>p.id===state.draft.id);
+  if(!stats)return '<div class="empty">找不到玩家</div>';
+  const card=state.playerCard;
+  const groupVisible=card===undefined?false:(card?card.showGroupStats!==false:true);
+  const self=stats.id===state.user?.uid;
+  const total=card?.showOverallStats?card.totalStats:null;
+  const cardIntro=card===undefined?'<span class="tag">載入名片中…</span>':card?'<span class="tag">玩家自訂名片</span>':'<span class="tag">尚未設定公開名片</span>';
+  return `<div class="player-line"><span class="avatar" style="width:52px;height:52px;font-size:22px">${e(stats.nickname?.[0]||'?')}</span>
+    <div><h2>${e(stats.nickname)}</h2><p class="muted sm">${self?'你自己的玩家名片':'其他玩家的名片'} · ${e(state.group?.name||'')}</p></div></div>
+    ${cardIntro}
+    ${card?.showBio&&card.bio?`<section class="card" style="margin-top:14px"><h3>關於我</h3><p class="muted">${e(card.bio)}</p></section>`:''}
+    ${card?.showFavoriteDeck&&card.favoriteDeck?.name?`<section class="card" style="margin-top:14px"><h3>♡ 最愛牌組</h3><p>${e(card.favoriteDeck.name)} · ${e(colorOf(card.favoriteDeck.color).name)}</p></section>`:''}
+    ${groupVisible?`<h3 style="margin-top:18px">目前戰團戰績</h3><div class="stats-detail">
+      <div class="stats-cell"><b>${stats.games}</b><span>場次</span></div>
+      <div class="stats-cell"><b>${stats.wins}</b><span>勝場</span></div>
+      <div class="stats-cell"><b>${stats.rate}%</b><span>勝率</span></div></div>`:''}
+    ${total?`<h3 style="margin-top:18px">個人公開總戰績</h3><div class="stats-detail">
+      <div class="stats-cell"><b>${Number(total.games)||0}</b><span>總場次</span></div>
+      <div class="stats-cell"><b>${Number(total.wins)||0}</b><span>勝場</span></div>
+      <div class="stats-cell"><b>${Number(total.rate)||0}%</b><span>勝率</span></div></div><p class="muted sm">這是玩家上次更新公開名片時的戰績快照。</p>`:''}
+    ${!groupVisible&&!total?'<div class="hint" style="margin-top:16px">這位玩家沒有開放名片戰績。</div>':''}
+    ${self?'<button class="btn btn-outline btn-full" data-tab="profile" style="margin-top:18px">編輯我的公開名片</button>':''}`;
+}
+
 function renderModal(){if(!state.modal)return '';let title,body;switch(state.modal){case 'match':title='新增對戰紀錄';body=matchModalBody();break;case 'deck':title=state.draft.id?'編輯牌組':'新增牌組';body=deckModalBody();break;case 'player':title='玩家詳細戰績';body=playerModalBody();break;case 'tournament-create':title='建立錦標賽';body=`<form data-form="create-tournament"><div class="field"><label>錦標賽名稱</label><input name="title" minlength="2" maxlength="60" required placeholder="例如：UA 週末冠軍盃"></div><div class="field mt"><label>賽事說明（選填）</label><textarea name="description" maxlength="240" rows="3" placeholder="例如：採單敗淘汰，房主確認結果"></textarea></div><div class="alert" style="margin-top:14px">僅房主可新增參賽者、開始賽程與登錄勝者。公開觀賽連結可免登入查看賽程，不會公開私人對戰團與牌組資料。</div><div class="modal-footer"><button type="button" class="btn btn-ghost" data-action="close-modal">取消</button><button type="submit" class="btn btn-primary">建立錦標賽</button></div></form>`;break;case 'more':title='功能選單';body=`<div class="more-links">${[['profile','◉ 個人資料'],['groups','⇄ 我的對戰團'],['players','♟ 玩家排行'],['rules','✦ 規則 AI']].map(([id,label])=>`<button class="nav" data-tab="${id}">${label}</button>`).join('')}</div>`;break;case 'invite':title='邀請朋友';body=`<p class="muted sm">將連結傳給朋友，對方註冊登入後就能加入你的對戰群組。具有連結的人可申請加入，請只傳給信任的朋友。</p><div class="divider"></div><label>對戰團名稱</label><div class="group-pill" style="display:inline-block;margin-bottom:17px">${e(state.group?.name)}</div><label>邀請連結</label><div class="invite-id"><span class="mono">${e(inviteUrl())}</span><button class="btn btn-primary btn-sm" data-action="copy-invite">複製</button></div><div class="hint">好友完成登入後即可進入群組；同一個帳號可參加多個群組。</div>`;break;default:body='';title='';}
   return `<div class="modal-backdrop" data-action="backdrop"><div class="modal" role="dialog" aria-modal="true" aria-label="${e(title)}"><div class="modal-header"><h2>${e(title)}</h2><button class="close" data-action="close-modal" aria-label="關閉視窗">✕</button></div>${body}</div></div>`;
 }
 
 function groupHubPage(){
-  return `<div class="page-head"><div><div class="label-up">PLAY GROUPS / SWITCH</div><h1>我的對戰團</h1><p>同一個帳號可以加入多個對戰團，每個團的牌組與戰績各自獨立。</p></div><button class="btn btn-primary" data-action="switch-group">＋ 新增或加入對戰團</button></div><div class="group-card-grid">${state.groupIds.map(id=>`<section class="card group-card"><span class="tag">${id===personalGroupId(state.user?.uid||'')?'🏠 個人戰團':id===state.groupId?'目前所在對戰團':'已加入'}</span><h3>${e(state.groupDetails[id]|| (id===state.groupId?state.group?.name:id))}</h3><p class="muted sm">${id===personalGroupId(state.user?.uid||'')?'不需要對手註冊，即可記錄訪客對戰':id===state.groupId?`${state.players.length} 名玩家 · ${state.matches.filter(m=>m.status==='active').length} 場對戰`:'切換後可查看該團戰績與牌組'}</p><button class="btn ${id===state.groupId?'btn-ghost':'btn-outline'}" data-action="select-group-card" data-id="${e(id)}">${id===state.groupId?'返回目前群組':'切換到這個對戰團'} →</button></section>`).join('')}</div><div class="card" style="margin-top:18px"><h3>想邀請朋友加入目前的對戰團？</h3><p class="muted sm" style="margin:9px 0 15px">邀請連結只供加入對戰團；錦標賽的公開觀賽連結是另一個網址。</p><button class="btn btn-ghost" data-action="share-invite">↗ 複製／查看邀請連結</button></div>`;
+  return `<div class="page-head"><div><div class="label-up">PLAY GROUPS / SWITCH</div><h1>我的對戰團</h1><p>同一帳號可參加多個戰團；戰績依戰團分開，牌組則由帳號共用。</p></div><button class="btn btn-primary" data-action="switch-group">＋ 新增或加入對戰團</button></div><div class="group-card-grid">${state.groupIds.map(id=>`<section class="card group-card"><span class="tag">${id===personalGroupId(state.user?.uid||'')?'🏠 個人戰團':id===state.groupId?'目前所在對戰團':'已加入'}</span><h3>${e(state.groupDetails[id]|| (id===state.groupId?state.group?.name:id))}</h3><p class="muted sm">${id===personalGroupId(state.user?.uid||'')?'不需要對手註冊，即可記錄訪客對戰':id===state.groupId?`${state.players.length} 名玩家 · ${state.matches.filter(m=>m.status==='active').length} 場對戰`:'切換後可查看該團戰績與牌組'}</p><button class="btn ${id===state.groupId?'btn-ghost':'btn-outline'}" data-action="select-group-card" data-id="${e(id)}">${id===state.groupId?'返回目前群組':'切換到這個對戰團'} →</button></section>`).join('')}</div><div class="card" style="margin-top:18px"><h3>想邀請朋友加入目前的對戰團？</h3><p class="muted sm" style="margin:9px 0 15px">邀請連結只供加入對戰團；錦標賽的公開觀賽連結是另一個網址。</p><button class="btn btn-ghost" data-action="share-invite">↗ 複製／查看邀請連結</button></div>`;
 }
+
+function personalExtras(){
+  const totals=ownStats(),c=state.myCard||{};
+  const mine=state.decks.filter(d=>d.ownerUid===state.user?.uid&&d.active!==false);
+  const groups=totals.byGroup.map(g=>`<tr><td><strong>${e(state.groupDetails[g.groupId]||g.groupId)}</strong></td><td>${g.games}</td><td>${g.wins}</td><td>${g.losses}</td><td>${g.rate}%</td><td><button class="btn btn-ghost btn-sm" data-action="my-group-matches" data-id="${e(g.groupId)}">查看</button></td></tr>`).join('');
+  const checked=key=>c[key]?'checked':'';
+  const fav=(c.favoriteDeck?.name||'');
+  return `<section class="card" style="margin-top:20px">
+    <div class="section-head"><h3>⚔ 我的個人總戰績</h3><span class="tag">跨 ${state.groupIds.length} 個戰團</span></div>
+    ${!state.historyReady?'<div class="hint">正在載入各戰團戰績，請稍後…</div>':''}
+    <div class="stats-detail">
+      <div class="stats-cell"><b>${totals.games}</b><span>總場次</span></div>
+      <div class="stats-cell"><b>${totals.wins}</b><span>總勝場</span></div>
+      <div class="stats-cell"><b>${totals.losses}</b><span>總敗場</span></div>
+      <div class="stats-cell"><b>${totals.rate}%</b><span>總勝率</span></div>
+    </div>
+    <div class="divider"></div><h3>各戰團戰績</h3>
+    <div class="table-wrap" style="margin-top:12px"><table class="table"><thead><tr>
+      <th>戰團</th><th>場次</th><th>勝</th><th>敗</th><th>勝率</th><th>明細</th>
+    </tr></thead><tbody>${groups}</tbody></table></div>
+    <p class="muted sm">僅統計你有參賽的有效場次；替別人代填不計入個人戰績。撤銷的對戰不列入。</p>
+  </section>
+  <section class="card" style="margin-top:20px">
+    <div class="section-head"><h3>◉ 公開玩家名片設定</h3><span class="tag">自行決定分享內容</span></div>
+    <p class="muted sm">其他登入玩家點你的名片會看到你勾選的項目；Email、群組清單與完整私人對戰明細不會公開。</p>
+    <form data-form="save-card" style="margin-top:15px">
+      <label class="field"><input type="checkbox" name="showBio" ${checked('showBio')}> 公開我的個人簡介</label>
+      <label class="field" style="margin-top:11px"><input type="checkbox" name="showGroupStats" ${c.showGroupStats===undefined?'checked':checked('showGroupStats')}> 名片顯示目前戰團戰績</label>
+      <label class="field" style="margin-top:11px"><input type="checkbox" name="showOverallStats" ${checked('showOverallStats')}> 公開跨戰團的個人總戰績</label>
+      <label class="field" style="margin-top:11px"><input type="checkbox" name="showFavoriteDeck" ${checked('showFavoriteDeck')}> 公開最愛牌組</label>
+      <div class="field" style="margin-top:11px"><label>選擇最愛牌組</label><select name="favoriteDeckId">
+        <option value="">不指定</option>
+        ${mine.map(d=>`<option value="${e(d.id)}" ${d.name===fav?'selected':''}>${e(d.name)} · ${e(colorOf(d.color).name)}</option>`).join('')}
+      </select></div>
+      <p class="hint">總戰績會在儲存公開名片時建立快照；之後他人新增你的戰績，快照不會自動變動。戰團排行榜仍依實際紀錄計算。</p>
+      <button class="btn btn-primary" type="submit" style="margin-top:18px">儲存公開名片</button>
+    </form>
+  </section>`;
+}
+
 function profilePage(){
   const me=getStats().players.find(p=>p.id===state.user?.uid);
-  return `<div class="page-head"><div><div class="label-up">ACCOUNT / PERSONAL PROFILE</div><h1>我的個人資料</h1><p>編輯你的全站暱稱，並查看帳號所屬的對戰團。</p></div></div><div class="profile-grid"><section class="card"><div class="profile-heading"><span class="avatar avatar-large">${e((userLabel()[0]||'?').toUpperCase())}</span><div><h2>${e(userLabel())}</h2><p class="muted sm">${e(state.user?.email||'展示帳號')}</p></div></div><div class="divider"></div><form data-form="save-profile"><div class="field"><label>公開玩家暱稱</label><input name="nickname" minlength="2" maxlength="24" required value="${e(userLabel())}" placeholder="你的顯示名稱"></div><div class="field mt"><label>個人簡介（只有你自己能在此頁查看）</label><textarea name="bio" maxlength="160" rows="4" placeholder="例如：喜歡紫色牌組">${e(state.profile?.bio||'')}</textarea></div><div class="hint">儲存後會同步更新你已加入對戰團的玩家暱稱；歷史勝負不會因此刪除。</div><button class="btn btn-primary" type="submit" style="margin-top:18px">儲存個人資料</button></form></section><section class="card"><h3>帳號資訊</h3><div class="profile-info-row"><span>Email</span><strong>${e(state.user?.email||'未設定')}</strong></div><div class="profile-info-row"><span>信箱驗證</span><strong>${state.user?.emailVerified?'已驗證':'尚未驗證'}</strong></div><div class="profile-info-row"><span>加入對戰團</span><strong>${state.groupIds.length} 個</strong></div><div class="profile-info-row"><span>目前團內戰績</span><strong>${me?`${me.wins} 勝 / ${me.losses} 敗`:'尚無紀錄'}</strong></div><div class="divider"></div><h3>我加入的對戰團</h3>${state.groupIds.map(id=>`<button class="nav" data-action="select-group-card" data-id="${e(id)}">⇄ ${e(state.groupDetails[id]||id)} ${id===state.groupId?'· 目前':''}</button>`).join('')}<div class="hint">Email 與密碼由 Firebase Authentication 管理；此頁先提供安全的暱稱與簡介編輯。</div></section></div>`;
+  return `<div class="page-head"><div><div class="label-up">ACCOUNT / PERSONAL PROFILE</div><h1>我的個人資料</h1><p>編輯你的全站暱稱，並查看帳號所屬的對戰團。</p></div></div><div class="profile-grid"><section class="card"><div class="profile-heading"><span class="avatar avatar-large">${e((userLabel()[0]||'?').toUpperCase())}</span><div><h2>${e(userLabel())}</h2><p class="muted sm">${e(state.user?.email||'展示帳號')}</p></div></div><div class="divider"></div><form data-form="save-profile"><div class="field"><label>公開玩家暱稱</label><input name="nickname" minlength="2" maxlength="24" required value="${e(userLabel())}" placeholder="你的顯示名稱"></div><div class="field mt"><label>個人簡介（只有你自己能在此頁查看）</label><textarea name="bio" maxlength="160" rows="4" placeholder="例如：喜歡紫色牌組">${e(state.profile?.bio||'')}</textarea></div><div class="hint">儲存後會同步更新你已加入對戰團的玩家暱稱；歷史勝負不會因此刪除。</div><button class="btn btn-primary" type="submit" style="margin-top:18px">儲存個人資料</button></form></section><section class="card"><h3>帳號資訊</h3><div class="profile-info-row"><span>Email</span><strong>${e(state.user?.email||'未設定')}</strong></div><div class="profile-info-row"><span>信箱驗證</span><strong>${state.user?.emailVerified?'已驗證':'尚未驗證'}</strong></div><div class="profile-info-row"><span>加入對戰團</span><strong>${state.groupIds.length} 個</strong></div><div class="profile-info-row"><span>目前團內戰績</span><strong>${me?`${me.wins} 勝 / ${me.losses} 敗`:'尚無紀錄'}</strong></div><div class="divider"></div><h3>我加入的對戰團</h3>${state.groupIds.map(id=>`<button class="nav" data-action="select-group-card" data-id="${e(id)}">⇄ ${e(state.groupDetails[id]||id)} ${id===state.groupId?'· 目前':''}</button>`).join('')}<div class="hint">Email 與密碼由 Firebase Authentication 管理；此頁先提供安全的暱稱與簡介編輯。</div></section></div>` + personalExtras();
 }
 const tournamentStatus=s=>({registration:'開放報名',running:'進行中',completed:'已完賽',cancelled:'已取消'})[s]||'未知狀態';
 function spectatorUrl(publicId){const u=new URL(location.href);u.search='';u.hash='';u.searchParams.set('watch',publicId);return u.href;}
@@ -191,7 +257,7 @@ function render(){if(!state.user){authPage();return}if(!state.groupId){setupPage
 function openModal(kind,draft={}){state.modal=kind;state.draft=draft;render()}
 function pickDeck(uid){return state.decks.find(d=>d.ownerUid===uid&&d.active!==false)?.id||''}
 function newMatch(){if(state.players.length<2){toast('請先加入群組或使用個人戰團的訪客模式。',true);return}const pa=state.players.find(p=>p.id===state.user.uid)?.id||state.players[0].id;const pb=isPersonal()?GUEST_PLAYER_ID:state.players.find(p=>p.id!==pa)?.id||'';openModal('match',{playerA:pa,playerB:pb,deckA:pickDeck(pa),deckB:pickDeck(pb),guestDeck:guestDefault(),winner:pa,note:''});}
-function newDeck(d={}){if(!state.players.length){toast('請先建立群組或邀請玩家。',true);return}openModal('deck',{id:d.id||'',ownerUid:d.ownerUid||state.user.uid,name:d.name||'',color:d.color||'PURPLE',imageData:d.imageData||''});}
+function newDeck(d={}){if(d.ownerUid&&d.ownerUid!==state.user?.uid){toast('只能編輯自己的牌組。',true);return}openModal('deck',{id:d.id||'',ownerUid:state.user.uid,name:d.name||'',color:d.color||'PURPLE',imageData:d.imageData||''});}
 async function loadGroup(gid){
   tournamentRequestUnsub();tournamentRequestUnsub=()=>{};unsub();unsub=()=>{};state.groupId='';state.group=await adapter.getGroup(gid);
   state.groupId=gid;state.tab='overview';state.quickDraft={};state.players=[];state.decks=[];state.matches=[];state.quickMatches=[];state.tournaments=[];state.tournamentRequests=[];state.myTournamentRequest=false;state.tournamentId='';state.quickSessionId='';state.quickCreate=true;state.quickResultOpen=false;state.quickPending=null;
@@ -199,12 +265,25 @@ async function loadGroup(gid){
   unsub=adapter.subscribe(gid,snapshot=>{state.players=isPersonal()?[...snapshot.members.filter(p=>p.id!==GUEST_PLAYER_ID),guestPlayer()]:snapshot.members;state.decks=snapshot.decks;state.matches=snapshot.matches;state.quickMatches=snapshot.quickMatches||[];state.tournaments=snapshot.tournaments||[];render()},error=>toast(readableError(error),true));
   render();
 }
+function restartPersonalHistory(){
+  historyUnsub();historyUnsub=()=>{};
+  state.personalHistory={};state.historyReady=false;
+  if(!state.user)return;
+  if(!state.groupIds.length){state.historyReady=true;return;}
+  historyUnsub=adapter.subscribePersonalHistory(state.groupIds,state.user.uid,records=>{
+    state.personalHistory=records;
+    state.historyReady=state.groupIds.every(id=>Object.prototype.hasOwnProperty.call(records,id));
+    if(state.tab==='profile'&&!state.modal)render();
+  },err=>{console.warn('個人戰績同步失敗',err);toast(readableError(err),true)});
+}
 async function afterAuth(user){
   state.user=user;state.groupId='';state.modal=null;
-  if(!user){unsub();state.groupIds=[];render();return}
+  if(!user){unsub();historyUnsub();historyUnsub=()=>{};state.personalHistory={};state.historyReady=false;state.groupIds=[];state.myCard=null;render();return}
   try{
     state.groupIds=await adapter.getMyGroups(user.uid);
     state.profile=await adapter.getProfile(user.uid);
+    try{state.myCard=await adapter.getPlayerCard(user.uid);}catch(err){console.warn('名片讀取尚未啟用',err);state.myCard=null;}
+    restartPersonalHistory();
     const groupInfo=await Promise.allSettled(state.groupIds.map(id=>adapter.getGroup(id)));
     state.groupDetails=Object.fromEntries(groupInfo.map((res,i)=>[state.groupIds[i],res.status==='fulfilled'?res.value.name:state.groupIds[i]]));
     if(state.inviteId){render();return}
@@ -238,6 +317,10 @@ async function handleAction(action,el){
   case 'logout':if(adapter.mode==='demo'){state.user=null;state.preview=false;render()}else await runBusy(async()=>adapter.signOut());break;
   case 'switch-group':tournamentRequestUnsub();tournamentRequestUnsub=()=>{};unsub();state.groupId='';state.inviteId='';render();break;
   case 'select-group-card':if(el.dataset.id===state.groupId){state.tab='overview';render();}else await runBusy(async()=>loadGroup(el.dataset.id));break;
+  case 'my-group-matches':await runBusy(async()=>{
+    if(el.dataset.id!==state.groupId)await loadGroup(el.dataset.id);
+    state.tab='matches';state.playerFilter=state.user.uid;render();
+  });break;
   case 'more-menu':openModal('more');break;
   case 'new-tournament':openModal('tournament-create');break;
   case 'select-tournament':{
@@ -271,7 +354,12 @@ async function handleAction(action,el){
   case 'edit-deck':{const d=deck(el.dataset.id);if(d)newDeck(d);break;}
   case 'archive-deck':if(confirm('封存這副牌組？歷史對戰會保留，但不能用於新對戰。'))await runBusy(async()=>{await adapter.archiveDeck(state.groupId,el.dataset.id);toast('牌組已封存。')});break;
   case 'void-match':if(confirm('確定撤銷這筆紀錄？它會保留稽核痕跡，但不計入統計。'))await runBusy(async()=>{await adapter.voidMatch(state.groupId,el.dataset.id);toast('已撤銷對戰紀錄。')});break;
-  case 'player-detail':openModal('player',{id:el.dataset.id});break;
+  case 'player-detail':{
+    state.playerCard=undefined;openModal('player',{id:el.dataset.id});
+    try{state.playerCard=el.dataset.id===state.user?.uid?state.myCard:await adapter.getPlayerCard(el.dataset.id);render();}
+    catch(err){console.error(err);toast(readableError(err),true)}
+    break;
+  }
   case 'share-invite':if(isPersonal()){toast('個人戰團不需邀請對方。請直接選擇「訪客玩家」登錄戰績。');break;}openModal('invite');break;
   case 'copy-invite':await navigator.clipboard.writeText(inviteUrl());toast('邀請連結已複製！');break;
   case 'close-modal':case 'backdrop':state.modal=null;render();break;
@@ -326,6 +414,19 @@ app.addEventListener('submit',event=>{
       state.players=state.players.map(p=>p.id===state.user.uid?{...p,nickname:fields.nickname.trim()}:p);
       render();toast(result.failures?.length?'個人資料已更新，但部分群組暱稱同步失敗。':'個人資料已更新');break;
     }
+    case 'save-card':{
+      const all=ownStats();
+      if(fields.showOverallStats&&!state.historyReady)throw new Error('各戰團戰績還在載入，請稍後再儲存名片。');
+      const favorite=state.decks.find(d=>d.id===fields.favoriteDeckId&&d.ownerUid===state.user.uid&&d.active!==false);
+      const visibleTotal=fields.showOverallStats?{games:all.games,wins:all.wins,losses:all.losses,rate:all.rate}:{games:0,wins:0,losses:0,rate:0};
+      const card={nickname:userLabel().slice(0,24),bio:state.profile?.bio||'',showBio:!!fields.showBio,
+        showGroupStats:!!fields.showGroupStats,showOverallStats:!!fields.showOverallStats,
+        showFavoriteDeck:!!fields.showFavoriteDeck&&!!favorite,
+        favoriteDeck:favorite?{name:favorite.name,color:favorite.color}:{name:'',color:'OTHER'},
+        totalStats:visibleTotal};
+      await adapter.savePlayerCard(state.user.uid,card);
+      state.myCard=card;render();toast('公開玩家名片已儲存。');break;
+    }
     case 'create-tournament':{
       const id=await adapter.createTournament(state.groupId,state.user.uid,fields.title,fields.description||'',userLabel());
       state.modal=null;state.tab='tournaments';state.tournamentId=id;render();toast('錦標賽建立成功！');break;
@@ -339,8 +440,8 @@ app.addEventListener('submit',event=>{
       if(state.authMode==='register')await adapter.signUp(fields.email.trim(),fields.password,fields.nickname.trim());
       else await adapter.signIn(fields.email.trim(),fields.password);
       break;
-    case 'create-group':{const gid=await adapter.createGroup(state.user.uid,fields.nickname,fields.name);state.groupIds=[...new Set([...state.groupIds,gid])];state.inviteId='';await loadGroup(gid);toast('對戰團建立成功！');break;}
-    case 'join-group':{let gid=(fields.code||'').trim();if(gid.includes('://')){try{gid=new URL(gid).searchParams.get('join')||gid}catch{}}await adapter.joinGroup(state.user.uid,fields.nickname,gid);state.groupIds=[...new Set([...state.groupIds,gid])];state.inviteId='';history.replaceState({},'',location.pathname);await loadGroup(gid);toast('成功加入群組！');break;}
+    case 'create-group':{const gid=await adapter.createGroup(state.user.uid,fields.nickname,fields.name);state.groupIds=[...new Set([...state.groupIds,gid])];state.inviteId='';restartPersonalHistory();await loadGroup(gid);toast('對戰團建立成功！');break;}
+    case 'join-group':{let gid=(fields.code||'').trim();if(gid.includes('://')){try{gid=new URL(gid).searchParams.get('join')||gid}catch{}}await adapter.joinGroup(state.user.uid,fields.nickname,gid);state.groupIds=[...new Set([...state.groupIds,gid])];state.inviteId='';restartPersonalHistory();history.replaceState({},'',location.pathname);await loadGroup(gid);toast('成功加入群組！');break;}
     case 'quick-setup':{
       const d=state.quickDraft;
       const match={playerA:d.playerA,playerB:d.playerB,deckA:d.playerA===GUEST_PLAYER_ID?GUEST_DECK_ID:d.deckA,deckB:d.playerB===GUEST_PLAYER_ID?GUEST_DECK_ID:d.deckB,
@@ -376,10 +477,10 @@ app.addEventListener('submit',event=>{
       await adapter.addMatch(state.groupId,state.user.uid,payload);state.modal=null;state.tab='matches';render();toast('成功登錄一場對戰！');break;
     }
     case 'save-deck':{
-      const data={...state.draft,name:fields.name.trim(),ownerUid:fields.ownerUid};
+      const data={...state.draft,name:fields.name.trim(),ownerUid:state.user.uid};
       if(!data.name||data.name.length>42)throw new Error('請填寫 1–42 字元的牌組名稱。');
       if(!COLORS.some(c=>c.id===data.color))throw new Error('請選擇有效的牌組顏色。');
-      if(!state.players.some(p=>p.id===data.ownerUid && p.id!==GUEST_PLAYER_ID))throw new Error('找不到正式牌組持有者。');
+      if(data.ownerUid!==state.user.uid)throw new Error('只能在自己的帳號下管理牌組。');
       if(data.id)await adapter.updateDeck(state.groupId,data.id,data);else await adapter.addDeck(state.groupId,state.user.uid,data);
       state.modal=null;state.tab='decks';render();toast('牌組已儲存！');break;
     }

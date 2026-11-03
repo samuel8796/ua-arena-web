@@ -1,9 +1,9 @@
 /** Quick Match timers. Times are UTC epoch milliseconds; Firestore stores all transitions. */
 export const QUICK_MATCH_LIMIT_MS = 30 * 60 * 1000;
 export const QUICK_MAX_TURNS = 200;
-export function createQuickMatch({playerA, playerB, deckA, deckB}, uid, now=Date.now()) {
+export function createQuickMatch({playerA, playerB, deckA, deckB, guestDeck}, uid, now=Date.now()) {
   if (!playerA || !playerB || playerA === playerB || !deckA || !deckB) throw new Error('請選擇兩位不同玩家及各自牌組。');
-  return {playerA, playerB, deckA, deckB, timerEnabled:true, status:'ready',
+  return {playerA, playerB, deckA, deckB, ...(guestDeck?{guestDeck:{name:guestDeck.name.trim(),color:guestDeck.color}}:{}), timerEnabled:true, status:'ready',
     createdBy:uid, createdAtMs:now, startedAtMs:0, activePlayer:'', activeSinceMs:0,
     turns:[], finishedAtMs:0, resultMatchId:'', revision:0, lastActionAtMs:now, updatedBy:uid};
 }

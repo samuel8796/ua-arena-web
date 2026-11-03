@@ -1,5 +1,5 @@
 import { firebaseConfig, aiSettings } from './firebase-config.js';
-import { RULE_SYSTEM_PROMPT } from './core.mjs';
+import { RULE_SYSTEM_PROMPT, personalGroupId, personalGroupName } from './core.mjs';
 import { createQuickMatch, changeQuickMatch, quickMatchResult } from './quick-core.mjs';
 import { addTournamentEntrant, removeTournamentEntrant, startTournament, recordTournamentWinner, publicTournamentSnapshot } from './tournament-core.mjs';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js';
@@ -28,6 +28,18 @@ const tidy = docSnapshot => ({id:docSnapshot.id,...docSnapshot.data()});
 async function rememberGroup(uid,gid,nickname){
   await setDoc(userRef(uid),{groups:arrayUnion(gid), nickname, updatedAt:serverTimestamp()},{merge:true});
 }
+async function ensurePersonalGroup(uid, nickname){
+  const id=personalGroupId(uid), display=String(nickname||'玩家').trim().slice(0,24)||'玩家';
+  const name=display.length>=2?display:'玩家';
+  const g=groupRef(id);
+  const existing=await getDoc(g);
+  if(!existing.exists())await setDoc(g,{name:personalGroupName(name),createdBy:uid,createdAt:serverTimestamp()});
+  else if(existing.data().createdBy!==uid)throw new Error('個人戰團識別碼被占用，請聯繫管理員。');
+  const m=memberRef(id,uid);
+  if(!(await getDoc(m)).exists())await setDoc(m,{uid,nickname:name,role:'owner',joinedAt:serverTimestamp()});
+  await rememberGroup(uid,id,name);
+  return id;
+}
 export const firebaseAdapter = {
   mode:'cloud',
   aiEnabled:Boolean(aiSettings.enabled && aiSettings.recaptchaEnterpriseSiteKey),
@@ -35,12 +47,20 @@ export const firebaseAdapter = {
   async signUp(email,password,name){
     const res=await createUserWithEmailAndPassword(auth,email,password);
     await updateProfile(res.user,{displayName:name.trim()});
+    await ensurePersonalGroup(res.user.uid,name);
     return res.user;
   },
   async signIn(email,password){return (await signInWithEmailAndPassword(auth,email,password)).user;},
   async signInGoogle(){return (await signInWithPopup(auth,googleProvider)).user;},
   async signOut(){await signOut(auth);},
-  async getMyGroups(uid){const snap=await getDoc(userRef(uid));return snap.exists()?(snap.data().groups||[]):[];},
+  async getMyGroups(uid){
+    const snap=await getDoc(userRef(uid));
+    const display=snap.exists()?snap.data().nickname:null;
+    const nickname=display||auth.currentUser?.displayName||auth.currentUser?.email?.split('@')[0]||'玩家';
+    await ensurePersonalGroup(uid,nickname);
+    const current=await getDoc(userRef(uid));
+    return current.exists()?(current.data().groups||[]):[];
+  },
   async getProfile(uid){const snap=await getDoc(userRef(uid));return snap.exists()?snap.data():{};},
   async saveProfile(uid,nickname,bio,groupIds){
     const name=nickname.trim();if(name.length<2||name.length>24)throw new Error('暱稱請使用 2–24 字元。');
@@ -85,7 +105,9 @@ export const firebaseAdapter = {
   },
   async archiveDeck(gid,id){await updateDoc(doc(db,'groups',gid,'decks',id),{active:false,updatedAt:serverTimestamp()});},
   async addMatch(gid,uid,m){
-    await addDoc(colRef(gid,'matches'),{playerA:m.playerA,deckA:m.deckA,playerB:m.playerB,deckB:m.deckB,winner:m.winner,note:(m.note||'').trim(),recordedBy:uid,status:'active',createdAt:serverTimestamp()});
+    await addDoc(colRef(gid,'matches'),{playerA:m.playerA,deckA:m.deckA,playerB:m.playerB,deckB:m.deckB,winner:m.winner,
+      ...(m.guestDeck?{guestDeck:{name:m.guestDeck.name.trim(),color:m.guestDeck.color}}:{}),
+      note:(m.note||'').trim(),recordedBy:uid,status:'active',createdAt:serverTimestamp()});
   },
   async voidMatch(gid,id){await updateDoc(doc(db,'groups',gid,'matches',id),{status:'void',cancelledAt:serverTimestamp()});},
   async createQuickMatch(gid,uid,payload){
@@ -114,6 +136,7 @@ export const firebaseAdapter = {
       const next=changeQuickMatch(before,'finish',{uid,matchId:matchDoc.id,now:Date.now()});
       const timing=quickMatchResult(next,next.finishedAtMs);
       tx.set(matchDoc,{playerA:before.playerA,deckA:before.deckA,playerB:before.playerB,deckB:before.deckB,
+        ...(before.guestDeck?{guestDeck:before.guestDeck}:{}),
         winner,note:note.trim().slice(0,200),recordedBy:uid,status:'active',createdAt:serverTimestamp(),
         quickMatchId:id,timing});
       tx.update(ref,{...next,updatedAt:serverTimestamp()});

@@ -23,6 +23,31 @@ service cloud.firestore {
         && d.imageData is string && d.imageData.size() <= 160000
         && d.ownerUid is string && d.createdBy is string && d.active is bool;
     }
+    function personalGroup(gid) {
+      return signedIn() && gid == 'personal_' + request.auth.uid;
+    }
+    function validGuestDeck(d) {
+      return ('guestDeck' in d) && d.guestDeck is map
+        && d.guestDeck.keys().hasAll(['name','color'])
+        && d.guestDeck.keys().hasOnly(['name','color'])
+        && d.guestDeck.name is string && d.guestDeck.name.size() > 0 && d.guestDeck.name.size() <= 42
+        && d.guestDeck.color in ['RED','BLUE','GREEN','YELLOW','PURPLE','MULTI','OTHER'];
+    }
+    function validBattleSide(gid,d) {
+      return (
+        d.playerA != '__ua_guest__' && d.playerB != '__ua_guest__'
+        && !('guestDeck' in d)
+        && memberExists(gid,d.playerA) && memberExists(gid,d.playerB)
+        && activeDeck(gid,d.deckA,d.playerA) && activeDeck(gid,d.deckB,d.playerB)
+      ) || (
+        personalGroup(gid)
+        && validGuestDeck(d)
+        && ((d.playerA == '__ua_guest__' && d.playerB == request.auth.uid
+              && d.deckA == '__ua_guest_deck__' && activeDeck(gid,d.deckB,d.playerB))
+            || (d.playerB == '__ua_guest__' && d.playerA == request.auth.uid
+              && d.deckB == '__ua_guest_deck__' && activeDeck(gid,d.deckA,d.playerA)))
+      );
+    }
     match /users/{uid} {
       allow get: if signedIn() && uid == request.auth.uid;
       allow list: if false;
@@ -87,9 +112,10 @@ service cloud.firestore {
     match /groups/{gid} {
       // Knowing the random invite URL permits reading only the group name/metadata.
       // It does NOT grant access to player, deck or match collections.
-      allow get: if signedIn();
+      allow get: if signedIn() && (!gid.matches('^personal_.*') || resource.data.createdBy == request.auth.uid);
       allow list: if false;
       allow create: if signedIn()
+        && (!gid.matches('^personal_.*') || gid == 'personal_' + request.auth.uid)
         && request.resource.data.keys().hasOnly(['name','createdBy','createdAt'])
         && request.resource.data.name is string
         && request.resource.data.name.size() >= 2
@@ -107,6 +133,7 @@ service cloud.firestore {
         allow get: if signedIn() && (uid == request.auth.uid || member(gid));
         allow list: if member(gid);
         allow create: if signedIn() && uid == request.auth.uid
+          && (!gid.matches('^personal_.*') || personalGroup(gid))
           && request.resource.data.keys().hasOnly(['uid','nickname','role','joinedAt'])
           && request.resource.data.uid == request.auth.uid
           && request.resource.data.nickname is string
@@ -200,13 +227,10 @@ service cloud.firestore {
         allow get, list: if member(gid);
         allow create: if member(gid)
           && request.resource.data.keys().hasAll(['playerA','playerB','deckA','deckB','timerEnabled','status','createdBy','createdAt','createdAtMs','updatedAt','updatedBy','startedAtMs','activePlayer','activeSinceMs','turns','finishedAtMs','resultMatchId','revision','lastActionAtMs'])
-          && request.resource.data.keys().hasOnly(['playerA','playerB','deckA','deckB','timerEnabled','status','createdBy','createdAt','createdAtMs','updatedAt','updatedBy','startedAtMs','activePlayer','activeSinceMs','turns','finishedAtMs','resultMatchId','revision','lastActionAtMs'])
+          && request.resource.data.keys().hasOnly(['playerA','playerB','deckA','deckB','guestDeck','timerEnabled','status','createdBy','createdAt','createdAtMs','updatedAt','updatedBy','startedAtMs','activePlayer','activeSinceMs','turns','finishedAtMs','resultMatchId','revision','lastActionAtMs'])
           && request.resource.data.timerEnabled == true
           && request.resource.data.playerA != request.resource.data.playerB
-          && memberExists(gid,request.resource.data.playerA)
-          && memberExists(gid,request.resource.data.playerB)
-          && activeDeck(gid,request.resource.data.deckA,request.resource.data.playerA)
-          && activeDeck(gid,request.resource.data.deckB,request.resource.data.playerB)
+          && validBattleSide(gid,request.resource.data)
           && request.resource.data.createdBy == request.auth.uid
           && request.resource.data.updatedBy == request.auth.uid
           && request.resource.data.createdAt == request.time
@@ -225,7 +249,7 @@ service cloud.firestore {
           && request.resource.data.lastActionAtMs == request.resource.data.createdAtMs;
         allow update: if member(gid)
           && resource.data.status in ['ready','running']
-          && request.resource.data.keys().hasOnly(['playerA','playerB','deckA','deckB','timerEnabled','status','createdBy','createdAt','createdAtMs','updatedAt','updatedBy','startedAtMs','activePlayer','activeSinceMs','turns','finishedAtMs','resultMatchId','revision','lastActionAtMs'])
+          && request.resource.data.keys().hasOnly(['playerA','playerB','deckA','deckB','guestDeck','timerEnabled','status','createdBy','createdAt','createdAtMs','updatedAt','updatedBy','startedAtMs','activePlayer','activeSinceMs','turns','finishedAtMs','resultMatchId','revision','lastActionAtMs'])
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','startedAtMs','activePlayer','activeSinceMs','turns','finishedAtMs','resultMatchId','revision','lastActionAtMs','updatedAt','updatedBy'])
           && request.resource.data.updatedBy == request.auth.uid
           && request.resource.data.updatedAt == request.time
@@ -297,13 +321,10 @@ service cloud.firestore {
         allow get, list: if member(gid);
         allow create: if member(gid)
           && request.resource.data.keys().hasAll(['playerA','deckA','playerB','deckB','winner','note','recordedBy','status','createdAt'])
-          && request.resource.data.keys().hasOnly(['playerA','deckA','playerB','deckB','winner','note','recordedBy','status','createdAt','quickMatchId','timing'])
+          && request.resource.data.keys().hasOnly(['playerA','deckA','playerB','deckB','guestDeck','winner','note','recordedBy','status','createdAt','quickMatchId','timing'])
           && request.resource.data.playerA is string && request.resource.data.playerB is string
           && request.resource.data.playerA != request.resource.data.playerB
-          && memberExists(gid,request.resource.data.playerA)
-          && memberExists(gid,request.resource.data.playerB)
-          && activeDeck(gid,request.resource.data.deckA,request.resource.data.playerA)
-          && activeDeck(gid,request.resource.data.deckB,request.resource.data.playerB)
+          && validBattleSide(gid,request.resource.data)
           && request.resource.data.winner in [request.resource.data.playerA,request.resource.data.playerB]
           && request.resource.data.note is string && request.resource.data.note.size() <= 200
           && request.resource.data.recordedBy == request.auth.uid
@@ -331,6 +352,10 @@ service cloud.firestore {
             && request.resource.data.timing.expired is bool
             && getAfter(/databases/$(database)/documents/groups/$(gid)/quickMatches/$(request.resource.data.quickMatchId)).data.status == 'finished'
             && getAfter(/databases/$(database)/documents/groups/$(gid)/quickMatches/$(request.resource.data.quickMatchId)).data.resultMatchId == matchId
+            && getAfter(/databases/$(database)/documents/groups/$(gid)/quickMatches/$(request.resource.data.quickMatchId)).data.playerA == request.resource.data.playerA
+            && getAfter(/databases/$(database)/documents/groups/$(gid)/quickMatches/$(request.resource.data.quickMatchId)).data.playerB == request.resource.data.playerB
+            && getAfter(/databases/$(database)/documents/groups/$(gid)/quickMatches/$(request.resource.data.quickMatchId)).data.deckA == request.resource.data.deckA
+            && getAfter(/databases/$(database)/documents/groups/$(gid)/quickMatches/$(request.resource.data.quickMatchId)).data.deckB == request.resource.data.deckB
           ));
         // Soft void only: no stealth edits of score or participants.
         allow update: if member(gid)

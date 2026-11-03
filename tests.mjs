@@ -126,3 +126,43 @@ test('同名參賽者不會繞過 UID 去重驗證',()=>{
   assert.throws(()=>createBracket(same));
 });
 console.log('Tournament tests completed.');
+
+import { GUEST_PLAYER_ID, GUEST_DECK_ID, personalGroupId, personalGroupName, guestPlayer, guestDeckLabel, isGuestMatch } from './core.mjs';
+const guestPeople=[people[0],guestPlayer()];
+const guestPayload={playerA:'a',playerB:GUEST_PLAYER_ID,deckA:'d1',deckB:GUEST_DECK_ID,winner:'a',guestDeck:{name:'紅色野場牌',color:'RED'}};
+test('每個帳號的個人戰團 ID 固定且名稱來自暱稱',()=>{
+  assert.equal(personalGroupId('abc'),'personal_abc');
+  assert.equal(personalGroupName('小明'),'小明的戰團');
+});
+test('訪客玩家僅為虛擬角色，不需要真正的團員文件',()=>{
+  assert.equal(guestPlayer().virtual,true);assert.equal(isGuestMatch(guestPayload),true);
+});
+test('個人戰團可以紀錄自己對訪客的勝負',()=>assert.equal(assertMatch(guestPayload,guestPeople,decks,{allowGuest:true}),true));
+test('訪客不可以在一般對戰團使用',()=>assert.throws(()=>assertMatch(guestPayload,guestPeople,decks)));
+test('訪客必須填牌組名稱和有效顏色',()=>{
+  assert.throws(()=>assertMatch({...guestPayload,guestDeck:{name:'',color:'RED'}},guestPeople,decks,{allowGuest:true}));
+  assert.throws(()=>assertMatch({...guestPayload,guestDeck:{name:'牌組',color:'INVALID'}},guestPeople,decks,{allowGuest:true}));
+  assert.throws(()=>assertMatch({...guestPayload,deckB:'d2'},guestPeople,decks,{allowGuest:true}));
+});
+test('不允許把訪客牌組寫成一般玩家的正式牌組',()=>{
+  assert.throws(()=>assertMatch({...guestPayload,playerB:'b'},people,decks,{allowGuest:true}));
+});
+test('訪客戰績計入本人勝率，不建立持久化的牌組物件',()=>{
+  const r=computeStats(guestPeople,decks,[{...guestPayload,status:'active'},
+    {...guestPayload,winner:GUEST_PLAYER_ID,guestDeck:{name:'藍色野場牌',color:'BLUE'},status:'active'}]);
+  const owner=r.players.find(p=>p.id==='a'),visitor=r.players.find(p=>p.id===GUEST_PLAYER_ID);
+  assert.equal(owner.games,2);assert.equal(owner.wins,1);assert.equal(visitor.wins,1);
+  assert.equal(visitor.deckStats.length,2);assert.equal(decks.some(d=>d.ownerUid===GUEST_PLAYER_ID),false);
+});
+test('訪客的當場牌組名稱與顏色可留在歷史紀錄',()=>{
+  assert.match(guestDeckLabel(guestPayload,'B'),/紅色野場牌.*紅色/);
+});
+test('Quick Match 30 分鐘計時完整保存訪客當場使用的牌組',()=>{
+  let q=createQuickMatch(guestPayload,'a',origin);
+  assert.deepEqual(q.guestDeck,guestPayload.guestDeck);
+  q=changeQuickMatch(q,'start',{playerId:GUEST_PLAYER_ID,uid:'a',now:origin+1000});
+  q=changeQuickMatch(q,'end',{uid:'a',now:origin+21000});
+  assert.equal(quickClock(q,origin+21000).playerBMs,20000);
+  assert.equal(q.guestDeck.name,'紅色野場牌');
+});
+console.log('Guest-player tests completed.');

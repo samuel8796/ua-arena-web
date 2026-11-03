@@ -1,4 +1,5 @@
 import { createQuickMatch, changeQuickMatch, quickMatchResult } from './quick-core.mjs';
+import { personalGroupId, personalGroupName } from './core.mjs';
 import { addTournamentEntrant, removeTournamentEntrant, startTournament, recordTournamentWinner, publicTournamentSnapshot } from './tournament-core.mjs';
 const K='ua-arena-demo-v1-1';
 const SAMPLE_IMAGE='';
@@ -31,21 +32,36 @@ export const demoAdapter={
   mode:'demo',aiEnabled:false,
   onAuth(cb){queueMicrotask(()=>cb(demoUser));return ()=>{};},
   async signIn(){return demoUser},async signUp(){return demoUser},async signInGoogle(){return demoUser},async signOut(){},
-  async getMyGroups(){return Object.keys(data.groups)},
+  async getMyGroups(){
+    const gid=personalGroupId(demoUser.uid);
+    if(!data.groups[gid])data.groups[gid]={id:gid,name:personalGroupName(demoUser.displayName),createdBy:demoUser.uid};
+    if(!data.members.some(m=>m.uid===demoUser.uid&&m.groupId===gid)){
+      // Demo's original seed has a flat member list. The personal group always projects only the owner.
+      save();
+    }
+    return Object.keys(data.groups);
+  },
   async getProfile(){return data.profile||{};},
   async saveProfile(uid,nickname,bio){data.profile={nickname,bio};demoUser.displayName=nickname;data.members.filter(m=>m.uid===uid).forEach(m=>m.nickname=nickname);save();return {failures:[]};},
   subscribePublicTournament(id,cb){const publish=()=>cb(data.tournaments.find(t=>t.publicId===id)?{...publicTournamentSnapshot(data.tournaments.find(t=>t.publicId===id)),id}:null);publish();const fn=()=>publish();listeners.add(fn);return ()=>listeners.delete(fn);},
   async getGroup(gid){return data.groups[gid]||data.groups.demo},
   async createGroup(uid,nickname,title){const id=`demo-${Date.now().toString(36)}`;data.groups[id]={id,name:title,createdBy:uid};data.members.push({id:uid,uid,nickname,role:'owner'});save();return id;},
   async joinGroup(uid,nickname,gid){if(!data.groups[gid])throw new Error('沒有這個示範群組');save();return gid;},
-  subscribe(gid,cb){listeners.add(cb);queueMicrotask(()=>cb({members:data.members,decks:data.decks,matches:data.matches,quickMatches:data.quickMatches||[],tournaments:data.tournaments||[]}));return ()=>listeners.delete(cb);},
+  subscribe(gid,cb){
+    const send=()=>cb({members:gid===personalGroupId(demoUser.uid)?data.members.filter(m=>m.id===demoUser.uid):data.members,
+      decks:gid===personalGroupId(demoUser.uid)?data.decks.filter(d=>d.ownerUid===demoUser.uid):data.decks,
+      matches:(data.matches||[]).filter(m=>gid===personalGroupId(demoUser.uid)?m.groupId===gid:!m.groupId || m.groupId===gid),
+      quickMatches:(data.quickMatches||[]).filter(q=>gid===personalGroupId(demoUser.uid)?q.groupId===gid:!q.groupId||q.groupId===gid),
+      tournaments:gid===personalGroupId(demoUser.uid)?[]:(data.tournaments||[])});
+    send();listeners.add(send);return ()=>listeners.delete(send);
+  },
   async addDeck(gid,uid,d){data.decks.push({...d,id:`d-${Date.now().toString(36)}`,createdBy:uid,active:true,createdAt:Date.now()});save();},
   async updateDeck(gid,id,d){Object.assign(data.decks.find(x=>x.id===id),d);save();},
   async archiveDeck(gid,id){data.decks.find(x=>x.id===id).active=false;save();},
-  async addMatch(gid,uid,m){data.matches.unshift({...m,id:`m-${Date.now().toString(36)}`,recordedBy:uid,status:'active',createdAt:Date.now()});save();},
+  async addMatch(gid,uid,m){data.matches.unshift({...m,groupId:gid,id:`m-${Date.now().toString(36)}`,recordedBy:uid,status:'active',createdAt:Date.now()});save();},
   async voidMatch(gid,id){data.matches.find(x=>x.id===id).status='void';save();},
   async createQuickMatch(gid,uid,payload){const id=`q-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,7)}`;
-    data.quickMatches.unshift({...createQuickMatch(payload,uid,Date.now()),id});save();return id;},
+    data.quickMatches.unshift({...createQuickMatch(payload,uid,Date.now()),id,groupId:gid});save();return id;},
   async changeQuickMatch(gid,id,uid,action,playerId=''){
     const idx=data.quickMatches.findIndex(x=>x.id===id);if(idx<0)throw new Error('找不到對戰。');
     data.quickMatches[idx]=changeQuickMatch(data.quickMatches[idx],action,{uid,playerId,now:Date.now()});save();},
@@ -55,7 +71,8 @@ export const demoAdapter={
     const matchId=`m-q-${Date.now().toString(36)}`;
     const next=changeQuickMatch(before,'finish',{uid,matchId,now:Date.now()});
     data.quickMatches[idx]={...next,id};
-    data.matches.unshift({id:matchId,playerA:before.playerA,playerB:before.playerB,deckA:before.deckA,deckB:before.deckB,
+    data.matches.unshift({id:matchId,groupId:gid,playerA:before.playerA,playerB:before.playerB,deckA:before.deckA,deckB:before.deckB,
+      ...(before.guestDeck?{guestDeck:before.guestDeck}:{}),
       winner,note,recordedBy:uid,status:'active',createdAt:Date.now(),quickMatchId:id,timing:quickMatchResult(next,next.finishedAtMs)});
     save();},
 

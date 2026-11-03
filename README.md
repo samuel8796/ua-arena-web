@@ -2,6 +2,23 @@
 
 **LINE Bot 已取消。** 本專案是一套可部署至 GitHub Pages 的手機優先靜態網站，使用 Firebase Authentication + Cloud Firestore，並可選擇啟用 Firebase AI Logic (Gemini)。
 
+## v1.3：個人戰團與野場訪客玩家
+
+- 登入時自動替帳號建立「暱稱的戰團」（固定 `personal_<Firebase UID>`），舊帳號也會取得，不會重複建立。
+- 個人戰團內提供虛擬「訪客玩家」供對戰／Quick Match 選擇。訪客不註冊、不成為正式成員。
+- 訪客牌組當場填名稱與顏色，**僅保留在該筆勝負／計時紀錄**，不會新增到 `decks` 清單；自己的牌組仍從正式清單選擇。
+- 支援一般戰績、Quick Match 不計時與 30 分鐘計時；訪客勝敗併計為整體路人對手的紀錄，不代表同一位訪客。
+- 為避免破壞現有社群，訪客選項只在自己的個人戰團出現。其他朋友戰團和錦標賽仍使用正式成員。
+- **部署後必做：** 本 Repository 的 GitHub Pages 只部署前端，不會自動部署 Firestore Rules。請到 [Firebase Console / Firestore Rules](https://console.firebase.google.com/project/ua-arena-web/firestore/rules) 開啟 `(default)`，把根目錄 `firestore.rules` **全文替換並 Publish**。未發布前，新的訪客戰績會發生 `permission-denied`。
+- 版本不會刪除或搬動舊戰團、牌組、對戰或錦標賽資料。
+
+### 驗收
+1. 登入 → 我的對戰團 → 切換到「暱稱的戰團」。
+2. 建立自己的一副正式牌組。
+3. 登錄對戰，自己 vs 訪客玩家，填訪客牌組名稱、顏色、勝者，儲存。
+4. 戰績會列出訪客當場牌組；「我的牌組」不會出現訪客牌組。
+5. Quick Match 選訪客，測試可計時與不計時，再切換回舊戰團確認沒有訪客選項。
+
 ## v1.1 新功能：Quick Match
 
 使用者點擊側邊欄／手機底部的 **Quick Match（速配）**，先選擇兩位玩家、雙方牌組。**任何群組成員都能代填。**

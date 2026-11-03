@@ -1,4 +1,11 @@
 /** Pure, testable stat & input functions. Firestore data is handled separately. */
+export const GUEST_PLAYER_ID = '__ua_guest__';
+export const GUEST_DECK_ID = '__ua_guest_deck__';
+export const personalGroupId = uid => `personal_${uid}`;
+export const personalGroupName = nickname => `${String(nickname||'玩家').trim().slice(0,24)||'玩家'}的戰團`;
+export const isGuestMatch = m => m.playerA===GUEST_PLAYER_ID || m.playerB===GUEST_PLAYER_ID;
+export const guestPlayer = () => ({id:GUEST_PLAYER_ID,uid:GUEST_PLAYER_ID,nickname:'訪客玩家',role:'guest',virtual:true});
+export const guestDeckLabel = (match,side) => match[side==='A'?'playerA':'playerB']===GUEST_PLAYER_ID ? `${match.guestDeck?.name||'訪客牌組'}（${colorOf(match.guestDeck?.color||'OTHER').name}）` : '';
 export const COLORS = [
   {id:'RED',name:'紅色',hex:'#f46b72'},
   {id:'BLUE',name:'藍色',hex:'#5a9dfa'},
@@ -17,11 +24,22 @@ export const formatDate = value => {
   if(!date || Number.isNaN(date.getTime())) return '—';
   return date.toLocaleString('zh-TW',{timeZone:'Asia/Taipei',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
 };
-export function assertMatch({playerA,playerB,deckA,deckB,winner}, players=[],decks=[]) {
+export function assertMatch({playerA,playerB,deckA,deckB,winner,guestDeck}, players=[],decks=[], {allowGuest=false}={}) {
   if(!playerA || !playerB || playerA===playerB) throw new Error('請選擇兩位不同的玩家。');
   if(!players.some(p=>p.id===playerA)||!players.some(p=>p.id===playerB)) throw new Error('玩家不存在。');
-  const da=decks.find(d=>d.id===deckA), db=decks.find(d=>d.id===deckB);
-  if(!da || da.ownerUid!==playerA || !db || db.ownerUid!==playerB) throw new Error('牌組必須屬於所選玩家。');
+  const hasGuest=playerA===GUEST_PLAYER_ID || playerB===GUEST_PLAYER_ID;
+  if(hasGuest && !allowGuest)throw new Error('只有個人戰團可以登錄訪客玩家。');
+  if(hasGuest){
+    const guestSide=playerA===GUEST_PLAYER_ID?'A':'B';
+    if((guestSide==='A'?deckA:deckB)!==GUEST_DECK_ID)throw new Error('訪客牌組只能在本場臨時填寫。');
+    if(!guestDeck || typeof guestDeck.name!=='string'||!guestDeck.name.trim()||guestDeck.name.trim().length>42
+       || !COLORS.some(c=>c.id===guestDeck.color))throw new Error('請填寫訪客使用牌組的名稱與顏色。');
+  }else if(guestDeck)throw new Error('非訪客對戰不可包含訪客牌組。');
+  for(const [id,deckId] of [[playerA,deckA],[playerB,deckB]]){
+    if(id===GUEST_PLAYER_ID)continue;
+    const found=decks.find(d=>d.id===deckId);
+    if(!found||found.ownerUid!==id||found.active===false)throw new Error('牌組必須屬於所選玩家且仍在使用中。');
+  }
   if(![playerA,playerB].includes(winner)) throw new Error('請選擇本場勝者。');
   return true;
 }
@@ -34,10 +52,11 @@ export function computeStats(players=[],decks=[],matches=[]) {
     const deckSummary={};
     for(const m of games){
       const id=m.playerA===p.id?m.deckA:m.deckB;
-      const d=decksById[id]; if(!d) continue;
-      if(!deckSummary[id])deckSummary[id]={id,name:d.name,color:d.color,games:0,wins:0,losses:0};
-      deckSummary[id].games++;
-      if(m.winner===p.id)deckSummary[id].wins++; else deckSummary[id].losses++;
+      const d=decksById[id]||(id===GUEST_DECK_ID&&p.id===GUEST_PLAYER_ID&&m.guestDeck?{name:m.guestDeck.name,color:m.guestDeck.color}:null); if(!d)continue;
+      const statId=id===GUEST_DECK_ID?`${id}:${d.name}:${d.color}`:id;
+      if(!deckSummary[statId])deckSummary[statId]={id:statId,name:d.name,color:d.color,games:0,wins:0,losses:0};
+      deckSummary[statId].games++;
+      if(m.winner===p.id)deckSummary[statId].wins++; else deckSummary[statId].losses++;
     }
     const ds=Object.values(deckSummary);
     const by=(field)=>[...ds].sort((a,b)=>b[field]-a[field] || b.games-a.games)[0] || null;

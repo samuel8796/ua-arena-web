@@ -26,6 +26,8 @@ jobs:
           node --check firebase-adapter.js
           node --check demo-adapter.js
           node tests.mjs
+      - name: Test match, timer and tournament logic
+        run: node tests.mjs
       - name: Prepare static site
         shell: bash
         run: |

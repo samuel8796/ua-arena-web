@@ -119,7 +119,7 @@ test('公開觀賽資料不暴露 UID、群組 ID 或私人牌組',()=>{
   const projected=publicTournamentSnapshot({...t,groupId:'SECRET-GROUP',privateEmail:'a@example.com',deckA:'private-deck'});
   const serialized=JSON.stringify(projected);
   assert.ok(serialized.includes('Amy'));
-  for(const confidential of ['SECRET-GROUP','a@example.com','private-deck','"uid"','groupId'])assert.ok(!serialized.includes(confidential));
+  for(const confidential of ['SECRET-GROUP','a@example.com','private-deck','"uid"','groupId','"createdBy"'])assert.ok(!serialized.includes(confidential));
 });
 test('同名參賽者不會繞過 UID 去重驗證',()=>{
   const same=[{uid:'a',nickname:'Sam'},{uid:'a',nickname:'Sam'}];

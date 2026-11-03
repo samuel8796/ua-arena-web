@@ -36,6 +36,16 @@ service cloud.firestore {
         && request.resource.data.groups.size() <= 50;
       allow delete: if false;
     }
+    // Private public-page ownership metadata: never exposed to spectators.
+    match /publicTournamentOwners/{publicId} {
+      allow get: if signedIn() && resource.data.ownerUid == request.auth.uid;
+      allow list: if false;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['ownerUid','createdAt'])
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
+    }
     // Public read-only tournament projection. No email, UID of entrants, group
     // invite code, or private matches/decks are written into these documents.
     // Only a signed-in tournament host can publish/modify a projection.
@@ -43,9 +53,9 @@ service cloud.firestore {
       allow get: if resource.data.public == true;
       allow list: if false;
       allow create: if signedIn()
-        && request.resource.data.keys().hasAll(['title','description','hostName','status','public','createdBy','participants','rounds','champion','createdAt','updatedAt'])
-        && request.resource.data.keys().hasOnly(['title','description','hostName','status','public','createdBy','participants','rounds','champion','createdAt','updatedAt'])
-        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.keys().hasAll(['title','description','hostName','status','public','participants','rounds','champion','createdAt','updatedAt'])
+        && request.resource.data.keys().hasOnly(['title','description','hostName','status','public','participants','rounds','champion','createdAt','updatedAt'])
+        && getAfter(/databases/$(database)/documents/publicTournamentOwners/$(publicId)).data.ownerUid == request.auth.uid
         && request.resource.data.public == true
         && request.resource.data.title is string
         && request.resource.data.title.size() >= 2
@@ -61,7 +71,7 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time;
       allow update: if signedIn()
-        && resource.data.createdBy == request.auth.uid
+        && get(/databases/$(database)/documents/publicTournamentOwners/$(publicId)).data.ownerUid == request.auth.uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participants','rounds','status','champion','updatedAt'])
         && request.resource.data.public == true
         && request.resource.data.updatedAt == request.time

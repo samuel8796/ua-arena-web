@@ -20,6 +20,7 @@ const groupRef = id => doc(db,'groups',id);
 const memberRef = (gid,uid) => doc(db,'groups',gid,'members',uid);
 const userRef = uid => doc(db,'users',uid);
 const publicTournamentRef = id => doc(db,'publicTournaments',id);
+const publicTournamentOwnerRef = id => doc(db,'publicTournamentOwners',id);
 const tournamentRef = (gid,id) => doc(db,'groups',gid,'tournaments',id);
 const colRef = (gid,key) => collection(db,'groups',gid,key);
 const tidy = docSnapshot => ({id:docSnapshot.id,...docSnapshot.data()});
@@ -150,6 +151,7 @@ export const firebaseAdapter = {
       publicId:publicRef.id,participants:[],rounds:[],champion:'',createdAt:serverTimestamp(),updatedAt:serverTimestamp()};
     const batch=writeBatch(db);
     batch.set(privateRef,t);
+    batch.set(publicTournamentOwnerRef(publicRef.id),{ownerUid:uid,createdAt:serverTimestamp()});
     batch.set(publicRef,{...publicTournamentSnapshot(t),createdAt:serverTimestamp(),updatedAt:serverTimestamp()});
     await batch.commit();return privateRef.id;
   },

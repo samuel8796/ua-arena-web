@@ -71,7 +71,7 @@ export function publicTournamentSnapshot(tournament){
   const nameFor=uid=>uid?nicknames[uid]||'未知玩家':'';
   return {
     title:tournament.title,description:tournament.description||'',hostName:tournament.hostName||'賽事房主',
-    status:tournament.status,public:true,createdBy:tournament.createdBy,
+    status:tournament.status,public:true,
     participants:tournament.participants.map(p=>({name:p.nickname})),
     rounds:tournament.rounds.map(round=>round.map(m=>({a:nameFor(m.a),b:nameFor(m.b),winner:nameFor(m.winner),bye:!!m.bye}))),
     champion:nameFor(tournament.champion)

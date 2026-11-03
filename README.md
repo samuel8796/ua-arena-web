@@ -1,4 +1,4 @@
-# UA ARENA WEB v1.1
+# UA ARENA WEB v1.2
 
 **LINE Bot 已取消。** 本專案是一套可部署至 GitHub Pages 的手機優先靜態網站，使用 Firebase Authentication + Cloud Firestore，並可選擇啟用 Firebase AI Logic (Gemini)。
 

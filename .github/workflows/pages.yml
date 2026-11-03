@@ -20,6 +20,12 @@ jobs:
         uses: actions/checkout@v4
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
+      - name: Run UA Arena checks
+        run: |
+          node --check app.js
+          node --check firebase-adapter.js
+          node --check demo-adapter.js
+          node tests.mjs
       - name: Prepare static site
         shell: bash
         run: |

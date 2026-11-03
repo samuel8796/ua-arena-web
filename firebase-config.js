@@ -1,15 +1,16 @@
-// 到 Firebase Console → 專案設定 → 你的應用程式 → 網頁應用程式，複製設定值填入。
-// Firebase Web Config 是公開的專案識別資訊，並不是私密管理員金鑰。
-// 不要將 service account 金鑰、Gemini API key 或管理憑證放在這個檔案！
+// Firebase Web App 公開設定。身分與資料權限由 Firebase Authentication 和 Firestore Security Rules 控制。
+// 切勿將 Firebase service account、管理員金鑰、或 Gemini Developer API Key 寫入此檔案。
 export const firebaseConfig = {
-  apiKey: '',
-  authDomain: '',
-  projectId: '',
-  appId: '',
-  messagingSenderId: ''
+  apiKey: "AIzaSyDq_x2ZXD7P_Ep1uG4o2OpGKmuUjTxujXM",
+  authDomain: "ua-arena-web.firebaseapp.com",
+  projectId: "ua-arena-web",
+  storageBucket: "ua-arena-web.firebasestorage.app",
+  messagingSenderId: "22146218387",
+  appId: "1:22146218387:web:c28397c8f50971b03f1066",
+  measurementId: "G-5XW9LYB2SN"
 };
 
-// 啟用 Firebase AI Logic 後可改為 true；需要先依 README 設定 Firebase App Check。
+// 規則問答須另行啟用 Firebase AI Logic / App Check 並驗證來源。
 export const aiSettings = {
   enabled: false,
   model: 'gemini-2.5-flash',

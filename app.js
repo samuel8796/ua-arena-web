@@ -1,5 +1,5 @@
 import { firebaseConfig, aiSettings } from './firebase-config.js';
-import { COLORS, colorOf, safeText as e, shortId, formatDate, assertMatch, computeStats, aggregatePersonalStats, GUEST_PLAYER_ID, GUEST_DECK_ID, guestPlayer, personalGroupId, isGuestMatch, guestDeckLabel } from './core.mjs';
+import { COLORS, colorOf, safeText as e, shortId, formatDate, assertMatch, computeStats, aggregatePersonalStats, resolvePlayerDeckSelection, GUEST_PLAYER_ID, GUEST_DECK_ID, guestPlayer, personalGroupId, isGuestMatch, guestDeckLabel } from './core.mjs';
 import { demoAdapter } from './demo-adapter.js';
 import { QUICK_MATCH_LIMIT_MS, quickClock, mmss } from './quick-core.mjs';
 
@@ -194,10 +194,19 @@ function publicWatchPage(){
   app.innerHTML=`<div class="watch-page"><div class="watch-header"><div class="logo" style="margin:0"><span class="logo-icon">UA</span> UA <span class="arena">ARENA</span></div><button class="btn btn-ghost btn-sm" data-action="watch-home">返回 UA Arena</button></div><div class="watch-content"><div class="label-up">LIVE TOURNAMENT / PUBLIC VIEW</div>${t?`<h1>${e(t.title)}</h1><p class="muted">${e(t.description||'公開賽程')} · ${tournamentStatus(t.status)}</p><div class="tournament-overview" style="margin-top:25px"><div class="metric"><div class="metric-label">賽事狀態</div><div class="metric-num mint" style="font-size:21px">${tournamentStatus(t.status)}</div></div><div class="metric"><div class="metric-label">參賽人數</div><div class="metric-num">${t.participants?.length||0}</div></div><div class="metric"><div class="metric-label">賽事房主</div><div class="metric-num" style="font-size:18px">${e(t.hostName||'')}</div></div><div class="metric"><div class="metric-label">冠軍</div><div class="metric-num gold" style="font-size:20px">${e(t.champion||'尚未產生')}</div></div></div><section class="card"><h3>參賽者</h3><div class="public-entrant-list">${(t.participants||[]).map(p=>`<span class="tag">${e(p.name)}</span>`).join('')||'<span class="muted">尚未公布名單</span>'}</div></section><section class="card" style="margin-top:18px"><div class="section-head"><h3>賽程與即時戰況</h3><span class="tag">自動同步</span></div>${tournamentBracket(t.rounds,true,false)}</section><p class="muted sm" style="margin-top:22px">此連結為公開唯讀頁面，不提供修改賽程或存取私人戰績的權限。</p>`:`<div class="card" style="margin-top:30px"><h2>${state.publicWatchError?'無法載入賽事':'正在載入公開賽程…'}</h2><p class="muted">${e(state.publicWatchError||'請確認觀賽連結。')}</p></div>`}</div></div>`;
 }
 function ensureQuickDraft(force=false){
-  if(!force && state.quickDraft.playerA && state.players.some(p=>p.id===state.quickDraft.playerA))return;
-  const a=state.players.find(p=>p.id===state.user?.uid)?.id||state.players[0]?.id||'';
-  const b=isPersonal()?GUEST_PLAYER_ID:state.players.find(p=>p.id!==a)?.id||'';
-  state.quickDraft={playerA:a,playerB:b,deckA:pickDeck(a),deckB:pickDeck(b),guestDeck:guestDefault(),timerEnabled:true};
+  const d=state.quickDraft;
+  const validA=state.players.some(p=>p.id===d.playerA);
+  const validB=state.players.some(p=>p.id===d.playerB);
+  if(force||!validA||!validB||d.playerA===d.playerB){
+    const a=state.players.find(p=>p.id===state.user?.uid)?.id||state.players[0]?.id||'';
+    const b=isPersonal()?GUEST_PLAYER_ID:state.players.find(p=>p.id!==a)?.id||'';
+    state.quickDraft={playerA:a,playerB:b,deckA:pickDeck(a),deckB:pickDeck(b),guestDeck:guestDefault(),timerEnabled:true};
+  }else{
+    // onSnapshot can deliver members before their personal decks. Reconcile the
+    // selected IDs on every render, without overwriting a valid user selection.
+    d.deckA=d.playerA===GUEST_PLAYER_ID?GUEST_DECK_ID:pickDeck(d.playerA,d.deckA);
+    d.deckB=d.playerB===GUEST_PLAYER_ID?GUEST_DECK_ID:pickDeck(d.playerB,d.deckB);
+  }
 }
 function quickSetupPage(){
   ensureQuickDraft();const d=state.quickDraft;
@@ -207,7 +216,8 @@ function quickSetupPage(){
     ${deckInputFor(d.playerA,'A',d.deckA,d.guestDeck,true)}
     ${deckInputFor(d.playerB,'B',d.deckB,d.guestDeck,true)}
     </div><label class="quick-switch"><input type="checkbox" name="timerEnabled" ${d.timerEnabled?'checked':''}/><span><strong>開啟 30 分鐘回合計時</strong><small>每回合須按「回合開始／結束」，分別統計兩位玩家花費的時間。關閉時直接填寫勝負。</small></span></label>
-    <div class="modal-footer" style="padding-bottom:0"><button type="submit" class="btn btn-primary">${d.timerEnabled?'建立計時對戰 →':'直接輸入勝負 →'}</button></div></form></section>`;
+    ${(!d.deckA&&d.playerA!==GUEST_PLAYER_ID)||(!d.deckB&&d.playerB!==GUEST_PLAYER_ID)?'<div class="hint">正在同步雙方的個人牌組；若長時間沒有牌組，請確認該玩家已建立並啟用自己的牌組。</div>':''}
+    <div class="modal-footer" style="padding-bottom:0"><button type="submit" class="btn btn-primary" ${(!d.deckA&&d.playerA!==GUEST_PLAYER_ID)||(!d.deckB&&d.playerB!==GUEST_PLAYER_ID)?'disabled':''}>${d.timerEnabled?'建立計時對戰 →':'直接輸入勝負 →'}</button></div></form></section>`;
 }
 function quickResultForm(s){
   const timed=Boolean(s),d=s||state.quickPending;
@@ -255,7 +265,7 @@ setInterval(refreshQuickClock,250);
 function inviteUrl(){let url=new URL(location.href);url.search='';url.hash='';url.searchParams.set('join',state.groupId);return url.href}
 function render(){if(!state.user){authPage();return}if(!state.groupId){setupPage();return}const pages={overview:overviewPage,quick:quickPage,matches:matchesPage,decks:decksPage,players:playersPage,rules:rulesPage,tournaments:tournamentPage,profile:profilePage,groups:groupHubPage};shell((pages[state.tab]||overviewPage)())}
 function openModal(kind,draft={}){state.modal=kind;state.draft=draft;render()}
-function pickDeck(uid){return state.decks.find(d=>d.ownerUid===uid&&d.active!==false)?.id||''}
+function pickDeck(uid,selectedId=''){return resolvePlayerDeckSelection(uid,selectedId,state.decks)}
 function newMatch(){if(state.players.length<2){toast('請先加入群組或使用個人戰團的訪客模式。',true);return}const pa=state.players.find(p=>p.id===state.user.uid)?.id||state.players[0].id;const pb=isPersonal()?GUEST_PLAYER_ID:state.players.find(p=>p.id!==pa)?.id||'';openModal('match',{playerA:pa,playerB:pb,deckA:pickDeck(pa),deckB:pickDeck(pb),guestDeck:guestDefault(),winner:pa,note:''});}
 function newDeck(d={}){if(d.ownerUid&&d.ownerUid!==state.user?.uid){toast('只能編輯自己的牌組。',true);return}openModal('deck',{id:d.id||'',ownerUid:state.user.uid,name:d.name||'',color:d.color||'PURPLE',imageData:d.imageData||''});}
 async function loadGroup(gid){
@@ -444,7 +454,7 @@ app.addEventListener('submit',event=>{
     case 'join-group':{let gid=(fields.code||'').trim();if(gid.includes('://')){try{gid=new URL(gid).searchParams.get('join')||gid}catch{}}await adapter.joinGroup(state.user.uid,fields.nickname,gid);state.groupIds=[...new Set([...state.groupIds,gid])];state.inviteId='';restartPersonalHistory();history.replaceState({},'',location.pathname);await loadGroup(gid);toast('成功加入群組！');break;}
     case 'quick-setup':{
       const d=state.quickDraft;
-      const match={playerA:d.playerA,playerB:d.playerB,deckA:d.playerA===GUEST_PLAYER_ID?GUEST_DECK_ID:d.deckA,deckB:d.playerB===GUEST_PLAYER_ID?GUEST_DECK_ID:d.deckB,
+      const match={playerA:d.playerA,playerB:d.playerB,deckA:d.playerA===GUEST_PLAYER_ID?GUEST_DECK_ID:(fields.deckA||pickDeck(d.playerA,d.deckA)),deckB:d.playerB===GUEST_PLAYER_ID?GUEST_DECK_ID:(fields.deckB||pickDeck(d.playerB,d.deckB)),
         ...(isGuestMatch(d)?{guestDeck:{name:(fields.guestDeckName||d.guestDeck?.name||'').trim(),color:fields.guestDeckColor||d.guestDeck?.color||'OTHER'}}:{})};
       assertMatch({...match,winner:d.playerA},state.players,state.decks,{allowGuest:isPersonal()});
       if(d.timerEnabled){

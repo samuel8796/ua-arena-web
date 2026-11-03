@@ -208,3 +208,27 @@ test('個人名片獨立於私人使用者資料，僅本人可編輯',()=>{
   assert.ok(authAdapterCode.includes('async savePlayerCard(uid,card)'));
   assert.ok(authAdapterCode.includes('showBio:!!card.showBio'));
 });
+
+import { resolvePlayerDeckSelection } from './core.mjs';
+test('Quick Match: 牌組資料晚於團員載入時可補齊預設牌組',()=>{
+  assert.equal(resolvePlayerDeckSelection('b','',[]),'');
+  assert.equal(resolvePlayerDeckSelection('b','',[{id:'b-new',ownerUid:'b',active:true}]),'b-new');
+});
+test('Quick Match: 同戰團兩名玩家可以使用各自帳號牌組',()=>{
+  const personalDecks=[{id:'a-deck',ownerUid:'a',active:true},{id:'b-deck',ownerUid:'b',active:true}];
+  const selectedA=resolvePlayerDeckSelection('a','',personalDecks);
+  const selectedB=resolvePlayerDeckSelection('b','',personalDecks);
+  assert.equal(assertMatch({playerA:'a',playerB:'b',deckA:selectedA,deckB:selectedB,winner:'b'},people,personalDecks),true);
+});
+test('Quick Match: 選過的有效牌組不會被非同步更新覆蓋',()=>{
+  const personalDecks=[{id:'first',ownerUid:'b',active:true},{id:'chosen',ownerUid:'b',active:true}];
+  assert.equal(resolvePlayerDeckSelection('b','chosen',personalDecks),'chosen');
+  assert.equal(resolvePlayerDeckSelection('b','wrong-owner',[...personalDecks,{id:'wrong-owner',ownerUid:'a'}]),'first');
+  assert.equal(resolvePlayerDeckSelection('b','archived',[...personalDecks,{id:'archived',ownerUid:'b',active:false}]),'first');
+});
+test('Quick Match 提交讀取表單實際選擇的牌組，而非僅依賴草稿 ID',()=>{
+  const appCode=readFileSync(new URL('./app.js',import.meta.url),'utf8');
+  assert.ok(appCode.includes('fields.deckA||pickDeck(d.playerA,d.deckA)'));
+  assert.ok(appCode.includes('fields.deckB||pickDeck(d.playerB,d.deckB)'));
+  assert.ok(appCode.includes('d.deckA=d.playerA===GUEST_PLAYER_ID?GUEST_DECK_ID:pickDeck(d.playerA,d.deckA)'));
+});

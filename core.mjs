@@ -24,6 +24,12 @@ export const formatDate = value => {
   if(!date || Number.isNaN(date.getTime())) return '—';
   return date.toLocaleString('zh-TW',{timeZone:'Asia/Taipei',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
 };
+// The Quick Match form may render before account-owned deck listeners finish.
+// Preserve a valid choice; otherwise adopt the first ACTIVE deck owned by the player.
+export function resolvePlayerDeckSelection(playerId,selectedId,decks=[]) {
+  const eligible=decks.filter(d=>d.ownerUid===playerId && d.active!==false);
+  return eligible.some(d=>d.id===selectedId) ? selectedId : (eligible[0]?.id||'');
+}
 export function assertMatch({playerA,playerB,deckA,deckB,winner,guestDeck}, players=[],decks=[], {allowGuest=false}={}) {
   if(!playerA || !playerB || playerA===playerB) throw new Error('請選擇兩位不同的玩家。');
   if(!players.some(p=>p.id===playerA)||!players.some(p=>p.id===playerB)) throw new Error('玩家不存在。');

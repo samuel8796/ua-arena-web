@@ -166,3 +166,17 @@ test('Quick Match 30 分鐘計時完整保存訪客當場使用的牌組',()=>{
   assert.equal(q.guestDeck.name,'紅色野場牌');
 });
 console.log('Guest-player tests completed.');
+
+// v1.3.1 regression contracts; the Firestore emulator remains the authority
+// for fully evaluating these rules with real authenticated requests.
+import { readFileSync } from 'node:fs';
+const securityRules=readFileSync(new URL('./firestore.rules',import.meta.url),'utf8');
+const authAdapterCode=readFileSync(new URL('./firebase-adapter.js',import.meta.url),'utf8');
+test('個人戰團不存在時可依登入 UID 安全讀取',()=>{
+  assert.ok(securityRules.includes("allow get: if signedIn() && (!gid.matches('^personal_.*') || personalGroup(gid));"));
+  assert.ok(!securityRules.includes("(!gid.matches('^personal_.*') || resource.data.createdBy"));
+});
+test('防止註冊和登入 callback 重複建立同一個人戰團',()=>{
+  assert.ok(authAdapterCode.includes("const personalGroupTasks = new Map();"));
+  assert.ok(authAdapterCode.includes("if(pending)return pending;"));
+});

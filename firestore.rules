@@ -112,7 +112,8 @@ service cloud.firestore {
     match /groups/{gid} {
       // Knowing the random invite URL permits reading only the group name/metadata.
       // It does NOT grant access to player, deck or match collections.
-      allow get: if signedIn() && (!gid.matches('^personal_.*') || resource.data.createdBy == request.auth.uid);
+      // Allow the account owner to check a *missing* personal-group document safely.
+      allow get: if signedIn() && (!gid.matches('^personal_.*') || personalGroup(gid));
       allow list: if false;
       allow create: if signedIn()
         && (!gid.matches('^personal_.*') || gid == 'personal_' + request.auth.uid)

@@ -28,17 +28,27 @@ const tidy = docSnapshot => ({id:docSnapshot.id,...docSnapshot.data()});
 async function rememberGroup(uid,gid,nickname){
   await setDoc(userRef(uid),{groups:arrayUnion(gid), nickname, updatedAt:serverTimestamp()},{merge:true});
 }
+// Auth callbacks and signUp() can overlap. Share one pending initialization
+// per UID to avoid a second create being rejected as a restricted update.
+const personalGroupTasks = new Map();
 async function ensurePersonalGroup(uid, nickname){
-  const id=personalGroupId(uid), display=String(nickname||'玩家').trim().slice(0,24)||'玩家';
-  const name=display.length>=2?display:'玩家';
-  const g=groupRef(id);
-  const existing=await getDoc(g);
-  if(!existing.exists())await setDoc(g,{name:personalGroupName(name),createdBy:uid,createdAt:serverTimestamp()});
-  else if(existing.data().createdBy!==uid)throw new Error('個人戰團識別碼被占用，請聯繫管理員。');
-  const m=memberRef(id,uid);
-  if(!(await getDoc(m)).exists())await setDoc(m,{uid,nickname:name,role:'owner',joinedAt:serverTimestamp()});
-  await rememberGroup(uid,id,name);
-  return id;
+  const pending=personalGroupTasks.get(uid);
+  if(pending)return pending;
+  const task=(async()=>{
+    const id=personalGroupId(uid), display=String(nickname||'玩家').trim().slice(0,24)||'玩家';
+    const name=display.length>=2?display:'玩家';
+    const g=groupRef(id);
+    const existing=await getDoc(g);
+    if(!existing.exists())await setDoc(g,{name:personalGroupName(name),createdBy:uid,createdAt:serverTimestamp()});
+    else if(existing.data().createdBy!==uid)throw new Error('個人戰團識別碼被占用，請聯繫管理員。');
+    const m=memberRef(id,uid);
+    if(!(await getDoc(m)).exists())await setDoc(m,{uid,nickname:name,role:'owner',joinedAt:serverTimestamp()});
+    await rememberGroup(uid,id,name);
+    return id;
+  })();
+  personalGroupTasks.set(uid,task);
+  try{return await task;}
+  finally{if(personalGroupTasks.get(uid)===task)personalGroupTasks.delete(uid);}
 }
 export const firebaseAdapter = {
   mode:'cloud',

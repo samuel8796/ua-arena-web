@@ -1,5 +1,5 @@
 import { createQuickMatch, changeQuickMatch, quickMatchResult } from './quick-core.mjs';
-import { personalGroupId, personalGroupName } from './core.mjs';
+import { personalGroupId, personalGroupName, parsePlayedAt } from './core.mjs';
 import { addTournamentEntrant, removeTournamentEntrant, startTournament, recordTournamentWinner, publicTournamentSnapshot } from './tournament-core.mjs';
 const K='ua-arena-demo-v1-1';
 const SAMPLE_IMAGE='';
@@ -65,10 +65,11 @@ export const demoAdapter={
   async addDeck(gid,uid,d){if(d.ownerUid!==uid)throw new Error('只能建立自己的牌組');data.decks.push({...d,id:`d-${Date.now().toString(36)}`,createdBy:uid,active:true,createdAt:Date.now()});save();},
   async updateDeck(gid,id,d){Object.assign(data.decks.find(x=>x.id===id),d);save();},
   async archiveDeck(gid,id){data.decks.find(x=>x.id===id).active=false;save();},
-  async addMatch(gid,uid,m){data.matches.unshift({...m,groupId:gid,id:`m-${Date.now().toString(36)}`,recordedBy:uid,status:'active',createdAt:Date.now()});save();},
+  async addMatch(gid,uid,m){data.matches.unshift({...m,groupId:gid,id:`m-${Date.now().toString(36)}`,recordedBy:uid,status:'active',createdAt:Date.now(),playedAt:m.playedAt?parsePlayedAt(m.playedAt).getTime():Date.now()});save();},
   async voidMatch(gid,id){data.matches.find(x=>x.id===id).status='void';save();},
   async createQuickMatch(gid,uid,payload){const id=`q-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,7)}`;
     data.quickMatches.unshift({...createQuickMatch(payload,uid,Date.now()),id,groupId:gid});save();return id;},
+  async hideQuickMatch(gid,id,uid){const q=data.quickMatches.find(x=>x.id===id);if(!q||![q.playerA,q.playerB].includes(uid))throw new Error('沒有權限移除。');if(!['finished','cancelled'].includes(q.status))throw new Error('請先結束計時。');q.hiddenAt=Date.now();save();},
   async changeQuickMatch(gid,id,uid,action,playerId=''){
     const idx=data.quickMatches.findIndex(x=>x.id===id);if(idx<0)throw new Error('找不到對戰。');
     data.quickMatches[idx]=changeQuickMatch(data.quickMatches[idx],action,{uid,playerId,now:Date.now()});save();},
@@ -80,7 +81,7 @@ export const demoAdapter={
     data.quickMatches[idx]={...next,id};
     data.matches.unshift({id:matchId,groupId:gid,playerA:before.playerA,playerB:before.playerB,deckA:before.deckA,deckB:before.deckB,
       ...(before.guestDeck?{guestDeck:before.guestDeck}:{}),
-      winner,note,recordedBy:uid,status:'active',createdAt:Date.now(),quickMatchId:id,timing:quickMatchResult(next,next.finishedAtMs)});
+      winner,note,recordedBy:uid,status:'active',createdAt:Date.now(),playedAt:before.startedAtMs||before.createdAtMs,quickMatchId:id,timing:quickMatchResult(next,next.finishedAtMs)});
     save();},
 
   subscribeTournamentRequests(gid,id,cb){const fn=()=>cb((data.tournamentRequests||[]).filter(r=>r.tournamentId===id));fn();listeners.add(fn);return ()=>listeners.delete(fn);},

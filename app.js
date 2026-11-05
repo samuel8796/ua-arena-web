@@ -183,6 +183,10 @@ function personalExtras(){
     <p class="muted sm">僅統計你有參賽的有效場次；替別人代填不計入個人戰績。撤銷的對戰不列入。</p>
   </section>
   <section class="card" style="margin-top:20px">
+    <div class="section-head"><h3>▤ 我的牌組勝率</h3><span class="tag">跨戰團累計</span></div>
+    <div class="deck-rate-list">${personalDeckStats().map(d=>`<div class="deck-rate-row"><span>${e(d.name)}</span><strong>${d.rate}%</strong><small>${d.games} 場 · ${d.wins} 勝 · ${d.losses} 敗</small></div>`).join('')||'<div class="empty">尚無個人牌組的對戰紀錄。</div>'}</div>
+  </section>
+  <section class="card" style="margin-top:20px">
     <div class="section-head"><h3>◉ 公開玩家名片設定</h3><span class="tag">自行決定分享內容</span></div>
     <p class="muted sm">其他登入玩家點你的名片會看到你勾選的項目；Email、群組清單與完整私人對戰明細不會公開。</p>
     <form data-form="save-card" style="margin-top:15px">

@@ -49,6 +49,48 @@ export function assertMatch({playerA,playerB,deckA,deckB,winner,guestDeck}, play
   if(![playerA,playerB].includes(winner)) throw new Error('請選擇本場勝者。');
   return true;
 }
+
+export const matchDateValue = m => m?.playedAt || m?.createdAt;
+export const matchTimeMs = m => {
+  const v=matchDateValue(m);
+  return Number(v?.seconds)*1000 || v?.toDate?.()?.getTime?.() || (v instanceof Date?v.getTime():new Date(v||0).getTime()) || 0;
+};
+export function parsePlayedAt(raw,now=Date.now()) {
+  const text=String(raw||'').trim();
+  if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(text))throw new Error('請填寫有效的對戰日期與時間。');
+  const d=new Date(text),m=d.getTime();
+  if(!Number.isFinite(m)||d.getFullYear()<2000||m>now+300000 || d.getFullYear()!==Number(text.slice(0,4)) || d.getMonth()+1!==Number(text.slice(5,7)) || d.getDate()!==Number(text.slice(8,10)) || d.getHours()!==Number(text.slice(11,13)) || d.getMinutes()!==Number(text.slice(14,16)))throw new Error('對戰時間不可早於 2000 年、晚於現在，或使用無效日期。');
+  return d;
+}
+export function filterMatches(matches=[], {playerId='',from='',to=''}={}) {
+  const start=from?new Date(from+'T00:00:00').getTime():-Infinity;
+  const end=to?new Date(to+'T23:59:59.999').getTime():Infinity;
+  return matches.filter(m=>(!playerId||m.playerA===playerId||m.playerB===playerId)
+    && matchTimeMs(m)>=start && matchTimeMs(m)<=end)
+    .sort((a,b)=>matchTimeMs(b)-matchTimeMs(a));
+}
+export function filteredMatchStats(matches=[],playerId='') {
+  const active=matches.filter(m=>m.status==='active');
+  const wins=playerId?active.filter(m=>m.winner===playerId).length:0;
+  return {games:active.length,wins,losses:playerId?active.length-wins:0,
+    rate:playerId&&active.length?Math.round(wins*100/active.length):0,
+    uniquePlayers:new Set(active.flatMap(m=>[m.playerA,m.playerB])).size,
+    voided:matches.length-active.length};
+}
+export function aggregateDeckWinRates(uid,groupMatches={},decks=[]) {
+  const byId=new Map(decks.filter(d=>d.ownerUid===uid).map(d=>[d.id,d])),byDeck=new Map();
+  for(const matches of Object.values(groupMatches||{}))for(const m of matches||[]){
+    if(m.status!=='active')continue;
+    const id=m.playerA===uid?m.deckA:m.playerB===uid?m.deckB:null;
+    if(!id)continue;
+    const d=byId.get(id);
+    if(!byDeck.has(id))byDeck.set(id,{id,name:d?.name||'已封存牌組',color:d?.color||'OTHER',games:0,wins:0,losses:0,rate:0});
+    const item=byDeck.get(id);item.games++;
+    if(m.winner===uid)item.wins++;else item.losses++;
+    item.rate=Math.round(item.wins*100/item.games);
+  }
+  return [...byDeck.values()].sort((a,b)=>b.games-a.games || b.wins-a.wins || a.name.localeCompare(b.name));
+}
 export function computeStats(players=[],decks=[],matches=[]) {
   const active=matches.filter(m=>m.status==='active');
   const decksById=Object.fromEntries(decks.map(d=>[d.id,d]));

@@ -84,11 +84,11 @@ service cloud.firestore {
       allow create, update: if signedIn() && uid == request.auth.uid
         && request.resource.data.keys().hasAll([
              'nickname','bio','showBio','showGroupStats','showOverallStats',
-             'showFavoriteDeck','favoriteDeck','totalStats','updatedAt'
+             'showFavoriteDeck','favoriteDeck','favoriteDeckStats','totalStats','updatedAt'
            ])
         && request.resource.data.keys().hasOnly([
              'nickname','bio','showBio','showGroupStats','showOverallStats',
-             'showFavoriteDeck','favoriteDeck','totalStats','updatedAt'
+             'showFavoriteDeck','favoriteDeck','favoriteDeckStats','totalStats','updatedAt'
            ])
         && request.resource.data.nickname is string
         && request.resource.data.nickname.size() >= 2
@@ -104,6 +104,21 @@ service cloud.firestore {
         && request.resource.data.favoriteDeck.name is string
         && request.resource.data.favoriteDeck.name.size() <= 42
         && request.resource.data.favoriteDeck.color in ['RED','BLUE','GREEN','YELLOW','PURPLE','MULTI','OTHER']
+        && (!('favoriteDeckStats' in request.resource.data) || (
+             request.resource.data.favoriteDeckStats is map
+             && request.resource.data.favoriteDeckStats.keys().hasAll(['games','wins','losses','rate'])
+             && request.resource.data.favoriteDeckStats.keys().hasOnly(['games','wins','losses','rate'])
+             && request.resource.data.favoriteDeckStats.games is int
+             && request.resource.data.favoriteDeckStats.wins is int
+             && request.resource.data.favoriteDeckStats.losses is int
+             && request.resource.data.favoriteDeckStats.rate is int
+             && request.resource.data.favoriteDeckStats.games >= 0
+             && request.resource.data.favoriteDeckStats.wins >= 0
+             && request.resource.data.favoriteDeckStats.losses >= 0
+             && request.resource.data.favoriteDeckStats.games == request.resource.data.favoriteDeckStats.wins + request.resource.data.favoriteDeckStats.losses
+             && request.resource.data.favoriteDeckStats.rate >= 0
+             && request.resource.data.favoriteDeckStats.rate <= 100
+           ))
         && request.resource.data.totalStats is map
         && request.resource.data.totalStats.keys().hasAll(['games','wins','losses','rate'])
         && request.resource.data.totalStats.keys().hasOnly(['games','wins','losses','rate'])
@@ -377,13 +392,21 @@ service cloud.firestore {
               && request.resource.data.turns == resource.data.turns
               && request.resource.data.resultMatchId == '')
           );
+        // Either participant can remove a completed/cancelled timer from the
+        // quick list without destroying its audit trail or recorded match.
+        allow update: if member(gid)
+          && request.auth.uid in [resource.data.playerA,resource.data.playerB]
+          && resource.data.status in ['finished','cancelled']
+          && !('hiddenAt' in resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hiddenAt'])
+          && request.resource.data.hiddenAt == request.time;
         allow delete: if false;
       }
       match /matches/{matchId} {
         allow get, list: if member(gid);
         allow create: if member(gid)
           && request.resource.data.keys().hasAll(['playerA','deckA','playerB','deckB','winner','note','recordedBy','status','createdAt'])
-          && request.resource.data.keys().hasOnly(['playerA','deckA','playerB','deckB','guestDeck','winner','note','recordedBy','status','createdAt','quickMatchId','timing'])
+          && request.resource.data.keys().hasOnly(['playerA','deckA','playerB','deckB','guestDeck','winner','note','recordedBy','status','createdAt','quickMatchId','timing','playedAt'])
           && request.resource.data.playerA is string && request.resource.data.playerB is string
           && request.resource.data.playerA != request.resource.data.playerB
           && validBattleSide(gid,request.resource.data)
@@ -392,6 +415,11 @@ service cloud.firestore {
           && request.resource.data.recordedBy == request.auth.uid
           && request.resource.data.status == 'active'
           && request.resource.data.createdAt == request.time
+          && (!('playedAt' in request.resource.data) || (
+            request.resource.data.playedAt is timestamp
+            && request.resource.data.playedAt.toMillis() >= 946684800000
+            && request.resource.data.playedAt.toMillis() <= request.time.toMillis() + 300000
+          ))
           && ('quickMatchId' in request.resource.data) == ('timing' in request.resource.data)
           && (!('quickMatchId' in request.resource.data) || (
             request.resource.data.quickMatchId is string
@@ -422,7 +450,8 @@ service cloud.firestore {
         // Soft void only: no stealth edits of score or participants.
         allow update: if member(gid)
           && resource.data.status == 'active'
-          && (resource.data.recordedBy == request.auth.uid || groupOwner(gid))
+          && (resource.data.recordedBy == request.auth.uid || groupOwner(gid)
+              || resource.data.playerA == request.auth.uid || resource.data.playerB == request.auth.uid)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','cancelledAt'])
           && request.resource.data.status == 'void'
           && request.resource.data.cancelledAt == request.time;

@@ -1,10 +1,10 @@
 import { firebaseConfig, aiSettings } from './firebase-config.js';
-import { RULE_SYSTEM_PROMPT, personalGroupId, personalGroupName } from './core.mjs';
+import { RULE_SYSTEM_PROMPT, personalGroupId, personalGroupName, parsePlayedAt } from './core.mjs';
 import { createQuickMatch, changeQuickMatch, quickMatchResult } from './quick-core.mjs';
 import { addTournamentEntrant, removeTournamentEntrant, startTournament, recordTournamentWinner, publicTournamentSnapshot } from './tournament-core.mjs';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js';
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signOut, updateProfile } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js';
-import { getFirestore, doc, collection, getDoc, getDocs, setDoc, updateDoc, addDoc, onSnapshot, serverTimestamp, arrayUnion, runTransaction, writeBatch } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js';
+import { getFirestore, doc, collection, getDoc, getDocs, setDoc, updateDoc, addDoc, onSnapshot, serverTimestamp, arrayUnion, runTransaction, writeBatch, Timestamp } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js';
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-app-check.js';
 import { getAI, getGenerativeModel, GoogleAIBackend } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-ai.js';
 
@@ -187,6 +187,7 @@ export const firebaseAdapter = {
       showBio:!!card.showBio,showGroupStats:!!card.showGroupStats,
       showOverallStats:!!card.showOverallStats,showFavoriteDeck:!!card.showFavoriteDeck,
       favoriteDeck:card.showFavoriteDeck?{name:card.favoriteDeck?.name||'',color:card.favoriteDeck?.color||'OTHER'}:{name:'',color:'OTHER'},
+      favoriteDeckStats:card.showFavoriteDeck?{games:Number(card.favoriteDeckStats?.games||0),wins:Number(card.favoriteDeckStats?.wins||0),losses:Number(card.favoriteDeckStats?.losses||0),rate:Number(card.favoriteDeckStats?.rate||0)}:{games:0,wins:0,losses:0,rate:0},
       totalStats:{games:Number(card.totalStats?.games||0),wins:Number(card.totalStats?.wins||0),
         losses:Number(card.totalStats?.losses||0),rate:Number(card.totalStats?.rate||0)},
       updatedAt:serverTimestamp()
@@ -208,8 +209,10 @@ export const firebaseAdapter = {
     await updateDoc(personalDeckRef(uid,id),{active:false,updatedAt:serverTimestamp()});
   },
   async addMatch(gid,uid,m){
+    const playedAt=m.playedAt?parsePlayedAt(m.playedAt):new Date();
     await addDoc(colRef(gid,'matches'),{playerA:m.playerA,deckA:m.deckA,playerB:m.playerB,deckB:m.deckB,winner:m.winner,
       ...(m.guestDeck?{guestDeck:{name:m.guestDeck.name.trim(),color:m.guestDeck.color}}:{}),
+      playedAt:Timestamp.fromDate(playedAt),
       note:(m.note||'').trim(),recordedBy:uid,status:'active',createdAt:serverTimestamp()});
   },
   async voidMatch(gid,id){await updateDoc(doc(db,'groups',gid,'matches',id),{status:'void',cancelledAt:serverTimestamp()});},
@@ -218,6 +221,16 @@ export const firebaseAdapter = {
     const obj=createQuickMatch(payload,uid,now);
     const created=await addDoc(colRef(gid,'quickMatches'),{...obj,createdAt:serverTimestamp(),updatedAt:serverTimestamp()});
     return created.id;
+  },
+  async hideQuickMatch(gid,id,uid){
+    const ref=doc(db,'groups',gid,'quickMatches',id);
+    const snap=await getDoc(ref);
+    if(!snap.exists())throw new Error('找不到此速配場次。');
+    const q=snap.data();
+    if(![q.playerA,q.playerB].includes(uid))throw new Error('只有本場兩位玩家能移除速配清單紀錄。');
+    if(!['finished','cancelled'].includes(q.status))throw new Error('請先結束或取消計時，再移除清單紀錄。');
+    if(q.hiddenAt)return;
+    await updateDoc(ref,{hiddenAt:serverTimestamp()});
   },
   async changeQuickMatch(gid,id,uid,action,playerId=''){
     const ref=doc(db,'groups',gid,'quickMatches',id);
@@ -241,7 +254,7 @@ export const firebaseAdapter = {
       tx.set(matchDoc,{playerA:before.playerA,deckA:before.deckA,playerB:before.playerB,deckB:before.deckB,
         ...(before.guestDeck?{guestDeck:before.guestDeck}:{}),
         winner,note:note.trim().slice(0,200),recordedBy:uid,status:'active',createdAt:serverTimestamp(),
-        quickMatchId:id,timing});
+        quickMatchId:id,timing,playedAt:Timestamp.fromMillis(before.startedAtMs||before.createdAtMs)});
       tx.update(ref,{...next,updatedAt:serverTimestamp()});
     });
   },

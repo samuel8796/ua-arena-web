@@ -255,7 +255,7 @@ function quickSetupPage(){
     <div class="field"><label>玩家 B</label><select name="playerB">${pickerOptions(state.players,d.playerB,d.playerA,isPersonal())}</select></div>
     ${deckInputFor(d.playerA,'A',d.deckA,d.guestDeck,true)}
     ${deckInputFor(d.playerB,'B',d.deckB,d.guestDeck,true)}
-    </div><label class="quick-switch"><input type="checkbox" name="timerEnabled" ${d.timerEnabled?'checked':''}/><span><strong>開啟 30 分鐘回合計時</strong><small>每回合須按「回合開始／結束」，分別統計兩位玩家花費的時間。關閉時直接填寫勝負。</small></span></label>
+    </div><label class="quick-switch"><input type="checkbox" name="timerDisabled" ${!d.timerEnabled?'checked':''}/><span><strong>不使用計時，直接登錄勝負</strong><small>預設使用 30 分鐘計時。如要補登或只記錄結果，請勾選此選項，並可填寫過去的對戰日期。</small></span></label>
     ${(!d.deckA&&d.playerA!==GUEST_PLAYER_ID)||(!d.deckB&&d.playerB!==GUEST_PLAYER_ID)?'<div class="hint">正在同步雙方的個人牌組；若長時間沒有牌組，請確認該玩家已建立並啟用自己的牌組。</div>':''}
     <div class="modal-footer" style="padding-bottom:0"><button type="submit" class="btn btn-primary" ${(!d.deckA&&d.playerA!==GUEST_PLAYER_ID)||(!d.deckB&&d.playerB!==GUEST_PLAYER_ID)?'disabled':''}>${d.timerEnabled?'建立計時對戰 →':'直接輸入勝負 →'}</button></div></form></section>`;
 }
@@ -284,12 +284,23 @@ function quickSessionPage(s){
  </section>${state.quickResultOpen && playing?quickResultForm(s):''}`;
 }
 function quickPage(){
- const active=state.quickMatches.filter(x=>x.status==='ready'||x.status==='running').sort((a,b)=>(b.createdAtMs||0)-(a.createdAtMs||0));
+ const visible=state.quickMatches.filter(x=>!x.hiddenAt);
+ const active=visible.filter(x=>x.status==='ready'||x.status==='running').sort((a,b)=>(b.createdAtMs||0)-(a.createdAtMs||0));
  const selected=state.quickMatches.find(x=>x.id===state.quickSessionId)||(!state.quickCreate?active[0]:null);
  if(selected && !state.quickSessionId)state.quickSessionId=selected.id;
- return `<div class="page-head"><div><div class="label-up">QUICK MATCH / 30-MINUTE CLOCK</div><h1 style="margin-top:7px">Quick Match</h1><p>選擇雙方牌組，決定是否啟用 30 分鐘計時；記錄每位玩家每一回合的用時。</p></div><button class="btn btn-primary" data-action="quick-new">＋ 新對戰</button></div>
+ const rows=visible.slice().sort((a,b)=>b.createdAtMs-a.createdAtMs).slice(0,30).map(q=>`<div class="quick-list-entry">
+   <button type="button" class="quick-list-row ${selected?.id===q.id?'selected':''}" data-action="quick-select" data-id="${e(q.id)}">
+    <span class="quick-list-meta"><strong>${e(playerName(q.playerA))} vs ${e(playerName(q.playerB))}</strong>
+      <small>${e(new Date(q.startedAtMs||q.createdAtMs||Date.now()).toLocaleString('zh-TW',{timeZone:'Asia/Taipei',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}))}</small></span>
+    <span class="tag">${q.status==='finished'?'已完成':q.status==='ready'?'待開始':q.status==='running'?'進行中':'已取消'}</span>
+   </button>
+   ${[q.playerA,q.playerB].includes(state.user?.uid)?`<button type="button" class="btn btn-danger btn-sm quick-remove" data-action="quick-remove" data-id="${e(q.id)}">刪除</button>`:''}
+ </div>`).join('');
+ return `<div class="page-head"><div><div class="label-up">QUICK MATCH / 30-MINUTE CLOCK</div><h1>Quick Match</h1><p>30 分鐘計時與直接記錄兩種模式，對戰結果會保存在目前戰團。</p></div><button class="btn btn-primary" data-action="quick-new">＋ 新對戰</button></div>
  ${state.players.length<2?`<section class="card"><div class="empty">請先建立個人牌組或邀請其他玩家加入對戰團。</div></section>`:state.quickPending?quickResultForm(null):state.quickCreate?quickSetupPage():selected?quickSessionPage(selected):quickSetupPage()}
- ${state.quickMatches.length?`<section class="card quick-session-list"><div class="section-head"><h3>計時場次（可跨裝置恢復）</h3><span class="tag">${state.quickMatches.length} 場</span></div><div class="quick-list">${[...state.quickMatches].sort((a,b)=>b.createdAtMs-a.createdAtMs).slice(0,20).map(s=>`<button class="quick-list-row ${selected?.id===s.id?'selected':''}" data-action="quick-select" data-id="${e(s.id)}"><span>${e(playerName(s.playerA))} vs ${e(playerName(s.playerB))}</span><small>${s.status==='finished'?'已完成':s.status==='ready'?'待開始':s.status==='running'?'計時中':'已取消'} · ${mmss(quickClock(s).remainingMs)} 剩餘</small></button>`).join('')}</div></section>`:''}`;
+ ${visible.length?`<section class="card quick-session-list"><div class="section-head"><h3>歷史對戰及計時場次</h3><span class="tag">${visible.length} 場</span></div>
+ <p class="muted sm" style="margin-bottom:13px">雙方玩家都能刪除這份速配清單。已完成的正式戰績仍會保留，可從「戰績紀錄」查看或撤銷。</p>
+ <div class="quick-list">${rows}</div></section>`:''}`;
 }
 function refreshQuickClock(){
  if(state.tab!=='quick'||state.quickCreate)return;
@@ -395,6 +406,17 @@ async function handleAction(action,el){
   case 'open-quick':state.tab='quick';state.modal=null;state.quickCreate=true;state.quickPending=null;state.quickResultOpen=false;ensureQuickDraft();render();break;
   case 'quick-new':state.quickCreate=true;state.quickSessionId='';state.quickPending=null;state.quickResultOpen=false;ensureQuickDraft(true);render();break;
   case 'quick-select':state.tab='quick';state.quickSessionId=el.dataset.id;state.quickCreate=false;state.quickPending=null;state.quickResultOpen=false;render();break;
+   case 'quick-remove':{
+    const session=state.quickMatches.find(x=>x.id===el.dataset.id);
+    if(!session||![session.playerA,session.playerB].includes(state.user?.uid))throw new Error('只有本場的兩位玩家可以刪除。');
+    if(!confirm('確定從快速對戰清單刪除此場？未結束的計時會先取消；已保存的正式戰績仍會保留，可在戰績詳情撤銷。'))break;
+    await runBusy(async()=>{
+      if(['ready','running'].includes(session.status))await adapter.changeQuickMatch(state.groupId,session.id,state.user.uid,'cancel');
+      await adapter.hideQuickMatch(state.groupId,session.id,state.user.uid);
+      if(state.quickSessionId===session.id){state.quickSessionId='';state.quickCreate=true;state.quickPending=null;}
+      render();toast('已從速配清單移除。');
+    });break;
+   }
   case 'quick-result-open':state.quickResultOpen=true;render();break;
   case 'quick-cancel':if(confirm('放棄這場計時對戰？不會產生勝負紀錄，計時資料將保留為已取消。'))await runBusy(async()=>{await adapter.changeQuickMatch(state.groupId,state.quickSessionId,state.user.uid,'cancel');toast('已取消計時對戰。')});break;
   case 'quick-result-close':state.quickResultOpen=false;render();break;
@@ -443,7 +465,7 @@ app.addEventListener('change',async event=>{
     else if(target.name==='playerB'){d.playerB=target.value;d.deckB=pickDeck(d.playerB);}
     else if(target.name==='deckA'||target.name==='deckB')d[target.name]=target.value;
     else if(target.name==='guestDeckColor'){d.guestDeck||=guestDefault();d.guestDeck.color=target.value;}
-    else if(target.name==='timerEnabled')d.timerEnabled=target.checked;
+    else if(target.name==='timerDisabled')d.timerEnabled=!target.checked;
     render();return;
   }
   if(!state.modal||state.modal!=='match')return;

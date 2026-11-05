@@ -76,6 +76,7 @@ function matchesPage(){
  const summary=state.playerFilter
    ? `<span><b>${stats.games}</b> 場</span><span><b>${stats.wins}</b> 勝</span><span><b>${stats.losses}</b> 敗</span><span><b>${stats.rate}%</b> 勝率</span>`
    : `<span><b>${stats.games}</b> 場有效</span><span><b>${stats.uniquePlayers}</b> 位玩家</span><span><b>${stats.voided}</b> 場已撤銷</span>`;
+ const rateTags=!state.playerFilter?computeStats(state.players,state.decks,all).players.filter(p=>p.games>0).sort((a,b)=>b.games-a.games).slice(0,10).map(p=>`<span class="person-rate">${e(p.nickname)} <b>${p.rate}%</b> 勝率</span>`).join(''):'';
  const rows=all.map(m=>`<article class="history-item ${m.status==='void'?'is-void':''}">
    <div class="history-main"><span class="history-date">${e(matchDateLabel(m))}</span><strong>${e(playerName(m.playerA))} <span class="muted">vs</span> ${e(playerName(m.playerB))}</strong><small>${m.status==='void'?'已撤銷':`🏆 ${e(playerName(m.winner))} 勝`}</small></div>
    <button class="btn btn-outline btn-sm" type="button" data-action="match-detail" data-id="${e(m.id)}">查看詳情</button></article>`).join('');
@@ -85,7 +86,7 @@ function matchesPage(){
    <label>開始日期<input type="date" id="match-from" value="${e(state.matchFrom)}"></label>
    <label>結束日期<input type="date" id="match-to" value="${e(state.matchTo)}"></label>
    <button class="btn btn-ghost btn-sm" data-action="clear-match-filters">清除篩選</button>
- </div><div class="history-stats">${summary}</div></section>
+ </div><div class="history-stats">${summary}${rateTags}</div></section>
  <section class="card history-results">${rows||'<div class="empty">此篩選條件沒有對戰紀錄。</div>'}</section>`;
 }
 function matchDetailBody(){

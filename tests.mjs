@@ -232,3 +232,54 @@ test('Quick Match 提交讀取表單實際選擇的牌組，而非僅依賴草�
   assert.ok(appCode.includes('fields.deckB||pickDeck(d.playerB,d.deckB)'));
   assert.ok(appCode.includes('d.deckA=d.playerA===GUEST_PLAYER_ID?GUEST_DECK_ID:pickDeck(d.playerA,d.deckA)'));
 });
+
+
+// v1.5 regressions: actual play date, user-level deck rates, and two-party access.
+import { aggregateDeckWinRates, filterMatches, filteredMatchStats, parsePlayedAt, matchTimeMs } from './core.mjs';
+test('v1.5 牌組勝率按照玩家實際使用跨戰團計算，代填不算本人',()=>{
+ const joined={g1:[
+  {playerA:'a',deckA:'d1',playerB:'b',winner:'a',recordedBy:'c',status:'active'},
+  {playerA:'b',deckA:'d2',playerB:'c',winner:'c',recordedBy:'a',status:'active'}],
+  g2:[{playerA:'c',playerB:'a',deckB:'d1',winner:'c',status:'active'},
+      {playerA:'a',deckA:'d1',winner:'a',status:'void'}]};
+ const x=aggregateDeckWinRates('a',joined,decks);
+ assert.equal(x.length,1);assert.equal(x[0].games,2);assert.equal(x[0].wins,1);
+ assert.equal(x[0].losses,1);assert.equal(x[0].rate,50);
+});
+test('v1.5 團內每個牌組顯示正確勝率',()=>{
+ const p=computeStats(people,decks,matches).players.find(p=>p.id==='a');
+ assert.equal(p.deckStats.find(d=>d.id==='d1').rate,50);
+});
+test('v1.5 可以補登過去時間但禁止無效日期和未來日期',()=>{
+ const now=new Date('2026-11-05T21:00:00').getTime();
+ assert.equal(parsePlayedAt('2025-08-14T20:30',now).getFullYear(),2025);
+ assert.throws(()=>parsePlayedAt('2025-02-30T15:00',now));
+ assert.throws(()=>parsePlayedAt('2025-13-01T15:00',now));
+ assert.throws(()=>parsePlayedAt('2026-12-01T10:00',now));
+});
+test('v1.5 依實際對戰日和玩家過濾，新舊紀錄都能查',()=>{
+ const x=[
+  {playerA:'a',playerB:'b',status:'active',winner:'a',playedAt:'2025-03-11T13:30:00',createdAt:'2026-11-05T13:30:00'},
+  {playerA:'b',playerB:'a',status:'active',winner:'b',createdAt:'2025-03-15T13:30:00'},
+  {playerA:'a',playerB:'c',status:'void',winner:'a',playedAt:'2025-03-18T13:30:00'},
+  {playerA:'b',playerB:'c',status:'active',winner:'b',playedAt:'2025-03-18T13:30:00'}];
+ const selected=filterMatches(x,{playerId:'a',from:'2025-03-01',to:'2025-03-31'});
+ const summary=filteredMatchStats(selected,'a');
+ assert.equal(selected.length,3);assert.equal(summary.games,2);assert.equal(summary.wins,1);
+ assert.equal(summary.losses,1);assert.equal(summary.rate,50);
+ assert.ok(matchTimeMs(x[0]) < matchTimeMs({createdAt:x[0].createdAt}));
+});
+test('v1.5 公開名片、回填日期和雙方取消的 Rules 有限制',()=>{
+ const rules=readFileSync(new URL('./firestore.rules',import.meta.url),'utf8');
+ const adapter=readFileSync(new URL('./firebase-adapter.js',import.meta.url),'utf8');
+ const ui=readFileSync(new URL('./app.js',import.meta.url),'utf8');
+ assert.ok(rules.includes("'favoriteDeckStats'"));
+ assert.ok(rules.includes("request.resource.data.playedAt is timestamp"));
+ assert.ok(rules.includes("request.resource.data.hiddenAt == request.time"));
+ assert.ok(rules.includes("resource.data.playerB == request.auth.uid"));
+ assert.ok(adapter.includes('async hideQuickMatch(gid,id,uid)'));
+ assert.ok(ui.includes("case 'match-detail'"));
+ assert.ok(ui.includes('match-from'));
+ assert.ok(ui.includes("case 'quick-remove'"));
+ assert.ok(ui.includes("const checked=key=>c[key]!==false?'checked':'';"));
+});

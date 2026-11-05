@@ -106,7 +106,7 @@ export function computeStats(players=[],decks=[],matches=[]) {
       deckSummary[statId].games++;
       if(m.winner===p.id)deckSummary[statId].wins++; else deckSummary[statId].losses++;
     }
-    const ds=Object.values(deckSummary);
+    const ds=Object.values(deckSummary).map(d=>({...d,rate:d.games?Math.round(d.wins*100/d.games):0}));
     const by=(field)=>[...ds].sort((a,b)=>b[field]-a[field] || b.games-a.games)[0] || null;
     return {...p,games:games.length,wins,losses:games.length-wins,rate:games.length?Math.round(wins/games.length*100):0,
       favorite:by('games'),mostWins:by('wins'),mostLosses:by('losses'),deckStats:ds};

@@ -49,7 +49,8 @@ export const demoAdapter={
   async getPlayerCard(uid){return (data.playerCards||{})[uid]||null;},
   async savePlayerCard(uid,card){data.playerCards||={};data.playerCards[uid]={...card,updatedAt:Date.now()};save();},
 
-  async saveProfile(uid,nickname,bio){data.profile={nickname,bio};demoUser.displayName=nickname;data.members.filter(m=>m.uid===uid).forEach(m=>m.nickname=nickname);save();return {failures:[]};},
+  async saveAvatar(uid,avatarData){if(uid!==demoUser.uid)throw new Error('只能修改自己的頭像。');data.profile||={};data.profile.avatarData=avatarData;data.members.filter(m=>m.uid===uid).forEach(m=>m.avatarData=avatarData);save();return {failures:[]};},
+  async saveProfile(uid,nickname,bio){data.profile={...(data.profile||{}),nickname,bio};demoUser.displayName=nickname;data.members.filter(m=>m.uid===uid).forEach(m=>m.nickname=nickname);save();return {failures:[]};},
   subscribePublicTournament(id,cb){const publish=()=>cb(data.tournaments.find(t=>t.publicId===id)?{...publicTournamentSnapshot(data.tournaments.find(t=>t.publicId===id)),id}:null);publish();const fn=()=>publish();listeners.add(fn);return ()=>listeners.delete(fn);},
   async getGroup(gid){return data.groups[gid]||data.groups.demo},
   async createGroup(uid,nickname,title){const id=`demo-${Date.now().toString(36)}`;data.groups[id]={id,name:title,createdBy:uid};data.members.push({id:uid,uid,nickname,role:'owner'});save();return id;},

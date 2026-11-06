@@ -341,8 +341,8 @@ service cloud.firestore {
       match /quickMatches/{quickId} {
         allow get, list: if member(gid);
         allow create: if member(gid)
-          && request.resource.data.keys().hasAll(['playerA','playerB','deckA','deckB','timerEnabled','status','createdBy','createdAt','createdAtMs','updatedAt','updatedBy','startedAtMs','activePlayer','activeSinceMs','turns','finishedAtMs','resultMatchId','revision','lastActionAtMs'])
-          && request.resource.data.keys().hasOnly(['playerA','playerB','deckA','deckB','guestDeck','timerEnabled','status','createdBy','createdAt','createdAtMs','updatedAt','updatedBy','startedAtMs','activePlayer','activeSinceMs','turns','finishedAtMs','resultMatchId','revision','lastActionAtMs'])
+          && request.resource.data.keys().hasAll(['playerA','playerB','deckA','deckB','duelRolled','decider','firstPlayer','timerEnabled','status','createdBy','createdAt','createdAtMs','updatedAt','updatedBy','startedAtMs','activePlayer','activeSinceMs','turns','finishedAtMs','resultMatchId','revision','lastActionAtMs','duelRolled','decider','firstPlayer'])
+          && request.resource.data.keys().hasOnly(['playerA','playerB','deckA','deckB','guestDeck','timerEnabled','status','createdBy','createdAt','createdAtMs','updatedAt','updatedBy','startedAtMs','activePlayer','activeSinceMs','turns','finishedAtMs','resultMatchId','revision','lastActionAtMs','duelRolled','decider','firstPlayer'])
           && request.resource.data.timerEnabled == true
           && request.resource.data.playerA != request.resource.data.playerB
           && validBattleSide(gid,request.resource.data)
@@ -354,6 +354,9 @@ service cloud.firestore {
           && request.resource.data.createdAtMs >= request.time.toMillis() - 60000
           && request.resource.data.createdAtMs <= request.time.toMillis() + 60000
           && request.resource.data.status == 'ready'
+          && request.resource.data.duelRolled == false
+          && request.resource.data.decider == ''
+          && request.resource.data.firstPlayer == ''
           && request.resource.data.startedAtMs == 0
           && request.resource.data.activeSinceMs == 0
           && request.resource.data.activePlayer == ''
@@ -364,8 +367,8 @@ service cloud.firestore {
           && request.resource.data.lastActionAtMs == request.resource.data.createdAtMs;
         allow update: if member(gid)
           && resource.data.status in ['ready','running']
-          && request.resource.data.keys().hasOnly(['playerA','playerB','deckA','deckB','guestDeck','timerEnabled','status','createdBy','createdAt','createdAtMs','updatedAt','updatedBy','startedAtMs','activePlayer','activeSinceMs','turns','finishedAtMs','resultMatchId','revision','lastActionAtMs'])
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','startedAtMs','activePlayer','activeSinceMs','turns','finishedAtMs','resultMatchId','revision','lastActionAtMs','updatedAt','updatedBy'])
+          && request.resource.data.keys().hasOnly(['playerA','playerB','deckA','deckB','guestDeck','timerEnabled','status','createdBy','createdAt','createdAtMs','updatedAt','updatedBy','startedAtMs','activePlayer','activeSinceMs','turns','finishedAtMs','resultMatchId','revision','lastActionAtMs','duelRolled','decider','firstPlayer'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','startedAtMs','activePlayer','activeSinceMs','turns','finishedAtMs','resultMatchId','revision','lastActionAtMs','updatedAt','updatedBy','duelRolled','decider','firstPlayer'])
           && request.resource.data.updatedBy == request.auth.uid
           && request.resource.data.updatedAt == request.time
           && request.resource.data.revision == resource.data.revision + 1
@@ -380,12 +383,36 @@ service cloud.firestore {
           && request.resource.data.finishedAtMs is int
           && request.resource.data.resultMatchId is string
           && request.resource.data.activePlayer in ['',resource.data.playerA,resource.data.playerB]
-          && request.resource.data.status in ['running','finished','cancelled']
+          && request.resource.data.status in ['ready','running','finished','cancelled']
           && (
+            // Draw a player who will decide whether to go first or second.
+            (resource.data.status == 'ready'
+              && resource.data.duelRolled == false
+              && resource.data.decider == ''
+              && resource.data.firstPlayer == ''
+              && request.resource.data.status == 'ready'
+              && request.resource.data.duelRolled == true
+              && request.resource.data.decider in [resource.data.playerA,resource.data.playerB]
+              && request.resource.data.firstPlayer == ''
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['duelRolled','decider','updatedAt','updatedBy','revision','lastActionAtMs']))
+            ||
+            // Winner of the draw chooses the first player; clock is still idle.
+            (resource.data.status == 'ready'
+              && resource.data.duelRolled == true
+              && resource.data.decider in [resource.data.playerA,resource.data.playerB]
+              && resource.data.firstPlayer == ''
+              && request.resource.data.status == 'ready'
+              && request.resource.data.decider == resource.data.decider
+              && request.resource.data.duelRolled == true
+              && request.resource.data.firstPlayer in [resource.data.playerA,resource.data.playerB]
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['firstPlayer','updatedAt','updatedBy','revision','lastActionAtMs']))
+            ||
             // Start turn: no active turn yet, cannot alter closed turn history.
             (request.resource.data.status == 'running'
               && resource.data.activePlayer == ''
               && request.resource.data.activePlayer in [resource.data.playerA,resource.data.playerB]
+              && (!('duelRolled' in resource.data) || (resource.data.firstPlayer != '' && request.resource.data.duelRolled == resource.data.duelRolled && request.resource.data.decider == resource.data.decider && request.resource.data.firstPlayer == resource.data.firstPlayer))
+              && (resource.data.startedAtMs != 0 || !('firstPlayer' in resource.data) || request.resource.data.activePlayer == resource.data.firstPlayer)
               && request.resource.data.activeSinceMs == request.resource.data.lastActionAtMs
               && request.resource.data.startedAtMs == (resource.data.startedAtMs == 0 ? request.resource.data.activeSinceMs : resource.data.startedAtMs)
               && request.resource.data.turns == resource.data.turns
@@ -395,8 +422,9 @@ service cloud.firestore {
             // End turn: close the currently running player's turn.
             (request.resource.data.status == 'running'
               && resource.data.activePlayer != ''
-              && request.resource.data.activePlayer == ''
-              && request.resource.data.activeSinceMs == 0
+              && request.resource.data.activePlayer == (resource.data.activePlayer == resource.data.playerA ? resource.data.playerB : resource.data.playerA)
+              && request.resource.data.activeSinceMs == request.resource.data.lastActionAtMs
+              && (!('duelRolled' in resource.data) || (request.resource.data.duelRolled == resource.data.duelRolled && request.resource.data.decider == resource.data.decider && request.resource.data.firstPlayer == resource.data.firstPlayer))
               && request.resource.data.startedAtMs == resource.data.startedAtMs
               && request.resource.data.turns.size() == resource.data.turns.size() + 1
               && request.resource.data.turns[resource.data.turns.size()].playerId == resource.data.activePlayer
@@ -420,6 +448,7 @@ service cloud.firestore {
                 && request.resource.data.turns[resource.data.turns.size()].endedAtMs == request.resource.data.lastActionAtMs
                 && request.resource.data.turns[resource.data.turns.size()].durationMs == request.resource.data.lastActionAtMs - resource.data.activeSinceMs
               ))
+              && (!('duelRolled' in resource.data) || (request.resource.data.duelRolled == resource.data.duelRolled && request.resource.data.decider == resource.data.decider && request.resource.data.firstPlayer == resource.data.firstPlayer))
               && getAfter(/databases/$(database)/documents/groups/$(gid)/matches/$(request.resource.data.resultMatchId)).data.quickMatchId == quickId)
             ||
             (request.resource.data.status == 'cancelled'
@@ -428,6 +457,7 @@ service cloud.firestore {
               && request.resource.data.startedAtMs == resource.data.startedAtMs
               && request.resource.data.finishedAtMs == request.resource.data.lastActionAtMs
               && request.resource.data.turns == resource.data.turns
+              && (!('duelRolled' in resource.data) || (request.resource.data.duelRolled == resource.data.duelRolled && request.resource.data.decider == resource.data.decider && request.resource.data.firstPlayer == resource.data.firstPlayer))
               && request.resource.data.resultMatchId == '')
           );
         // Either participant can remove a completed/cancelled timer from the
@@ -444,12 +474,13 @@ service cloud.firestore {
         allow get, list: if member(gid);
         allow create: if member(gid)
           && request.resource.data.keys().hasAll(['playerA','deckA','playerB','deckB','winner','note','recordedBy','status','createdAt'])
-          && request.resource.data.keys().hasOnly(['playerA','deckA','playerB','deckB','guestDeck','winner','note','recordedBy','status','createdAt','quickMatchId','timing','playedAt','tournamentId','tournamentRound','tournamentMatch','tournamentTitle'])
+          && request.resource.data.keys().hasOnly(['playerA','deckA','playerB','deckB','guestDeck','winner','note','recordedBy','status','createdAt','quickMatchId','timing','playedAt','firstPlayer','tournamentId','tournamentRound','tournamentMatch','tournamentTitle'])
           && request.resource.data.playerA is string && request.resource.data.playerB is string
           && request.resource.data.playerA != request.resource.data.playerB
           && validBattleSide(gid,request.resource.data)
           && validTournamentMatch(gid,matchId,request.resource.data)
           && request.resource.data.winner in [request.resource.data.playerA,request.resource.data.playerB]
+          && (!('firstPlayer' in request.resource.data) || request.resource.data.firstPlayer in [request.resource.data.playerA,request.resource.data.playerB])
           && request.resource.data.note is string && request.resource.data.note.size() <= 200
           && request.resource.data.recordedBy == request.auth.uid
           && request.resource.data.status == 'active'

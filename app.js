@@ -1,6 +1,6 @@
 import { firebaseConfig, aiSettings } from './firebase-config.js';
 import {chooseAvatarCrop} from './avatar-crop-ui.mjs?v=1.8';
-import { COLORS, colorOf, safeText as e, shortId, formatDate, assertMatch, computeStats, aggregatePersonalStats, aggregateDeckWinRates, filterMatches, filteredMatchStats, matchTimeMs, matchDateValue, parsePlayedAt, topDecksByWinRate, resolvePlayerDeckSelection, GUEST_PLAYER_ID, GUEST_DECK_ID, guestPlayer, personalGroupId, isGuestMatch, guestDeckLabel } from './core.mjs?v=1.7';
+import { COLORS, colorOf, safeText as e, shortId, formatDate, assertMatch, computeStats, aggregatePersonalStats, aggregateDeckWinRates, filterMatches, filteredMatchStats, matchTimeMs, matchDateValue, parsePlayedAt, topDecksByWinRate, playerWinStreak, streakTier, resolvePlayerDeckSelection, GUEST_PLAYER_ID, GUEST_DECK_ID, guestPlayer, personalGroupId, isGuestMatch, guestDeckLabel } from './core.mjs?v=1.9';
 import { demoAdapter } from './demo-adapter.js';
 import { QUICK_MATCH_LIMIT_MS, quickClock, mmss } from './quick-core.mjs';
 
@@ -27,10 +27,16 @@ const guardedImage=src=>typeof src==='string' && /^data:image\/(webp|jpeg);base6
 // Player portraits are stored as compact JPEG data on the player's group-member
 // document; keep the initial placeholder until an upload is available.
 const guardedAvatar=src=>typeof src==='string'&&src.length<=40000&&/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(src)?src:'';
-function playerAvatar(uid,extra='') {
+function playerAvatar(uid,extra='',forcedTier=undefined) {
   const p=player(uid),label=uid===state.user?.uid?userLabel():p?.nickname||'玩家';
   const src=guardedAvatar(uid===state.user?.uid?(state.profile?.avatarData||p?.avatarData):p?.avatarData);
-  return `<span class="avatar${extra?' '+extra:''}">${src?`<img src="${src}" alt="${e(label)} 的頭像" decoding="async" loading="lazy">`:e((label[0]||'?').toUpperCase())}</span>`;
+  // The frame is decorative; only the user's profile contains tier explanations.
+  const tier=forcedTier===undefined?(uid&&uid!==GUEST_PLAYER_ID?streakTier(playerWinStreak(uid,state.matches).current):null):forcedTier;
+  const frame=['bronze','silver','gold','prismatic'].includes(tier)?tier:null;
+  return `<span class="avatar-shell${extra?' '+extra:''}${frame?' is-framed':''}">
+    <span class="avatar">${src?`<img src="${src}" alt="${e(label)} 的頭像" decoding="async" loading="lazy">`:e((label[0]||'?').toUpperCase())}</span>
+    ${frame?`<img class="avatar-frame-decoration" src="./assets/streak-${frame}.svg" alt="" aria-hidden="true" loading="lazy" decoding="async">`:''}
+  </span>`;
 }
 
 /** Reuse existing personal/legacy deck images without re-encoding them.
@@ -159,7 +165,6 @@ function playerModalBody(){
   const groupVisible=card===undefined?false:(card?card.showGroupStats!==false:true);
   const self=stats.id===state.user?.uid;
   const total=card?.showOverallStats?card.totalStats:null;
-  const cardIntro=card===undefined?'<span class="tag">載入名片中…</span>':card?'<span class="tag">玩家自訂名片</span>':'<span class="tag">尚未設定公開名片</span>';
   const topDecks=groupVisible?topDecksByWinRate(stats.deckStats,5):[];
   const favoriteMatches=card?.favoriteDeck?.name
     ?state.decks.filter(d=>d.ownerUid===stats.id&&d.name===card.favoriteDeck.name&&d.color===card.favoriteDeck.color)
@@ -167,7 +172,6 @@ function playerModalBody(){
   const favoriteId=favoriteMatches.length===1?favoriteMatches[0].id:'';
   return `<div class="player-line">${playerAvatar(stats.id,'avatar-player')}
     <div><h2>${e(stats.nickname)}</h2><p class="muted sm">${self?'你自己的玩家名片':'其他玩家的名片'} · ${e(state.group?.name||'')}</p></div></div>
-    ${cardIntro}
     ${card?.showBio&&card.bio?`<section class="card" style="margin-top:14px"><h3>關於我</h3><p class="muted">${e(card.bio)}</p></section>`:''}
     ${card?.showFavoriteDeck&&card.favoriteDeck?.name&&!topDecks.length?`<section class="card" style="margin-top:14px"><h3>♡ 最愛牌組</h3><div class="deck-favorite-feature">${deckArtwork(stats.id,favoriteId,card.favoriteDeck.name,'deck-art-favorite')}<div class="deck-favorite-info"><strong>${e(card.favoriteDeck.name)}</strong><span>${e(colorOf(card.favoriteDeck.color).name)}</span><small>使用此牌組：${Number(card.favoriteDeckStats?.games||0)} 場 · ${Number(card.favoriteDeckStats?.wins||0)} 勝 · ${Number(card.favoriteDeckStats?.rate||0)}% 勝率（公開快照）</small></div></div></section>`:''}
     ${groupVisible?`<h3 style="margin-top:18px">目前戰團戰績</h3><div class="stats-detail">
@@ -234,9 +238,24 @@ function personalExtras(){
   </section>`;
 }
 
+function streakGuide(){
+  const streak=playerWinStreak(state.user?.uid,state.matches);
+  const tiers=[{id:'bronze',threshold:2,name:'銅框'},{id:'silver',threshold:5,name:'銀框'},
+    {id:'gold',threshold:10,name:'金框'},{id:'prismatic',threshold:20,name:'彩色框'}];
+  const active=streakTier(streak.current);
+  return `<section class="card streak-guide">
+    <div class="section-head"><h3>✦ 連勝頭像外框</h3><span class="tag">目前戰團</span></div>
+    <div class="streak-status"><strong>目前連勝 ${streak.current} 場</strong><span>${active?'已獲得 '+e(tiers.find(t=>t.id===active)?.name||'外框'):'再連勝 '+Math.max(0,2-streak.current)+' 場即可取得銅框'}</span></div>
+    <div class="streak-tier-grid">${tiers.map(t=>`<div class="streak-tier-card${active===t.id?' achieved':''}">
+      ${playerAvatar(state.user?.uid,'avatar-tier-preview',t.id)}
+      <strong>連贏 ${t.threshold} 場</strong><small>${t.name}</small>
+    </div>`).join('')}</div>
+    <p class="hint">外框會依目前戰團的連續勝場自動變化，輸掉一場就重新累計。只計入有效戰績，並按實際對戰時間排序；已撤銷的對戰不計入。其他頁面只顯示外框，不顯示等級說明。</p>
+  </section>`;
+}
 function profilePage(){
   const me=getStats().players.find(p=>p.id===state.user?.uid);
-  return `<div class="page-head"><div><div class="label-up">ACCOUNT / PERSONAL PROFILE</div><h1>我的個人資料</h1><p>編輯你的全站暱稱，並查看帳號所屬的對戰團。</p></div></div><div class="profile-grid"><section class="card"><div class="profile-heading">${playerAvatar(state.user?.uid,'avatar-large')}<div><h2>${e(userLabel())}</h2><p class="muted sm">${e(state.user?.email||'展示帳號')}</p></div></div><div class="avatar-editor"><label class="avatar-upload-control"><input type="file" name="avatar" accept="image/*" aria-label="上傳個人頭像"><span>📷 更換頭像</span></label><button class="btn btn-ghost btn-sm" data-action="remove-avatar" type="button" ${!guardedAvatar(state.profile?.avatarData)?'disabled':''}>移除頭像</button><p class="hint">圖片會裁切成正方形並壓縮，供已加入戰團的成員查看；按「確認使用」後才會儲存。</p></div><div class="divider"></div><form data-form="save-profile"><div class="field"><label>公開玩家暱稱</label><input name="nickname" minlength="2" maxlength="24" required value="${e(userLabel())}" placeholder="你的顯示名稱"></div><div class="field mt"><label>個人簡介（只有你自己能在此頁查看）</label><textarea name="bio" maxlength="160" rows="4" placeholder="例如：喜歡紫色牌組">${e(state.profile?.bio||'')}</textarea></div><div class="hint">儲存後會同步更新你已加入對戰團的玩家暱稱；歷史勝負不會因此刪除。</div><button class="btn btn-primary" type="submit" style="margin-top:18px">儲存個人資料</button></form></section><section class="card"><h3>帳號資訊</h3><div class="profile-info-row"><span>Email</span><strong>${e(state.user?.email||'未設定')}</strong></div><div class="profile-info-row"><span>信箱驗證</span><strong>${state.user?.emailVerified?'已驗證':'尚未驗證'}</strong></div><div class="profile-info-row"><span>加入對戰團</span><strong>${state.groupIds.length} 個</strong></div><div class="profile-info-row"><span>目前團內戰績</span><strong>${me?`${me.wins} 勝 / ${me.losses} 敗`:'尚無紀錄'}</strong></div><div class="divider"></div><h3>我加入的對戰團</h3>${state.groupIds.map(id=>`<button class="nav" data-action="select-group-card" data-id="${e(id)}">⇄ ${e(state.groupDetails[id]||id)} ${id===state.groupId?'· 目前':''}</button>`).join('')}<div class="hint">Email 與密碼由 Firebase Authentication 管理；此頁先提供安全的暱稱與簡介編輯。</div></section></div>` + personalExtras();
+  return `<div class="page-head"><div><div class="label-up">ACCOUNT / PERSONAL PROFILE</div><h1>我的個人資料</h1><p>編輯你的全站暱稱，並查看帳號所屬的對戰團。</p></div></div><div class="profile-grid"><section class="card"><div class="profile-heading">${playerAvatar(state.user?.uid,'avatar-large')}<div><h2>${e(userLabel())}</h2><p class="muted sm">${e(state.user?.email||'展示帳號')}</p></div></div><div class="avatar-editor"><label class="avatar-upload-control"><input type="file" name="avatar" accept="image/*" aria-label="上傳個人頭像"><span>📷 更換頭像</span></label><button class="btn btn-ghost btn-sm" data-action="remove-avatar" type="button" ${!guardedAvatar(state.profile?.avatarData)?'disabled':''}>移除頭像</button><p class="hint">圖片會裁切成正方形並壓縮，供已加入戰團的成員查看；按「確認使用」後才會儲存。</p></div><div class="divider"></div><form data-form="save-profile"><div class="field"><label>公開玩家暱稱</label><input name="nickname" minlength="2" maxlength="24" required value="${e(userLabel())}" placeholder="你的顯示名稱"></div><div class="field mt"><label>個人簡介（只有你自己能在此頁查看）</label><textarea name="bio" maxlength="160" rows="4" placeholder="例如：喜歡紫色牌組">${e(state.profile?.bio||'')}</textarea></div><div class="hint">儲存後會同步更新你已加入對戰團的玩家暱稱；歷史勝負不會因此刪除。</div><button class="btn btn-primary" type="submit" style="margin-top:18px">儲存個人資料</button></form></section><section class="card"><h3>帳號資訊</h3><div class="profile-info-row"><span>Email</span><strong>${e(state.user?.email||'未設定')}</strong></div><div class="profile-info-row"><span>信箱驗證</span><strong>${state.user?.emailVerified?'已驗證':'尚未驗證'}</strong></div><div class="profile-info-row"><span>加入對戰團</span><strong>${state.groupIds.length} 個</strong></div><div class="profile-info-row"><span>目前團內戰績</span><strong>${me?`${me.wins} 勝 / ${me.losses} 敗`:'尚無紀錄'}</strong></div><div class="divider"></div><h3>我加入的對戰團</h3>${state.groupIds.map(id=>`<button class="nav" data-action="select-group-card" data-id="${e(id)}">⇄ ${e(state.groupDetails[id]||id)} ${id===state.groupId?'· 目前':''}</button>`).join('')}<div class="hint">Email 與密碼由 Firebase Authentication 管理；此頁先提供安全的暱稱與簡介編輯。</div></section></div>` + streakGuide() + personalExtras();
 }
 const tournamentStatus=s=>({registration:'開放報名',running:'進行中',completed:'已完賽',cancelled:'已取消'})[s]||'未知狀態';
 function spectatorUrl(publicId){const u=new URL(location.href);u.search='';u.hash='';u.searchParams.set('watch',publicId);return u.href;}

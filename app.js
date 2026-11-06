@@ -723,7 +723,14 @@ async function handleAction(action,el){
   case 'tournament-match':openModal('tournament-match',{round:Number(el.dataset.round),match:Number(el.dataset.match)});break;
   case 'watch-home':location.assign(location.pathname);break;
   case 'select-existing-group':{const gid=$('#group-select')?.value;if(gid)await runBusy(async()=>await loadGroup(gid));else toast('請先選擇群組。',true);break}
-  case 'remove-avatar':if(guardedAvatar(state.profile?.avatarData)&&confirm('確定移除個人頭像？同戰團成員將恢復顯示你的暱稱首字。')){
+  case 'remove-card-cover':
+     state.draft.cardCoverData='';
+     document.getElementById('card-cover-preview').innerHTML='<span class="profile-cover-placeholder">尚未設定名片背景</span>';
+     el.disabled=true;break;
+   case 'remove-profile-cover':if(guardedCover(state.profile?.profileCoverData)&&confirm('確定移除個人資料背景？')){
+     await runBusy(async()=>{await adapter.saveProfileCover(state.user.uid,'');state.profile={...state.profile,profileCoverData:''};render();toast('個人資料背景已移除。')});
+   }break;
+   case 'remove-avatar':if(guardedAvatar(state.profile?.avatarData)&&confirm('確定移除個人頭像？同戰團成員將恢復顯示你的暱稱首字。')){
     await runBusy(async()=>{
       const result=await adapter.saveAvatar(state.user.uid,'',state.groupIds);
       state.profile={...state.profile,avatarData:''};
@@ -839,8 +846,29 @@ app.addEventListener('change',async event=>{
     }catch(err){console.error(err);toast(readableError(err),true)}
     return;
   }
+  if(target.name==='profileCover'&&target.files?.[0]){
+    const file=target.files[0];target.value='';
+    try{const data=await chooseWideCrop(file,'profile');if(!data)return;
+      await runBusy(async()=>{await adapter.saveProfileCover(state.user.uid,data);state.profile={...state.profile,profileCoverData:data};render();toast('個人資料背景已更新。')});
+    }catch(err){console.error(err);toast(readableError(err),true)}
+    return;
+  }
+  if(target.name==='cardCover'&&target.files?.[0]){
+    const file=target.files[0];target.value='';
+    try{const data=await chooseWideCrop(file,'card');if(!data)return;
+      state.draft.cardCoverData=data;
+      document.getElementById('card-cover-preview').innerHTML='<img src="'+data+'" alt="名片背景預覽">';
+      document.querySelector('[data-action="remove-card-cover"]').disabled=false;
+      toast('名片背景已裁切，記得按「儲存公開名片」。');
+    }catch(err){console.error(err);toast(readableError(err),true)}
+    return;
+  }
   if(target.name==='cover'&&target.files?.[0]){
-    await runBusy(async()=>{state.draft.imageData=await imageToCompressedDataUrl(target.files[0]);render();toast('圖片已壓縮並準備儲存。')});return;
+    const file=target.files[0];target.value='';
+    try{const data=await chooseWideCrop(file,'deck');if(!data)return;
+      state.draft.imageData=data;render();toast('已裁切為 16:9，儲存牌組後生效。');
+    }catch(err){console.error(err);toast(readableError(err),true)}
+    return;
   }
   if(state.modal==='deck'&&target.name==='ownerUid'){state.draft.ownerUid=target.value;return;}
   if(state.tab==='quick' && state.quickCreate && target.closest('[data-form="quick-setup"]')){

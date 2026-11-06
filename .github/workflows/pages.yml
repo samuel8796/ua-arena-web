@@ -23,6 +23,7 @@ jobs:
       - name: Run UA Arena checks
         run: |
           node --check app.js
+          node --check wide-crop-ui.mjs
           node --check avatar-crop-ui.mjs
           node --check avatar-crop-core.mjs
           node --check firebase-adapter.js
@@ -35,7 +36,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist/assets
-          cp index.html app.js core.mjs avatar-crop-ui.mjs avatar-crop-core.mjs tournament-core.mjs quick-core.mjs demo-adapter.js firebase-adapter.js firebase-config.js styles.css .nojekyll dist/
+          cp index.html app.js core.mjs wide-crop-ui.mjs avatar-crop-ui.mjs avatar-crop-core.mjs tournament-core.mjs quick-core.mjs demo-adapter.js firebase-adapter.js firebase-config.js styles.css .nojekyll dist/
           cp assets/favicon.svg dist/assets/
           cp assets/streak-*.svg dist/assets/
           mkdir -p dist/data

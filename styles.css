@@ -866,3 +866,94 @@ input,select,textarea{max-width:100%;min-width:0}
 
 /* Ensure rectangular crop canvas fills its aspect-ratio viewport on Safari. */
 .wide-crop-preview .wide-crop-canvas{position:absolute;inset:0;width:100%;height:100%;}
+
+/* v2.4 · Non-obstructive image settings and fixed-size battle art */
+.profile-cover{
+  border:0!important;
+  border-radius:0!important;
+  box-shadow:none!important;
+  overflow:visible!important;
+  margin-bottom:17px;
+}
+.profile-cover>img{
+  border:0!important;
+  border-radius:0!important;
+  background:transparent;
+}
+.profile-cover-placeholder{
+  border:0;
+  background:linear-gradient(125deg,#25443e,#192a42);
+  border-radius:0;
+}
+.image-settings{position:relative;z-index:5;flex:0 0 auto}
+.image-settings-gear{
+  display:grid;place-items:center;
+  width:34px;height:34px;min-width:34px;min-height:34px;
+  padding:0;border-radius:9px;border:1px solid #668579aa;
+  background:#101f2bd9;color:#eaf8f1;font-size:17px;
+  box-shadow:0 2px 9px #0006;
+}
+.image-settings-gear:focus-visible{outline:2px solid var(--mint);outline-offset:2px}
+.image-settings-menu{
+  position:absolute;right:0;top:calc(100% + 6px);z-index:11;
+  display:flex;flex-direction:column;gap:5px;
+  min-width:146px;padding:7px;background:#172638;
+  border:1px solid #4c6776;border-radius:11px;
+  box-shadow:0 13px 30px #000c;
+}
+.image-settings-menu[hidden]{display:none!important}
+.image-settings-menu button,.image-settings-upload{
+  width:100%;min-height:39px;border:0;border-radius:8px;
+  padding:9px 11px;background:#243447;color:#e3f2f5;
+  font-size:12px;font-weight:800;text-align:left;cursor:pointer;
+  display:flex;align-items:center;white-space:nowrap;
+}
+.image-settings-menu button:hover,.image-settings-upload:hover{background:#344b5d}
+.image-settings-menu .image-settings-danger{color:#ffbabc;background:#3b2933}
+.image-settings-upload{position:relative;overflow:hidden;margin:0}
+.image-settings-upload input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;font-size:100px}
+.profile-cover>.image-settings{
+  position:absolute;top:9px;right:9px;z-index:8;
+}
+.profile-heading>.image-settings{margin-left:auto;align-self:flex-start}
+.profile-heading{align-items:center}
+.avatar-editor{margin:6px 0 0}
+.avatar-editor .hint{font-size:11px}
+.deck-image-editor{
+  position:relative;width:100%;border-radius:11px;
+}
+.deck-image-preview{
+  position:relative;display:grid;place-items:center;aspect-ratio:16 / 9;
+  width:100%;overflow:hidden;border-radius:11px;
+  background:#0e1a29;border:1px solid #33485a;
+}
+.deck-image-preview>img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block;background:#0d1825}
+.deck-image-empty{color:#88a7b7;font-size:12px;text-align:center;padding:16px}
+.deck-image-editor>.image-settings{position:absolute;right:10px;top:10px}
+.card-cover-editor{position:relative}
+.card-cover-editor>.image-settings{
+  position:absolute;top:37px;right:9px;
+}
+.card-cover-editor .card-cover-preview{margin-top:9px}
+.detail-participants .detail-side .deck-art-battle{
+  display:block!important;position:relative;
+  width:100%!important;height:auto!important;min-height:0!important;
+  max-height:none!important;aspect-ratio:16 / 9!important;
+  margin:0!important;padding:0!important;
+  flex:0 0 auto;
+  background:#101d2b;
+}
+.detail-participants .detail-side .deck-art-battle>img{
+  position:absolute;inset:0;width:100%;height:100%;
+  object-fit:contain!important;object-position:center!important;
+}
+.detail-participants .detail-side .deck-art-battle>.deck-art-missing{position:absolute;inset:0}
+.detail-participants .detail-side .detail-side-info{
+  min-height:0!important;height:auto!important;
+  padding:11px 10px!important;gap:6px!important;
+}
+@media(max-width:740px){
+ .profile-cover>.image-settings{right:6px;top:6px}
+ .detail-participants .detail-side .detail-side-info{padding:8px 7px!important;gap:5px!important}
+ .deck-image-editor>.image-settings{top:7px;right:7px}
+}

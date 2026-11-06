@@ -924,41 +924,38 @@ app.addEventListener('change',async event=>{
     render();return;
   }
   if(target.name==='avatar'&&target.files?.[0]){
-    const file=target.files[0];
-    target.value=''; // Re-selecting the same file must still reopen the editor.
+    const file=target.files[0];target.value='';
+    if(guardedAvatar(state.profile?.avatarData)){toast('已有頭像，請先從設定移除舊圖片。',true);return;}
     try{
-      const data=await chooseAvatarCrop(file);
-      if(!data)return; // Cancel never sends a Firebase write.
-      await runBusy(async()=>{
-        const result=await adapter.saveAvatar(state.user.uid,data,state.groupIds);
-        state.profile={...state.profile,avatarData:data};
-        state.players=state.players.map(p=>p.id===state.user.uid?{...p,avatarData:data}:p);
-        render();toast(result.failures?.length?'頭像已更新，但部分戰團同步失敗。':'個人頭像已更新！');
-      });
+      const source=await prepareImageSource(file,145000);
+      await applyAvatarCrop(source);
     }catch(err){console.error(err);toast(readableError(err),true)}
     return;
   }
   if(target.name==='profileCover'&&target.files?.[0]){
     const file=target.files[0];target.value='';
-    try{const data=await chooseWideCrop(file,'profile');if(!data)return;
-      await runBusy(async()=>{await adapter.saveProfileCover(state.user.uid,data);state.profile={...state.profile,profileCoverData:data};render();toast('個人資料背景已更新。')});
+    if(guardedCover(state.profile?.profileCoverData)){toast('已有背景圖片，請先從設定移除舊圖片。',true);return;}
+    try{
+      const source=await prepareImageSource(file,145000);
+      await applyProfileCoverCrop(source);
     }catch(err){console.error(err);toast(readableError(err),true)}
     return;
   }
   if(target.name==='cardCover'&&target.files?.[0]){
     const file=target.files[0];target.value='';
-    try{const data=await chooseWideCrop(file,'card');if(!data)return;
-      state.draft.cardCoverData=data;
-      document.getElementById('card-cover-preview').innerHTML='<img src="'+data+'" alt="名片背景預覽">';
-      document.querySelector('[data-action="remove-card-cover"]').disabled=false;
-      toast('名片背景已裁切，記得按「儲存公開名片」。');
+    if(guardedCover(state.draft.cardCoverData)){toast('已有名片背景，請先移除後才能重新上傳。',true);return;}
+    try{
+      const source=await prepareImageSource(file,145000);
+      await applyCardCoverCrop(source);
     }catch(err){console.error(err);toast(readableError(err),true)}
     return;
   }
   if(target.name==='cover'&&target.files?.[0]){
     const file=target.files[0];target.value='';
-    try{const data=await chooseWideCrop(file,'deck');if(!data)return;
-      state.draft.imageData=data;render();toast('已裁切為 16:9，儲存牌組後生效。');
+    if(guardedImage(state.draft.imageData)){toast('已有牌組圖片，請先移除後才能重新上傳。',true);return;}
+    try{
+      const source=await prepareImageSource(file,145000);
+      await applyDeckCrop(source);
     }catch(err){console.error(err);toast(readableError(err),true)}
     return;
   }
@@ -1002,14 +999,14 @@ app.addEventListener('submit',event=>{
       const favorite=state.decks.find(d=>d.id===fields.favoriteDeckId&&d.ownerUid===state.user.uid&&d.active!==false);
       const favoriteStats=personalDeckStats().find(d=>d.id===favorite?.id)||{games:0,wins:0,losses:0,rate:0};
       const visibleTotal=fields.showOverallStats?{games:all.games,wins:all.wins,losses:all.losses,rate:all.rate}:{games:0,wins:0,losses:0,rate:0};
-      const card={nickname:userLabel().slice(0,24),bio:state.profile?.bio||'',coverData:guardedCover(state.draft.cardCoverData??state.myCard?.coverData),showBio:!!fields.showBio,
+      const card={nickname:userLabel().slice(0,24),bio:state.profile?.bio||'',coverData:guardedCover(state.draft.cardCoverData??state.myCard?.coverData),coverSourceData:validCropSource(state.draft.cardCoverSourceData)||'',showBio:!!fields.showBio,
         showGroupStats:!!fields.showGroupStats,showOverallStats:!!fields.showOverallStats,
         showFavoriteDeck:!!fields.showFavoriteDeck,
         favoriteDeck:favorite&&fields.showFavoriteDeck?{name:favorite.name,color:favorite.color}:{name:'',color:'OTHER'},
         favoriteDeckStats:fields.showFavoriteDeck?{games:favoriteStats.games,wins:favoriteStats.wins,losses:favoriteStats.losses,rate:favoriteStats.rate}:{games:0,wins:0,losses:0,rate:0},
         totalStats:visibleTotal};
       await adapter.savePlayerCard(state.user.uid,card);
-      state.myCard=card;state.modal=null;render();toast('公開玩家名片已儲存。');break;
+      state.myCard={...card};state.profile={...state.profile,cardCoverSourceData:card.coverSourceData};state.modal=null;render();toast('公開玩家名片已儲存。');break;
     }
     case 'create-tournament':{
       const id=await adapter.createTournament(state.groupId,state.user.uid,fields.title,fields.description||'',userLabel(),fields.eventAt);

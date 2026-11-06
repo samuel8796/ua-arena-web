@@ -20,4 +20,51 @@
 <path d="M100 0 112 18 128 16 119 31 124 41 100 32 76 41 81 31 72 16 88 18Z" fill="url(#iris-prismatic)" stroke="#e7c2ff" stroke-width="1.4"/><g transform="translate(100 21) scale(1 0.95)"><path d="M0 -14 10 0 0 14 -10 0Z" fill="url(#metal-prismatic)" stroke="#e7c2ff" stroke-width="1.7"/><path d="M0 -11 6 0 0 11 -6 0Z" fill="url(#gem-prismatic)" opacity=".95"/><path d="M-6 0H6 M0 -11V11" stroke="#fff" stroke-opacity=".54" stroke-width=".7"/></g>
 <path d="M42 164 Q79 182 100 172 Q121 182 158 164 L140 184 L122 180 L100 199 L78 180 L60 184Z" fill="url(#iris-prismatic)" stroke="#e7c2ff" stroke-width="1.3"/><g transform="translate(100 181) scale(1 1)"><path d="M0 -14 10 0 0 14 -10 0Z" fill="url(#metal-prismatic)" stroke="#e7c2ff" stroke-width="1.7"/><path d="M0 -11 6 0 0 11 -6 0Z" fill="url(#gem-prismatic)" opacity=".95"/><path d="M-6 0H6 M0 -11V11" stroke="#fff" stroke-opacity=".54" stroke-width=".7"/></g>
 <g fill="#e7c2ff" opacity=".9"><path d="M27 25l2 6 6 2-6 2-2 6-2-6-6-2 6-2Z"/><path d="M174 145l1.7 5.3 5.3 1.7-5.3 1.7-1.7 5.3-1.7-5.3-5.3-1.7 5.3-1.7Z"/><circle cx="22" cy="112" r="1.7"/><circle cx="182" cy="67" r="1.6"/></g>
+
+<!-- V2 ornamental layered laurel and jeweled crown; open center retained. -->
+<circle cx="100" cy="100" r="79" fill="none" stroke="#9a95ff" stroke-width="10" opacity=".26" filter="url(#glow-prismatic)"/>
+ <circle cx="100" cy="100" r="78" fill="none" stroke="url(#metal-prismatic)" stroke-width="2.8" opacity=".94" stroke-dasharray="28 4 46 5 33 4"/>
+ <circle cx="100" cy="100" r="81" fill="none" stroke="#fbf0ff" stroke-width=".85" opacity=".64"/>
+<g id="new-laurel-prismatic"><path d="M54 42 C23 55 15 80 20 109 C26 139 40 156 63 168" fill="none" stroke="#7254d1" stroke-width="7" stroke-linecap="round"/>
+ <path d="M54 42 C23 55 15 80 20 109 C26 139 40 156 63 168" fill="none" stroke="#fbf0ff" stroke-width="2.8" stroke-linecap="round" opacity=".95"/><g transform="translate(49 53) rotate(-11) scale(0.85)">
+ <path d="M0 0 C-11 -5 -19 -14 -13 -30 C-4 -23 6 -16 0 0Z" fill="url(#iris-prismatic)" stroke="#f5c9ff" stroke-width="1.35"/>
+ <path d="M0 0 Q-4 -14 -13 -30" fill="none" stroke="#fbf0ff" stroke-width="1" opacity=".78"/>
+ <path d="M-5 -8 l-6 -4 M-8 -16 l-7 -4" fill="none" stroke="#7254d1" stroke-width=".7" opacity=".7"/>
+ </g><g transform="translate(39 66) rotate(3) scale(0.97)">
+ <path d="M0 0 C-11 -5 -19 -14 -13 -30 C-4 -23 6 -16 0 0Z" fill="url(#iris-prismatic)" stroke="#f5c9ff" stroke-width="1.35"/>
+ <path d="M0 0 Q-4 -14 -13 -30" fill="none" stroke="#fbf0ff" stroke-width="1" opacity=".78"/>
+ <path d="M-5 -8 l-6 -4 M-8 -16 l-7 -4" fill="none" stroke="#7254d1" stroke-width=".7" opacity=".7"/>
+ </g><g transform="translate(32 82) rotate(23) scale(1.12)">
+ <path d="M0 0 C-11 -5 -19 -14 -13 -30 C-4 -23 6 -16 0 0Z" fill="url(#iris-prismatic)" stroke="#f5c9ff" stroke-width="1.35"/>
+ <path d="M0 0 Q-4 -14 -13 -30" fill="none" stroke="#fbf0ff" stroke-width="1" opacity=".78"/>
+ <path d="M-5 -8 l-6 -4 M-8 -16 l-7 -4" fill="none" stroke="#7254d1" stroke-width=".7" opacity=".7"/>
+ </g><g transform="translate(26 101) rotate(55) scale(1.1)">
+ <path d="M0 0 C-11 -5 -19 -14 -13 -30 C-4 -23 6 -16 0 0Z" fill="url(#iris-prismatic)" stroke="#f5c9ff" stroke-width="1.35"/>
+ <path d="M0 0 Q-4 -14 -13 -30" fill="none" stroke="#fbf0ff" stroke-width="1" opacity=".78"/>
+ <path d="M-5 -8 l-6 -4 M-8 -16 l-7 -4" fill="none" stroke="#7254d1" stroke-width=".7" opacity=".7"/>
+ </g><g transform="translate(29 118) rotate(95) scale(1.08)">
+ <path d="M0 0 C-11 -5 -19 -14 -13 -30 C-4 -23 6 -16 0 0Z" fill="url(#iris-prismatic)" stroke="#f5c9ff" stroke-width="1.35"/>
+ <path d="M0 0 Q-4 -14 -13 -30" fill="none" stroke="#fbf0ff" stroke-width="1" opacity=".78"/>
+ <path d="M-5 -8 l-6 -4 M-8 -16 l-7 -4" fill="none" stroke="#7254d1" stroke-width=".7" opacity=".7"/>
+ </g><g transform="translate(38 137) rotate(132) scale(0.96)">
+ <path d="M0 0 C-11 -5 -19 -14 -13 -30 C-4 -23 6 -16 0 0Z" fill="url(#iris-prismatic)" stroke="#f5c9ff" stroke-width="1.35"/>
+ <path d="M0 0 Q-4 -14 -13 -30" fill="none" stroke="#fbf0ff" stroke-width="1" opacity=".78"/>
+ <path d="M-5 -8 l-6 -4 M-8 -16 l-7 -4" fill="none" stroke="#7254d1" stroke-width=".7" opacity=".7"/>
+ </g><g transform="translate(52 154) rotate(169) scale(0.82)">
+ <path d="M0 0 C-11 -5 -19 -14 -13 -30 C-4 -23 6 -16 0 0Z" fill="url(#iris-prismatic)" stroke="#f5c9ff" stroke-width="1.35"/>
+ <path d="M0 0 Q-4 -14 -13 -30" fill="none" stroke="#fbf0ff" stroke-width="1" opacity=".78"/>
+ <path d="M-5 -8 l-6 -4 M-8 -16 l-7 -4" fill="none" stroke="#7254d1" stroke-width=".7" opacity=".7"/>
+ </g><path d="M45 36 Q10 38 11 66 M29 137 Q9 150 22 172 M42 162 Q32 181 56 182" fill="none" stroke="#f5c9ff" stroke-opacity=".55" stroke-width="1.1"/>
+ <path d="M50 47 Q32 48 29 66 M27 120 Q21 139 37 147" fill="none" stroke="#fff" stroke-width=".9" stroke-opacity=".62"/></g>
+ <g transform="translate(200 0) scale(-1 1)"><use href="#new-laurel-prismatic"/></g>
+<path d="M69 28 82 7 93 13 100 -2 107 13 118 7 131 28 116 36 100 30 84 36Z" fill="url(#iris-prismatic)" stroke="#f5c9ff" stroke-width="2.2"/>
+ <path d="M84 24 100 7 116 24" stroke="#fff" stroke-width="1.5" opacity=".9"/>
+<g transform="translate(100 25)"><path d="M0 -14 9 0 0 14 -9 0Z" fill="#7254d1" stroke="#f5c9ff" stroke-width="1.5"/><path d="M0 -10 6 0 0 10 -6 0Z" fill="url(#iris-prismatic)"/><path d="M0 -10V10 M-6 0H6" stroke="#fff" stroke-width=".75" opacity=".75"/></g>
+<path d="M52 165 Q70 188 100 176 Q130 188 148 165 Q136 185 117 186 L100 199 83 186 Q64 185 52 165Z" fill="url(#iris-prismatic)" stroke="#f5c9ff" stroke-width="1.8"/>
+<path d="M100 175 L111 187 100 200 89 187Z" fill="url(#iris-prismatic)" stroke="#f5c9ff" stroke-width="2"/><path d="M100 178V197 M92 187H108" stroke="#fff" stroke-width=".9" opacity=".7"/>
+<path d="M17 80 7 90 17 101 27 90Z M183 80 193 90 183 101 173 90Z" fill="url(#iris-prismatic)" stroke="#f5c9ff" stroke-width="1.2" opacity=".86"/>
+<g stroke="#f5c9ff" stroke-width="1.45" stroke-linecap="round" opacity=".94">
+ <path d="M18 32V42 M13 37H23 M183 129V141 M177 135H189"/>
+ <path d="M48 12V19 M44.5 15.5H51.5 M153 15V23 M149 19H157"/>
+ </g>
 </svg>

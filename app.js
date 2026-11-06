@@ -1,5 +1,5 @@
 import { firebaseConfig, aiSettings } from './firebase-config.js';
-import { COLORS, colorOf, safeText as e, shortId, formatDate, assertMatch, computeStats, aggregatePersonalStats, aggregateDeckWinRates, filterMatches, filteredMatchStats, matchTimeMs, matchDateValue, parsePlayedAt, resolvePlayerDeckSelection, GUEST_PLAYER_ID, GUEST_DECK_ID, guestPlayer, personalGroupId, isGuestMatch, guestDeckLabel } from './core.mjs';
+import { COLORS, colorOf, safeText as e, shortId, formatDate, assertMatch, computeStats, aggregatePersonalStats, aggregateDeckWinRates, filterMatches, filteredMatchStats, matchTimeMs, matchDateValue, parsePlayedAt, topDecksByWinRate, resolvePlayerDeckSelection, GUEST_PLAYER_ID, GUEST_DECK_ID, guestPlayer, personalGroupId, isGuestMatch, guestDeckLabel } from './core.mjs';
 import { demoAdapter } from './demo-adapter.js';
 import { QUICK_MATCH_LIMIT_MS, quickClock, mmss } from './quick-core.mjs';
 
@@ -23,6 +23,20 @@ const ownStats=()=>aggregatePersonalStats(state.user?.uid||'',state.personalHist
 const isOwner=()=>state.group?.createdBy===state.user?.uid;
 const isPersonal=()=>state.groupId===personalGroupId(state.user?.uid||'');
 const guardedImage=src=>typeof src==='string' && /^data:image\/(webp|jpeg);base64,[A-Za-z0-9+/=]+$/.test(src) ? src : '';
+/** Reuse existing personal/legacy deck images without re-encoding them.
+ * Match both deck ID and participant UID so similarly named decks stay distinct.
+ * Empty or missing images use the same neutral placeholder on all devices. */
+function deckArtwork(ownerUid,deckId,label,sizeClass='') {
+  const owned=state.decks.find(d=>d.id===deckId&&d.ownerUid===ownerUid);
+  const src=guardedImage(owned?.imageData);
+  const classes=sizeClass?' '+sizeClass:'';
+  return `<div class="deck-art-frame${classes}">${src
+    ?`<img src="${src}" alt="${e(label||owned.name)} 牌組圖片" loading="lazy" decoding="async">`
+    :'<span class="deck-art-missing" aria-label="尚未上傳牌組圖片">▧<small>尚無圖片</small></span>'}</div>`;
+}
+function battleDeckArtwork(match,side) {
+  return deckArtwork(match[side==='A'?'playerA':'playerB'],match[side==='A'?'deckA':'deckB'],battleDeckName(match,side),'deck-art-battle');
+}
 const userLabel=()=>state.profile?.nickname||player(state.user?.uid)?.nickname||state.user?.displayName||state.user?.email?.split('@')[0]||'玩家';
 const escapeAttr=e;
 const n=(x)=>Number(x||0).toLocaleString('zh-TW');
@@ -96,7 +110,7 @@ function matchDetailBody(){
  const allowed=m.status==='active'&&(m.recordedBy===state.user?.uid||m.playerA===state.user?.uid||m.playerB===state.user?.uid||isOwner());
  const turns=q?.turns||[];
  return `<div class="match-detail-header"><span class="tag">${m.status==='void'?'已撤銷':'有效對戰'}</span><strong>🏆 ${e(playerName(m.winner))} 勝</strong></div>
- <div class="detail-participants"><div><strong>${e(playerName(m.playerA))}</strong><span>${e(battleDeckName(m,'A'))}</span></div><b>VS</b><div><strong>${e(playerName(m.playerB))}</strong><span>${e(battleDeckName(m,'B'))}</span></div></div>
+ <div class="detail-participants"><div class="detail-side">${battleDeckArtwork(m,'A')}<strong>${e(playerName(m.playerA))}</strong><span>${e(battleDeckName(m,'A'))}</span></div><b>VS</b><div class="detail-side">${battleDeckArtwork(m,'B')}<strong>${e(playerName(m.playerB))}</strong><span>${e(battleDeckName(m,'B'))}</span></div></div>
  <div class="detail-facts"><div><span>實際對戰時間</span><b>${e(matchDateLabel(m))}</b></div><div><span>登錄時間</span><b>${e(formatDate(m.createdAt))}</b></div><div><span>登錄人</span><b>${e(playerName(m.recordedBy))}</b></div><div><span>備註</span><b>${e(m.note||'無')}</b></div></div>
  ${m.timing?.enabled?`<div class="detail-timing"><h3>⏱ 30 分鐘計時紀錄</h3><div class="history-stats"><span><b>${mmss(m.timing.playerAMs)}</b> ${e(playerName(m.playerA))}</span><span><b>${mmss(m.timing.playerBMs)}</b> ${e(playerName(m.playerB))}</span><span><b>${mmss(m.timing.unattributedMs)}</b> 間隔</span></div>
  ${turns.length?`<div class="table-wrap"><table class="table"><thead><tr><th>回合</th><th>玩家</th><th>時間</th></tr></thead><tbody>${turns.map((t,i)=>`<tr><td>${i+1}</td><td>${e(playerName(t.playerId))}</td><td>${mmss(t.durationMs)}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted sm">沒有保存逐回合明細。</p>'}</div>`:''}
@@ -136,16 +150,21 @@ function playerModalBody(){
   const self=stats.id===state.user?.uid;
   const total=card?.showOverallStats?card.totalStats:null;
   const cardIntro=card===undefined?'<span class="tag">載入名片中…</span>':card?'<span class="tag">玩家自訂名片</span>':'<span class="tag">尚未設定公開名片</span>';
+  const topDecks=groupVisible?topDecksByWinRate(stats.deckStats,5):[];
+  const favoriteMatches=card?.favoriteDeck?.name
+    ?state.decks.filter(d=>d.ownerUid===stats.id&&d.name===card.favoriteDeck.name&&d.color===card.favoriteDeck.color)
+    :[];
+  const favoriteId=favoriteMatches.length===1?favoriteMatches[0].id:'';
   return `<div class="player-line"><span class="avatar" style="width:52px;height:52px;font-size:22px">${e(stats.nickname?.[0]||'?')}</span>
     <div><h2>${e(stats.nickname)}</h2><p class="muted sm">${self?'你自己的玩家名片':'其他玩家的名片'} · ${e(state.group?.name||'')}</p></div></div>
     ${cardIntro}
     ${card?.showBio&&card.bio?`<section class="card" style="margin-top:14px"><h3>關於我</h3><p class="muted">${e(card.bio)}</p></section>`:''}
-    ${card?.showFavoriteDeck&&card.favoriteDeck?.name?`<section class="card" style="margin-top:14px"><h3>♡ 最愛牌組</h3><p>${e(card.favoriteDeck.name)} · ${e(colorOf(card.favoriteDeck.color).name)}</p><p class="muted sm">使用此牌組：${Number(card.favoriteDeckStats?.games||0)} 場 · ${Number(card.favoriteDeckStats?.wins||0)} 勝 · ${Number(card.favoriteDeckStats?.rate||0)}% 勝率（公開快照）</p></section>`:''}
+    ${card?.showFavoriteDeck&&card.favoriteDeck?.name?`<section class="card" style="margin-top:14px"><h3>♡ 最愛牌組</h3><div class="deck-favorite-feature">${deckArtwork(stats.id,favoriteId,card.favoriteDeck.name,'deck-art-favorite')}<div class="deck-favorite-info"><strong>${e(card.favoriteDeck.name)}</strong><span>${e(colorOf(card.favoriteDeck.color).name)}</span><small>使用此牌組：${Number(card.favoriteDeckStats?.games||0)} 場 · ${Number(card.favoriteDeckStats?.wins||0)} 勝 · ${Number(card.favoriteDeckStats?.rate||0)}% 勝率（公開快照）</small></div></div></section>`:''}
     ${groupVisible?`<h3 style="margin-top:18px">目前戰團戰績</h3><div class="stats-detail">
       <div class="stats-cell"><b>${stats.games}</b><span>場次</span></div>
       <div class="stats-cell"><b>${stats.wins}</b><span>勝場</span></div>
       <div class="stats-cell"><b>${stats.rate}%</b><span>勝率</span></div></div>`:''}
-    ${groupVisible&&stats.deckStats.length?`<section class="card" style="margin-top:14px"><h3>牌組使用勝率 · 此戰團</h3><div class="deck-rate-list">${stats.deckStats.map(d=>`<div class="deck-rate-row"><span>${e(d.name)}</span><strong>${d.rate}%</strong><small>${d.games} 場 / ${d.wins} 勝</small></div>`).join('')}</div></section>`:'' }
+    ${topDecks.length?`<section class="card" style="margin-top:14px"><div class="section-head"><h3>牌組勝率 TOP 5</h3><span class="tag">此戰團 · 最多五副</span></div><div class="deck-top-five">${topDecks.map((d,i)=>`<div class="deck-top-five-item"><span class="deck-top-five-rank">${i+1}</span>${deckArtwork(stats.id,d.id,d.name,'deck-art-top-five')}<div class="deck-top-five-info"><strong>${e(d.name)}</strong><span>${e(colorOf(d.color).name)} · ${d.games} 場 / ${d.wins} 勝 / ${d.losses} 敗</span></div><b class="deck-top-five-rate">${d.rate}%</b></div>`).join('')}</div><p class="hint">依勝率排序；相同勝率優先顯示場次較多的牌組。</p></section>`:''}
     ${total?`<h3 style="margin-top:18px">個人公開總戰績</h3><div class="stats-detail">
       <div class="stats-cell"><b>${Number(total.games)||0}</b><span>總場次</span></div>
       <div class="stats-cell"><b>${Number(total.wins)||0}</b><span>勝場</span></div>

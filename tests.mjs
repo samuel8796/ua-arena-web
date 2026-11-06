@@ -325,7 +325,7 @@ test('v1.6 戰績詳情顯示雙方圖片；玩家名片包含最高五副與最
   assert.ok(ui.includes("deck-art-favorite"));
   assert.ok(ui.includes("card?.showFavoriteDeck&&card.favoriteDeck?.name&&!topDecks.length"));
   assert.ok(ui.includes("favoriteId===d.id"));
-  assert.ok(ui.includes("from './core.mjs?v=1.7'"));
+  assert.ok(ui.includes("from './core.mjs?v=1.9'"));
   assert.ok(ui.includes('aria-label="尚未上傳牌組圖片"'));
   assert.ok(css.includes("object-fit:scale-down"));
   assert.ok(css.includes("@media(max-width:380px)"));
@@ -386,7 +386,7 @@ test('v1.7.1 手機牌組圖片完整填滿容器、不留上下黑邊',()=>{
  assert.ok(css.includes('min-height:100%;'));
  assert.ok(css.includes('object-fit:cover;'));
  assert.ok(css.includes('height:clamp(132px,38vw,170px);'));
- assert.ok(html.includes('href="./styles.css?v=1.8"'));
+ assert.ok(html.includes('href="./styles.css?v=1.9"'));
 });
 
 import {avatarCropGeometry,avatarSourceCrop} from './avatar-crop-core.mjs';
@@ -430,7 +430,65 @@ test('v1.8 圓形預覽需確認才保存，取消不寫入，支援手機雙指
   assert.ok(ui.includes("document.body.style.overflow=previousOverflow"));
   assert.ok(ui.includes('URL.revokeObjectURL(url)'));
   assert.ok(css.includes('touch-action:none'));
-  assert.ok(html.includes('styles.css?v=1.8'));
-  assert.ok(html.includes('app.js?v=1.8'));
+  assert.ok(html.includes('styles.css?v=1.9'));
+  assert.ok(html.includes('app.js?v=1.9'));
   assert.ok(wf.includes('avatar-crop-ui.mjs avatar-crop-core.mjs'));
+});
+
+
+import {playerWinStreak,streakTier} from './core.mjs';
+
+test('v1.9 連勝從每位玩家的有效對戰紀錄計算，輸掉立即重置',()=>{
+ const games=[
+  {id:'a',status:'active',playerA:'sam',playerB:'osc',winner:'sam',playedAt:'2026-10-01T19:00:00'},
+  {id:'b',status:'active',playerA:'osc',playerB:'friend',winner:'osc',playedAt:'2026-10-01T19:10:00'},
+  {id:'c',status:'active',playerA:'sam',playerB:'friend',winner:'sam',playedAt:'2026-10-01T19:20:00'},
+  {id:'d',status:'active',playerA:'sam',playerB:'osc',winner:'osc',playedAt:'2026-10-01T19:30:00'},
+  {id:'e',status:'active',playerA:'sam',playerB:'osc',winner:'sam',playedAt:'2026-10-01T19:40:00'},
+  {id:'f',status:'void',playerA:'sam',playerB:'osc',winner:'osc',playedAt:'2026-10-01T19:50:00'},
+  {id:'g',status:'active',playerA:'osc',playerB:'friend',winner:'friend',playedAt:'2026-10-01T19:55:00'}
+ ];
+ assert.deepEqual(playerWinStreak('sam',games),{current:1,best:2,games:4});
+ assert.deepEqual(playerWinStreak('osc',games),{current:0,best:1,games:5});
+ assert.deepEqual(playerWinStreak('none',games),{current:0,best:0,games:0});
+ assert.deepEqual(playerWinStreak(null,games),{current:0,best:0,games:0});
+});
+test('v1.9 補登過去戰績按照實際對戰時間排序，不按輸入順序',()=>{
+ const games=[
+  {id:'late-input',status:'active',playerA:'a',playerB:'b',winner:'a',playedAt:'2026-11-03T20:00:00',createdAt:'2026-11-06T08:00:00'},
+  {id:'recent-loss',status:'active',playerA:'a',playerB:'b',winner:'b',playedAt:'2026-11-05T20:00:00',createdAt:'2026-11-05T20:00:00'},
+  {id:'old-win',status:'active',playerA:'a',playerB:'b',winner:'a',playedAt:'2026-11-02T20:00:00',createdAt:'2026-11-02T20:00:00'},
+  {id:'latest-win',status:'active',playerA:'a',playerB:'b',winner:'a',playedAt:'2026-11-06T08:00:00',createdAt:'2026-11-06T08:01:00'}
+ ];
+ assert.deepEqual(playerWinStreak('a',games),{current:1,best:2,games:4});
+ assert.deepEqual(playerWinStreak('a',games.slice().reverse()),{current:1,best:2,games:4});
+});
+test('v1.9 連勝外框達到 2、5、10、20 場時自動切換',()=>{
+ for(const [n,tier] of [[0,null],[1,null],[2,'bronze'],[4,'bronze'],
+   [5,'silver'],[9,'silver'],[10,'gold'],[19,'gold'],[20,'prismatic'],[25,'prismatic']]){
+   assert.equal(streakTier(n),tier);
+ }
+});
+test('v1.9 四款透明連勝外框以獨立 SVG 呈現，圖例僅放在個人資料',()=>{
+ const app=readFileSync(new URL('./app.js',import.meta.url),'utf8');
+ const css=readFileSync(new URL('./styles.css',import.meta.url),'utf8');
+ const wf=readFileSync(new URL('./.github/workflows/pages.yml',import.meta.url),'utf8');
+ assert.ok(app.includes("streakTier(playerWinStreak(uid,state.matches).current)"));
+ assert.ok(app.includes("avatar-frame-decoration"));
+ assert.ok(app.includes("function streakGuide()"));
+ assert.ok(app.includes('streakGuide() + personalExtras()'));
+ assert.ok(!app.includes('玩家自訂名片'));
+ assert.ok(app.includes("role")||app.includes("function playerAvatar"));
+ assert.ok(css.includes('.avatar-shell>.avatar-frame-decoration'));
+ assert.ok(css.includes('width:156%'));
+ assert.ok(css.includes('pointer-events:none'));
+ assert.ok(wf.includes('cp assets/streak-*.svg dist/assets/'));
+ for(const tier of ['bronze','silver','gold','prismatic']){
+   const frame=readFileSync(new URL('./assets/streak-'+tier+'.svg',import.meta.url),'utf8');
+   assert.ok(frame.startsWith('<svg'));
+   assert.ok(frame.includes('viewBox="0 0 200 200"'));
+   assert.ok(frame.includes('fill="none"'));
+   assert.ok(frame.includes('<circle cx="100" cy="100"'));
+   assert.ok(frame.includes('<defs>'));
+ }
 });

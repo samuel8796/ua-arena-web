@@ -957,3 +957,8 @@ input,select,textarea{max-width:100%;min-width:0}
  .detail-participants .detail-side .detail-side-info{padding:8px 7px!important;gap:5px!important}
  .deck-image-editor>.image-settings{top:7px;right:7px}
 }
+
+/* Align public-card image tools with the actual preview, regardless of hint wraps. */
+.card-banner-image-editor{position:relative;width:100%}
+.card-banner-image-editor>.image-settings{position:absolute;top:9px;right:9px;z-index:8}
+.card-banner-image-editor>.card-cover-preview{margin:9px 0 10px}

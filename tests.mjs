@@ -373,3 +373,19 @@ test('v1.7 牌組圖片採上半圖下半文字，手機維持兩欄且不溢出
   assert.ok(app.includes('class="detail-side-user"'));
   assert.ok(app.includes('deck-top-five-info'));
 });
+
+// v1.7.1 iPhone Safari photo frames must fill their area rather than render
+// wide source images as thin centered strips in auto-sized grid tracks.
+test('v1.7.1 手機牌組圖片完整填滿容器、不留上下黑邊',()=>{
+ const css=readFileSync(new URL('./styles.css',import.meta.url),'utf8');
+ const html=readFileSync(new URL('./index.html',import.meta.url),'utf8');
+ assert.ok(css.includes('v1.7.1 iOS Safari fix'));
+ assert.ok(css.includes('.detail-participants .detail-side .deck-art-battle > img'));
+ assert.ok(css.includes('.deck-top-five-item .deck-art-top-five > img'));
+ assert.ok(css.includes('position:absolute;'));
+ assert.ok(css.includes('inset:0;'));
+ assert.ok(css.includes('min-height:100%;'));
+ assert.ok(css.includes('object-fit:cover;'));
+ assert.ok(css.includes('height:clamp(132px,38vw,170px);'));
+ assert.ok(html.includes('href="./styles.css?v=1.7.1"'));
+});

@@ -135,19 +135,22 @@ export function topDecksByWinRate(deckStats=[],limit=5) {
     .slice(0,Math.max(0,Math.floor(limit)));
 }
 
-/** Sort personal decks by win rate, usage, or name without mutating source data.
- * Never rank an unplayed deck as 0%: keep all 0-game decks below played decks. */
+/** Every personal deck sort offers both directions.
+ * Unplayed decks stay last in win-rate sorting: no games is not 0%. */
 export function sortDeckLibrary(decks=[],stats=[],sort='rate'){
  const byId=new Map(stats.map(x=>[x.id,x]));
+ const reverse=sort.endsWith('-asc')||sort==='name-desc';
+ const field=sort.replace(/-asc$|-desc$/,'');
+ const nameSort=(a,b)=>String(a.name).localeCompare(String(b.name),'zh-Hant')||String(a.id).localeCompare(String(b.id));
  return decks.slice().sort((a,b)=>{
    const x=byId.get(a.id)||{games:0,wins:0},y=byId.get(b.id)||{games:0,wins:0};
    const gx=x.games||0,gy=y.games||0,wx=x.wins||0,wy=y.wins||0;
-   if(sort==='games')return gy-gx||(gy?wy-wx:0)||String(a.name).localeCompare(String(b.name),'zh-Hant');
-   if(sort==='name')return String(a.name).localeCompare(String(b.name),'zh-Hant')||String(a.id).localeCompare(String(b.id));
+   if(field==='name')return reverse?-nameSort(a,b):nameSort(a,b);
+   if(field==='games')return (reverse?gx-gy:gy-gx)||nameSort(a,b);
    const played=(gy>0)-(gx>0);
    if(played)return played;
-   const rate=gx&&gy?(wy/gy)-(wx/gx):0;
-   return rate||gy-gx||String(a.name).localeCompare(String(b.name),'zh-Hant');
+   const rate=gx&&gy?(reverse?wx/gx-wy/gy:wy/gy-wx/gx):0;
+   return rate||(reverse?gx-gy:gy-gx)||nameSort(a,b);
  });
 }
 

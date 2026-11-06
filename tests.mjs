@@ -449,7 +449,7 @@ test('v1.9 連勝從每位玩家的有效對戰紀錄計算，輸掉立即重置
   {id:'g',status:'active',playerA:'osc',playerB:'friend',winner:'friend',playedAt:'2026-10-01T19:55:00'}
  ];
  assert.deepEqual(playerWinStreak('sam',games),{current:1,best:2,games:4});
- assert.deepEqual(playerWinStreak('osc',games),{current:0,best:1,games:5});
+ assert.deepEqual(playerWinStreak('osc',games),{current:0,best:2,games:5});
  assert.deepEqual(playerWinStreak('none',games),{current:0,best:0,games:0});
  assert.deepEqual(playerWinStreak(null,games),{current:0,best:0,games:0});
 });

@@ -1,4 +1,4 @@
-import { createQuickMatch, changeQuickMatch, quickMatchResult } from './quick-core.mjs';
+import { createQuickMatch, changeQuickMatch, quickMatchResult } from './quick-core.mjs?v=2.2';
 import { personalGroupId, personalGroupName, parsePlayedAt } from './core.mjs';
 import { addTournamentEntrant, removeTournamentEntrant, startTournament, recordTournamentWinner, publicTournamentSnapshot, deserializeTournamentRounds } from './tournament-core.mjs?v=2.1';
 const K='ua-arena-demo-v1-1';

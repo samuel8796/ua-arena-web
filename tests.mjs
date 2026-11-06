@@ -325,7 +325,7 @@ test('v1.6 戰績詳情顯示雙方圖片；玩家名片包含最高五副與最
   assert.ok(ui.includes("deck-art-favorite"));
   assert.ok(ui.includes("card?.showFavoriteDeck&&card.favoriteDeck?.name&&!topDecks.length"));
   assert.ok(ui.includes("favoriteId===d.id"));
-  assert.ok(ui.includes("from './core.mjs?v=1.9'"));
+  assert.ok(ui.includes("from './core.mjs?v=2.1'"));
   assert.ok(ui.includes('aria-label="尚未上傳牌組圖片"'));
   assert.ok(css.includes("object-fit:scale-down"));
   assert.ok(css.includes("@media(max-width:380px)"));
@@ -386,7 +386,7 @@ test('v1.7.1 手機牌組圖片完整填滿容器、不留上下黑邊',()=>{
  assert.ok(css.includes('min-height:100%;'));
  assert.ok(css.includes('object-fit:cover;'));
  assert.ok(css.includes('height:clamp(132px,38vw,170px);'));
- assert.ok(html.includes('href="./styles.css?v=2.0"'));
+ assert.ok(html.includes('href="./styles.css?v=2.1"'));
 });
 
 import {avatarCropGeometry,avatarSourceCrop} from './avatar-crop-core.mjs';
@@ -430,8 +430,8 @@ test('v1.8 圓形預覽需確認才保存，取消不寫入，支援手機雙指
   assert.ok(ui.includes("document.body.style.overflow=previousOverflow"));
   assert.ok(ui.includes('URL.revokeObjectURL(url)'));
   assert.ok(css.includes('touch-action:none'));
-  assert.ok(html.includes('styles.css?v=2.0'));
-  assert.ok(html.includes('app.js?v=2.0'));
+  assert.ok(html.includes('styles.css?v=2.1'));
+  assert.ok(html.includes('app.js?v=2.1'));
   assert.ok(wf.includes('avatar-crop-ui.mjs avatar-crop-core.mjs'));
 });
 
@@ -565,4 +565,87 @@ test('v2.0 個人跨戰團獎牌總數與賽事詳情、戰績中的賽事結果
  assert.ok(css.includes('.tournament-medal-stats'));
  assert.ok(css.includes('.tournament-podium-list'));
  assert.ok(css.includes('.modal .streak-guide'));
+});
+
+import {sortDeckLibrary} from './core.mjs';
+test('v2.1 牌組依勝率、出場次數、名稱排序且不影響原始順序',()=>{
+ const original=[{id:'a',name:'紅監獄'},{id:'b',name:'藍一拳'},{id:'c',name:'綠巨人'},{id:'d',name:'黃坂本'}];
+ const stats=[{id:'a',games:10,wins:6},{id:'b',games:6,wins:6},{id:'c',games:18,wins:8}];
+ assert.deepEqual(sortDeckLibrary(original,stats,'rate').map(d=>d.id),['b','a','c','d']);
+ assert.deepEqual(sortDeckLibrary(original,stats,'games').map(d=>d.id),['c','a','b','d']);
+ assert.deepEqual(sortDeckLibrary(original,stats,'name').map(d=>d.name),[...original.map(d=>d.name)].sort((a,b)=>a.localeCompare(b,'zh-Hant')));
+ assert.equal(original[0].id,'a');
+});
+test('v2.1 淘汰賽每一場建立唯一正式戰績，連結保存在 Firestore 安全的賽程中',()=>{
+ let t=startTournament(tourney(),()=>.999);
+ const first=t.rounds[0][0];
+ const matchId='t_tournament1_0_0';
+ t=recordTournamentWinner(t,0,0,first.a,matchId);
+ const stored=serializeTournamentRounds(t.rounds);
+ assert.equal(stored[0].matches[0].matchId,matchId);
+ assert.equal(deserializeTournamentRounds(stored)[0][0].winner,first.a);
+ assert.throws(()=>recordTournamentWinner({...t,rounds:stored},0,0,first.a,'another'));
+ const noTournament=computeStats(people,decks,matches).totalMatches;
+ const battle={id:matchId,status:'active',playerA:'a',playerB:'b',deckA:'d1',deckB:'d2',winner:'a',tournamentId:'tournament1'};
+ const withTournament=computeStats(people,decks,[...matches,battle]).totalMatches;
+ assert.equal(withTournament,noTournament+1);
+ assert.equal(computeStats(people,decks,matches).totalMatches,noTournament);
+});
+test('v2.1 牌組選擇與時間用正式戰績儲存，刪除賽事同時移除關聯對戰',()=>{
+ const firebase=readFileSync(new URL('./firebase-adapter.js',import.meta.url),'utf8');
+ const demo=readFileSync(new URL('./demo-adapter.js',import.meta.url),'utf8');
+ assert.ok(firebase.includes('async saveTournamentMatch(gid,id,uid,payload)'));
+ assert.ok(firebase.includes('async deleteTournament(gid,id,uid)'));
+ assert.ok(firebase.includes('tournamentId:id,tournamentRound:round,tournamentMatch:index,tournamentTitle:current.title'));
+ assert.ok(firebase.includes('parsePlayedAt(payload.playedAt)'));
+ assert.ok(firebase.includes('tx.set(matchRef,'));
+ assert.ok(firebase.includes('getDocs(query(colRef(gid,\'matches\'),where(\'tournamentId\',\'==\',id)))'));
+ assert.ok(firebase.includes('tx.delete(publicTournamentRef(t.publicId))'));
+ assert.ok(firebase.includes('tx.delete(publicTournamentOwnerRef(t.publicId))'));
+ assert.ok(firebase.includes('for(const request of requests.docs)tx.delete(request.ref)'));
+ assert.ok(firebase.includes('recorded!==matches.size'));
+ assert.ok(demo.includes('data.matches=data.matches.filter(m=>m.tournamentId!==id)'));
+ assert.ok(demo.includes('data.tournaments=data.tournaments.filter(t=>t.id!==id)'));
+});
+test('v2.1 房主權限、牌組驗證及關聯紀錄清理具備 Firestore 安全規則',()=>{
+ const rules=readFileSync(new URL('./firestore.rules',import.meta.url),'utf8');
+ assert.ok(rules.includes('function validTournamentMatch(gid,matchId,d)'));
+ assert.ok(rules.includes('validTournamentMatch(gid,matchId,request.resource.data)'));
+ assert.ok(rules.includes('getAfter(/databases/$(database)/documents/groups/$(gid)/tournaments/$(d.tournamentId))'));
+ assert.ok(rules.includes("&& !('tournamentId' in resource.data)"));
+ assert.ok(rules.includes('!existsAfter(/databases/$(database)/documents/groups/$(gid)/tournaments/$(resource.data.tournamentId))'));
+ assert.ok(rules.includes("request.resource.data.eventAt is timestamp"));
+ assert.ok(rules.includes('!existsAfter(/databases/$(database)/documents/publicTournamentOwners/$(resource.data.publicId))'));
+});
+test('v2.1 個人名片、帳號資訊改為彈窗並放在個人簡介下',()=>{
+ const app=readFileSync(new URL('./app.js',import.meta.url),'utf8');
+ const css=readFileSync(new URL('./styles.css',import.meta.url),'utf8');
+ assert.ok(app.includes('function playerCardSettings()'));
+ assert.ok(app.includes('function accountInfoBody()'));
+ assert.ok(app.includes('data-action="open-card-settings"'));
+ assert.ok(app.includes('data-action="open-account-info"'));
+ assert.ok(app.includes("case 'card-settings'"));
+ assert.ok(app.includes("case 'account-info'"));
+ assert.ok(app.includes('state.myCard=card;state.modal=null;render()'));
+ assert.ok(css.includes('.profile-quick-actions'));
+ assert.ok(css.includes('.profile-grid-single'));
+});
+test('v2.1 計時對戰雙方牌組顯示大圖，並支援錦標賽選牌及篩選戰績',()=>{
+ const app=readFileSync(new URL('./app.js',import.meta.url),'utf8');
+ const css=readFileSync(new URL('./styles.css',import.meta.url),'utf8');
+ assert.ok(app.includes('function tournamentMatchModalBody()'));
+ assert.ok(app.includes('data-form="tournament-result"'));
+ assert.ok(app.includes('data-action="tournament-match"'));
+ assert.ok(app.includes('adapter.saveTournamentMatch('));
+ assert.ok(app.includes('assertMatch(data,state.players,state.decks)'));
+ assert.ok(app.includes("data-action=\"delete-tournament\""));
+ assert.ok(app.includes('adapter.deleteTournament('));
+ assert.ok(app.includes('name="eventAt"'));
+ assert.ok(app.includes('quick-player-visual'));
+ assert.ok(app.includes('sortDeckLibrary('));
+ assert.ok(app.includes('id="deck-sort"'));
+ assert.ok(app.includes('tournamentMatchRows'));
+ assert.ok(app.includes('all.filter(m=>!m.tournamentId)'));
+ assert.ok(css.includes('.quick-player-visual .deck-art-battle>img'));
+ assert.ok(css.includes('.tournament-deck-choices'));
 });

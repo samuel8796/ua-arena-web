@@ -1,6 +1,6 @@
 import { createQuickMatch, changeQuickMatch, quickMatchResult } from './quick-core.mjs';
 import { personalGroupId, personalGroupName, parsePlayedAt } from './core.mjs';
-import { addTournamentEntrant, removeTournamentEntrant, startTournament, recordTournamentWinner, publicTournamentSnapshot } from './tournament-core.mjs?v=2.0';
+import { addTournamentEntrant, removeTournamentEntrant, startTournament, recordTournamentWinner, publicTournamentSnapshot, deserializeTournamentRounds } from './tournament-core.mjs?v=2.1';
 const K='ua-arena-demo-v1-1';
 const SAMPLE_IMAGE='';
 function seed(){
@@ -93,9 +93,9 @@ export const demoAdapter={
   async hasTournamentRequest(gid,id,uid){return (data.tournamentRequests||[]).some(r=>r.tournamentId===id&&r.uid===uid);},
   async requestTournamentJoin(gid,id,uid,nickname){data.tournamentRequests||=[];data.tournamentRequests.push({tournamentId:id,uid,nickname,status:'pending'});save();},
   async approveTournamentRequest(gid,id,uid,hostUid){await this.changeTournament(gid,id,hostUid,'add',uid);data.tournamentRequests=data.tournamentRequests.filter(r=>!(r.tournamentId===id&&r.uid===uid));save();},
-  async createTournament(gid,uid,title,description,hostName){
+  async createTournament(gid,uid,title,description,hostName,eventTime){
     const id=`t-${Date.now().toString(36)}`,publicId=`p-${id}`;
-    data.tournaments ||= [];data.tournaments.push({id,publicId,title,description,hostName,status:'registration',createdBy:uid,participants:[],rounds:[],champion:'',createdAt:Date.now()});save();return id;
+    data.tournaments ||= [];data.tournaments.push({id,publicId,title,description,hostName,status:'registration',createdBy:uid,participants:[],rounds:[],champion:'',eventAt:parsePlayedAt(eventTime).getTime(),createdAt:Date.now()});save();return id;
   },
   async changeTournament(gid,id,uid,action,arg){
     const idx=data.tournaments.findIndex(t=>t.id===id);if(idx<0)throw new Error('賽事不存在。');
@@ -103,11 +103,35 @@ export const demoAdapter={
     if(action==='add')next=addTournamentEntrant(cur,data.members.find(p=>p.uid===arg)||{uid:arg,nickname:'參賽者'});
     else if(action==='remove')next=removeTournamentEntrant(cur,arg);
     else if(action==='start')next=startTournament(cur);
-    else if(action==='result')next=recordTournamentWinner(cur,arg.round,arg.match,arg.winner);
+    else if(action==='result')throw new Error('請先選擇牌組並填寫此場的對戰時間。');
     else if(action==='cancel'&&cur.status==='registration')next={...cur,status:'cancelled'};
     else throw new Error('操作不允許。');
     data.tournaments[idx]={...next,id,publicId:cur.publicId};save();
   },
 
+  async saveTournamentMatch(gid,id,uid,payload){
+    const idx=data.tournaments.findIndex(t=>t.id===id);
+    if(idx<0||data.tournaments[idx].createdBy!==uid)throw new Error('只有賽事房主能記錄戰績。');
+    const t=data.tournaments[idx],side=deserializeTournamentRounds(t.rounds)[payload.round]?.[payload.match];
+    if(!side?.a||!side?.b||side.winner)throw new Error('此場尚未開放或已有結果。');
+    if(side.a!==payload.playerA||side.b!==payload.playerB)throw new Error('玩家須依照抽籤結果。');
+    const idMatch=`t_${id}_${payload.round}_${payload.match}`;
+    if(data.matches.some(m=>m.id===idMatch))throw new Error('此場已登錄。');
+    const next=recordTournamentWinner(t,payload.round,payload.match,payload.winner,idMatch);
+    const playedAt=parsePlayedAt(payload.playedAt).getTime();
+    data.matches.unshift({id:idMatch,groupId:gid,playerA:side.a,playerB:side.b,
+      deckA:payload.deckA,deckB:payload.deckB,winner:payload.winner,note:String(payload.note||''),
+      playedAt,createdAt:Date.now(),recordedBy:uid,status:'active',
+      tournamentId:id,tournamentRound:payload.round,tournamentMatch:payload.match,tournamentTitle:t.title});
+    data.tournaments[idx]={...next,id};save();
+  },
+  async deleteTournament(gid,id,uid){
+    const t=data.tournaments.find(t=>t.id===id);
+    if(!t||t.createdBy!==uid)throw new Error('只有房主可以刪除錦標賽。');
+    data.matches=data.matches.filter(m=>m.tournamentId!==id);
+    data.tournaments=data.tournaments.filter(t=>t.id!==id);
+    data.tournamentRequests=(data.tournamentRequests||[]).filter(req=>req.tournamentId!==id);
+    save();
+  },
   async askRule(){throw new Error('展示模式尚未連接 Gemini。');}
 };

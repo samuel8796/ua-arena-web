@@ -329,7 +329,7 @@ test('v1.6 戰績詳情顯示雙方圖片；玩家名片包含最高五副與最
   assert.ok(ui.includes("deck-art-favorite"));
   assert.ok(ui.includes("card?.showFavoriteDeck&&card.favoriteDeck?.name&&!topDecks.length"));
   assert.ok(ui.includes("favoriteId===d.id"));
-  assert.ok(ui.includes("from './core.mjs?v=2.2'"));
+  assert.ok(ui.includes("from './core.mjs?v=2.3'"));
   assert.ok(ui.includes('aria-label="尚未上傳牌組圖片"'));
   assert.ok(css.includes("object-fit:scale-down"));
   assert.ok(css.includes("@media(max-width:380px)"));
@@ -390,7 +390,7 @@ test('v1.7.1 手機牌組圖片完整填滿容器、不留上下黑邊',()=>{
  assert.ok(css.includes('min-height:100%;'));
  assert.ok(css.includes('object-fit:cover;'));
  assert.ok(css.includes('height:clamp(132px,38vw,170px);'));
- assert.ok(html.includes('href="./styles.css?v=2.2.1"'));
+ assert.ok(html.includes('href="./styles.css?v=2.3"'));
 });
 
 import {avatarCropGeometry,avatarSourceCrop} from './avatar-crop-core.mjs';
@@ -434,8 +434,8 @@ test('v1.8 圓形預覽需確認才保存，取消不寫入，支援手機雙指
   assert.ok(ui.includes("document.body.style.overflow=previousOverflow"));
   assert.ok(ui.includes('URL.revokeObjectURL(url)'));
   assert.ok(css.includes('touch-action:none'));
-  assert.ok(html.includes('styles.css?v=2.2.1'));
-  assert.ok(html.includes('app.js?v=2.2.1'));
+  assert.ok(html.includes('styles.css?v=2.3'));
+  assert.ok(html.includes('app.js?v=2.3'));
   assert.ok(wf.includes('avatar-crop-ui.mjs avatar-crop-core.mjs'));
 });
 
@@ -749,4 +749,50 @@ test('v2.2.1 個人名片牌組封面可以點開唯讀詳情，先後攻勝場�
  assert.ok(app.includes('d.createdAt?e(new Date(dateNum(d.createdAt))'));
  assert.ok(app.includes('s.duelRolled===undefined||!!s.startedAtMs'));
  assert.ok(css.includes('.deck-top-five-open'));
+});
+
+test('v2.3 牌組六種排序方向及未出場勝率不混算',()=>{
+ const decks=[{id:'a',name:'紅監獄'},{id:'b',name:'藍一拳'},{id:'c',name:'綠巨人'},{id:'d',name:'黃坂本'}];
+ const stats=[{id:'a',games:10,wins:6},{id:'b',games:6,wins:6},{id:'c',games:18,wins:8}];
+ assert.deepEqual(sortDeckLibrary(decks,stats,'rate-asc').map(d=>d.id),['c','a','b','d']);
+ assert.deepEqual(sortDeckLibrary(decks,stats,'games-asc').map(d=>d.id),['d','b','a','c']);
+ assert.deepEqual(sortDeckLibrary(decks,stats,'name-desc').map(d=>d.name),
+   [...decks.map(d=>d.name)].sort((a,b)=>b.localeCompare(a,'zh-Hant')));
+});
+test('v2.3 剪裁一次並完整顯示，個人與公開名片有獨立背景欄位',()=>{
+ const app=readFileSync(new URL('./app.js',import.meta.url),'utf8');
+ const ui=readFileSync(new URL('./wide-crop-ui.mjs',import.meta.url),'utf8');
+ const css=readFileSync(new URL('./styles.css',import.meta.url),'utf8');
+ const adapter=readFileSync(new URL('./firebase-adapter.js',import.meta.url),'utf8');
+ const rules=readFileSync(new URL('./firestore.rules',import.meta.url),'utf8');
+ const wf=readFileSync(new URL('./.github/workflows/pages.yml',import.meta.url),'utf8');
+ assert.ok(ui.includes("export async function chooseWideCrop"));
+ assert.ok(ui.includes("ratio:16/9"));
+ assert.ok(ui.includes("ratio:3"));
+ assert.ok(ui.includes("data-wide-action=\"save\""));
+ assert.ok(ui.includes("data-wide-action=\"cancel\""));
+ assert.ok(app.includes("chooseWideCrop(file,'deck')"));
+ assert.ok(app.includes("chooseWideCrop(file,'profile')"));
+ assert.ok(app.includes("chooseWideCrop(file,'card')"));
+ assert.ok(css.includes("object-fit:contain !important"));
+ assert.ok(css.includes(".player-card-banner:after"));
+ assert.ok(css.includes(".card-settings-modal input[type=\"checkbox\"]"));
+ assert.ok(adapter.includes("async saveProfileCover"));
+ assert.ok(adapter.includes("coverData:typeof card.coverData"));
+ assert.ok(rules.includes("validWideCover"));
+ assert.ok(rules.includes("'profileCoverData'"));
+ assert.ok(wf.includes("core.mjs wide-crop-ui.mjs avatar-crop-ui.mjs"));
+});
+test('v2.3 戰績詳情右上設定允許範圍內的編輯與撤銷',()=>{
+ const app=readFileSync(new URL('./app.js',import.meta.url),'utf8');
+ const adapter=readFileSync(new URL('./firebase-adapter.js',import.meta.url),'utf8');
+ const rules=readFileSync(new URL('./firestore.rules',import.meta.url),'utf8');
+ assert.ok(app.includes('data-action="match-settings"'));
+ assert.ok(app.includes('data-action="match-edit"'));
+ assert.ok(app.includes('data-action="void-match"'));
+ assert.ok(!app.includes('撤銷這場戰績（雙方皆可）'));
+ assert.ok(adapter.includes("async updateMatch(gid,id,m)"));
+ assert.ok(adapter.includes("async updateTimedMatch(gid,id,winner,note)"));
+ assert.ok(rules.includes(".hasOnly(['winner','note'])"));
+ assert.ok(rules.includes("!('tournamentId' in resource.data)"));
 });

@@ -4,9 +4,11 @@ import {avatarCropGeometry,avatarSourceCrop} from './avatar-crop-core.mjs?v=1.8'
  * explicit confirmation; the caller is responsible for saving it to Firebase.
  * Appending outside #app keeps the editor alive across Firestore re-renders. */
 export async function chooseAvatarCrop(file){
-  if(!file||!file.type.startsWith('image/'))throw new Error('請選擇圖片檔案。');
-  if(file.size>12*1024*1024)throw new Error('圖片超過 12 MB，請先縮小後上傳。');
-  const url=URL.createObjectURL(file),image=new Image();
+  const stored=typeof file==='string';
+  if(stored && !/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(file))throw new Error('已儲存的圖片格式無效。');
+  if(!stored && (!file||!file.type.startsWith('image/')))throw new Error('請選擇圖片檔案。');
+  if(!stored && file.size>12*1024*1024)throw new Error('圖片超過 12 MB，請先縮小後上傳。');
+  const url=stored?file:URL.createObjectURL(file),image=new Image();
   try{
     await new Promise((resolve,reject)=>{
       image.onload=resolve;
@@ -14,7 +16,7 @@ export async function chooseAvatarCrop(file){
       image.src=url;
     });
     if(!image.naturalWidth||!image.naturalHeight)throw new Error('圖片尺寸無效。');
-  }catch(err){URL.revokeObjectURL(url);throw err;}
+  }catch(err){if(!stored)URL.revokeObjectURL(url);throw err;}
 
   return await new Promise(resolve=>{
     let zoom=1,offsetX=0,offsetY=0,pinch=null,finished=false;
@@ -81,7 +83,7 @@ export async function chooseAvatarCrop(file){
       window.removeEventListener('resize',redraw);
       window.removeEventListener('keydown',onKeyDown);
       document.body.style.overflow=previousOverflow;
-      overlay.remove();URL.revokeObjectURL(url);
+      overlay.remove();if(!stored)URL.revokeObjectURL(url);
       resolve(result);
     }
     function onKeyDown(ev){

@@ -20,4 +20,51 @@
 <path d="M67 28 60 2 82 17 100 0 118 17 140 2 133 28 100 35Z" fill="url(#metal-gold)" stroke="#ffe08a" stroke-width="1.8"/><path d="M72 25 69 11 83 22 100 7 117 22 131 11 128 25Z" fill="url(#gloss-gold)" opacity=".95"/><g transform="translate(100 13) scale(1 0.64)"><path d="M0 -14 10 0 0 14 -10 0Z" fill="url(#metal-gold)" stroke="#ffe08a" stroke-width="1.7"/><path d="M0 -11 6 0 0 11 -6 0Z" fill="url(#gem-gold)" opacity=".95"/><path d="M-6 0H6 M0 -11V11" stroke="#fff" stroke-opacity=".54" stroke-width=".7"/></g><circle cx="60" cy="3" r="3" fill="url(#gem-gold)"/><circle cx="140" cy="3" r="3" fill="url(#gem-gold)"/>
 <path d="M48 166Q67 191 100 185Q133 191 152 166Q120 179 100 172Q80 179 48 166Z" fill="url(#gloss-gold)" stroke="#ffe08a" stroke-width="1.7"/><g transform="translate(100 181) scale(1 1)"><path d="M0 -14 10 0 0 14 -10 0Z" fill="url(#metal-gold)" stroke="#ffe08a" stroke-width="1.7"/><path d="M0 -11 6 0 0 11 -6 0Z" fill="url(#gem-gold)" opacity=".95"/><path d="M-6 0H6 M0 -11V11" stroke="#fff" stroke-opacity=".54" stroke-width=".7"/></g>
 <g fill="#ffe08a" opacity=".9"><path d="M27 25l2 6 6 2-6 2-2 6-2-6-6-2 6-2Z"/><path d="M174 145l1.7 5.3 5.3 1.7-5.3 1.7-1.7 5.3-1.7-5.3-5.3-1.7 5.3-1.7Z"/><circle cx="22" cy="112" r="1.7"/><circle cx="182" cy="67" r="1.6"/></g>
+
+<!-- V2 ornamental layered laurel and jeweled crown; open center retained. -->
+<circle cx="100" cy="100" r="79" fill="none" stroke="#ffce4a" stroke-width="10" opacity=".26" filter="url(#glow-gold)"/>
+ <circle cx="100" cy="100" r="78" fill="none" stroke="url(#metal-gold)" stroke-width="2.8" opacity=".94" stroke-dasharray="28 4 46 5 33 4"/>
+ <circle cx="100" cy="100" r="81" fill="none" stroke="#fff2b2" stroke-width=".85" opacity=".64"/>
+<g id="new-laurel-gold"><path d="M54 42 C23 55 15 80 20 109 C26 139 40 156 63 168" fill="none" stroke="#8e4d0e" stroke-width="7" stroke-linecap="round"/>
+ <path d="M54 42 C23 55 15 80 20 109 C26 139 40 156 63 168" fill="none" stroke="#fff2b2" stroke-width="2.8" stroke-linecap="round" opacity=".95"/><g transform="translate(49 53) rotate(-11) scale(0.85)">
+ <path d="M0 0 C-11 -5 -19 -14 -13 -30 C-4 -23 6 -16 0 0Z" fill="url(#gloss-gold)" stroke="#fff2aa" stroke-width="1.35"/>
+ <path d="M0 0 Q-4 -14 -13 -30" fill="none" stroke="#fff2b2" stroke-width="1" opacity=".78"/>
+ <path d="M-5 -8 l-6 -4 M-8 -16 l-7 -4" fill="none" stroke="#8e4d0e" stroke-width=".7" opacity=".7"/>
+ </g><g transform="translate(39 66) rotate(3) scale(0.97)">
+ <path d="M0 0 C-11 -5 -19 -14 -13 -30 C-4 -23 6 -16 0 0Z" fill="url(#gloss-gold)" stroke="#fff2aa" stroke-width="1.35"/>
+ <path d="M0 0 Q-4 -14 -13 -30" fill="none" stroke="#fff2b2" stroke-width="1" opacity=".78"/>
+ <path d="M-5 -8 l-6 -4 M-8 -16 l-7 -4" fill="none" stroke="#8e4d0e" stroke-width=".7" opacity=".7"/>
+ </g><g transform="translate(32 82) rotate(23) scale(1.12)">
+ <path d="M0 0 C-11 -5 -19 -14 -13 -30 C-4 -23 6 -16 0 0Z" fill="url(#gloss-gold)" stroke="#fff2aa" stroke-width="1.35"/>
+ <path d="M0 0 Q-4 -14 -13 -30" fill="none" stroke="#fff2b2" stroke-width="1" opacity=".78"/>
+ <path d="M-5 -8 l-6 -4 M-8 -16 l-7 -4" fill="none" stroke="#8e4d0e" stroke-width=".7" opacity=".7"/>
+ </g><g transform="translate(26 101) rotate(55) scale(1.1)">
+ <path d="M0 0 C-11 -5 -19 -14 -13 -30 C-4 -23 6 -16 0 0Z" fill="url(#gloss-gold)" stroke="#fff2aa" stroke-width="1.35"/>
+ <path d="M0 0 Q-4 -14 -13 -30" fill="none" stroke="#fff2b2" stroke-width="1" opacity=".78"/>
+ <path d="M-5 -8 l-6 -4 M-8 -16 l-7 -4" fill="none" stroke="#8e4d0e" stroke-width=".7" opacity=".7"/>
+ </g><g transform="translate(29 118) rotate(95) scale(1.08)">
+ <path d="M0 0 C-11 -5 -19 -14 -13 -30 C-4 -23 6 -16 0 0Z" fill="url(#gloss-gold)" stroke="#fff2aa" stroke-width="1.35"/>
+ <path d="M0 0 Q-4 -14 -13 -30" fill="none" stroke="#fff2b2" stroke-width="1" opacity=".78"/>
+ <path d="M-5 -8 l-6 -4 M-8 -16 l-7 -4" fill="none" stroke="#8e4d0e" stroke-width=".7" opacity=".7"/>
+ </g><g transform="translate(38 137) rotate(132) scale(0.96)">
+ <path d="M0 0 C-11 -5 -19 -14 -13 -30 C-4 -23 6 -16 0 0Z" fill="url(#gloss-gold)" stroke="#fff2aa" stroke-width="1.35"/>
+ <path d="M0 0 Q-4 -14 -13 -30" fill="none" stroke="#fff2b2" stroke-width="1" opacity=".78"/>
+ <path d="M-5 -8 l-6 -4 M-8 -16 l-7 -4" fill="none" stroke="#8e4d0e" stroke-width=".7" opacity=".7"/>
+ </g><g transform="translate(52 154) rotate(169) scale(0.82)">
+ <path d="M0 0 C-11 -5 -19 -14 -13 -30 C-4 -23 6 -16 0 0Z" fill="url(#gloss-gold)" stroke="#fff2aa" stroke-width="1.35"/>
+ <path d="M0 0 Q-4 -14 -13 -30" fill="none" stroke="#fff2b2" stroke-width="1" opacity=".78"/>
+ <path d="M-5 -8 l-6 -4 M-8 -16 l-7 -4" fill="none" stroke="#8e4d0e" stroke-width=".7" opacity=".7"/>
+ </g><path d="M45 36 Q10 38 11 66 M29 137 Q9 150 22 172 M42 162 Q32 181 56 182" fill="none" stroke="#fff2aa" stroke-opacity=".55" stroke-width="1.1"/>
+ <path d="M50 47 Q32 48 29 66 M27 120 Q21 139 37 147" fill="none" stroke="#fff" stroke-width=".9" stroke-opacity=".62"/></g>
+ <g transform="translate(200 0) scale(-1 1)"><use href="#new-laurel-gold"/></g>
+<path d="M72 28 71 2 89 15 100 -1 111 15 129 2 128 28 116 35 84 35Z" fill="url(#metal-gold)" stroke="#fff2aa" stroke-width="2.2"/>
+ <path d="M79 22 75 9 92 21 100 7 108 21 125 9 121 22Z" fill="url(#gloss-gold)" stroke="#fff4b8" stroke-width="1.5"/>
+<g transform="translate(100 25)"><path d="M0 -14 9 0 0 14 -9 0Z" fill="#8e4d0e" stroke="#fff2aa" stroke-width="1.5"/><path d="M0 -10 6 0 0 10 -6 0Z" fill="url(#gloss-gold)"/><path d="M0 -10V10 M-6 0H6" stroke="#fff" stroke-width=".75" opacity=".75"/></g>
+<path d="M58 167 Q78 190 100 184 Q122 190 142 167 Q132 186 113 186 L100 197 87 186 Q68 186 58 167Z" fill="url(#metal-gold)" stroke="#fff2aa" stroke-width="1.8"/>
+<path d="M100 175 L111 187 100 200 89 187Z" fill="url(#gloss-gold)" stroke="#fff2aa" stroke-width="2"/><path d="M100 178V197 M92 187H108" stroke="#fff" stroke-width=".9" opacity=".7"/>
+<path d="M17 80 7 90 17 101 27 90Z M183 80 193 90 183 101 173 90Z" fill="url(#gloss-gold)" stroke="#fff2aa" stroke-width="1.2" opacity=".86"/>
+<g stroke="#fff2aa" stroke-width="1.45" stroke-linecap="round" opacity=".94">
+ <path d="M18 32V42 M13 37H23 M183 129V141 M177 135H189"/>
+ <path d="M48 12V19 M44.5 15.5H51.5 M153 15V23 M149 19H157"/>
+ </g>
 </svg>

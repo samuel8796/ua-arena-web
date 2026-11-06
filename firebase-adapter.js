@@ -1,10 +1,10 @@
 import { firebaseConfig, aiSettings } from './firebase-config.js';
 import { RULE_SYSTEM_PROMPT, personalGroupId, personalGroupName, parsePlayedAt } from './core.mjs';
 import { createQuickMatch, changeQuickMatch, quickMatchResult } from './quick-core.mjs';
-import { addTournamentEntrant, removeTournamentEntrant, startTournament, recordTournamentWinner, publicTournamentSnapshot, serializeTournamentRounds } from './tournament-core.mjs?v=2.0';
+import { addTournamentEntrant, removeTournamentEntrant, startTournament, recordTournamentWinner, publicTournamentSnapshot, serializeTournamentRounds, deserializeTournamentRounds } from './tournament-core.mjs?v=2.1';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js';
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signOut, updateProfile } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js';
-import { getFirestore, doc, collection, getDoc, getDocs, setDoc, updateDoc, addDoc, onSnapshot, serverTimestamp, arrayUnion, runTransaction, writeBatch, Timestamp } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js';
+import { getFirestore, doc, collection, getDoc, getDocs, setDoc, updateDoc, addDoc, onSnapshot, serverTimestamp, arrayUnion, runTransaction, writeBatch, Timestamp, query, where } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js';
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-app-check.js';
 import { getAI, getGenerativeModel, GoogleAIBackend } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-ai.js';
 
@@ -308,13 +308,14 @@ export const firebaseAdapter = {
       tx.delete(req);
     });
   },
-  async createTournament(gid,uid,title,description,hostName){
+  async createTournament(gid,uid,title,description,hostName,eventTime){
     const name=title.trim(),desc=description.trim();
+    const eventAt=Timestamp.fromDate(parsePlayedAt(eventTime));
     if(name.length<2||name.length>60||desc.length>240)throw new Error('錦標賽名稱為 2–60 字，說明最多 240 字。');
     const privateRef=doc(colRef(gid,'tournaments'));
     const publicRef=doc(collection(db,'publicTournaments'));
     const t={title:name,description:desc,hostName:hostName.trim().slice(0,24),status:'registration',createdBy:uid,
-      publicId:publicRef.id,participants:[],rounds:[],champion:'',createdAt:serverTimestamp(),updatedAt:serverTimestamp()};
+      publicId:publicRef.id,participants:[],rounds:[],champion:'',eventAt,createdAt:serverTimestamp(),updatedAt:serverTimestamp()};
     const batch=writeBatch(db);
     batch.set(privateRef,t);
     batch.set(publicTournamentOwnerRef(publicRef.id),{ownerUid:uid,createdAt:serverTimestamp()});
@@ -335,7 +336,7 @@ export const firebaseAdapter = {
         next=addTournamentEntrant(current,{uid:playerOrResult,nickname:member.data().nickname});
       }else if(action==='remove')next=removeTournamentEntrant(current,playerOrResult);
       else if(action==='start')next=startTournament(current);
-      else if(action==='result')next=recordTournamentWinner(current,playerOrResult.round,playerOrResult.match,playerOrResult.winner);
+      else if(action==='result')throw new Error('請透過淘汰賽詳細設定選擇牌組、勝者及對戰時間。');
       else if(action==='cancel'){
         if(current.status!=='registration')throw new Error('進行中的錦標賽不能取消。');
         next={...current,status:'cancelled'};
@@ -345,6 +346,58 @@ export const firebaseAdapter = {
     });
   },
 
+  /** Save the bracket result and the regular match together, once only. */
+  async saveTournamentMatch(gid,id,uid,payload){
+    const tRef=tournamentRef(gid,id),round=Number(payload.round),index=Number(payload.match);
+    if(!Number.isInteger(round)||round<0||round>4||!Number.isInteger(index)||index<0||index>15)throw new Error('無效的淘汰賽場次。');
+    const playedAt=Timestamp.fromDate(parsePlayedAt(payload.playedAt));
+    const matchRef=doc(colRef(gid,'matches'),`t_${id}_${round}_${index}`);
+    await runTransaction(db,async tx=>{
+      const snap=await tx.get(tRef),existing=await tx.get(matchRef);
+      if(!snap.exists())throw new Error('找不到這場錦標賽。');
+      if(existing.exists())throw new Error('這場對戰已登錄，不能重複計入戰績。');
+      const current=snap.data();
+      if(current.createdBy!==uid)throw new Error('只有賽事房主可以記錄對戰結果。');
+      const side=deserializeTournamentRounds(current.rounds)[round]?.[index];
+      if(!side?.a||!side?.b||side.winner)throw new Error('這場賽程尚未開放或已有結果。');
+      if(payload.playerA!==side.a||payload.playerB!==side.b)throw new Error('玩家必須與抽籤結果相同。');
+      if(![side.a,side.b].includes(payload.winner))throw new Error('勝者必須是本場參賽玩家。');
+      const next=recordTournamentWinner(current,round,index,payload.winner,matchRef.id);
+      tx.set(matchRef,{playerA:side.a,playerB:side.b,deckA:payload.deckA,deckB:payload.deckB,
+        winner:payload.winner,note:String(payload.note||'').trim().slice(0,200),playedAt,recordedBy:uid,status:'active',
+        tournamentId:id,tournamentRound:round,tournamentMatch:index,tournamentTitle:current.title,
+        createdAt:serverTimestamp()});
+      tx.update(tRef,{participants:next.participants,rounds:serializeTournamentRounds(next.rounds),
+        status:next.status,champion:next.champion,updatedAt:serverTimestamp()});
+      tx.update(publicTournamentRef(current.publicId),{...publicTournamentSnapshot(next),updatedAt:serverTimestamp()});
+    });
+  },
+  /** Atomically delete private event, its recorded rounds, public listing,
+   * owner metadata and pending requests. Reject a stale bracket snapshot. */
+  async deleteTournament(gid,id,uid){
+    const tRef=tournamentRef(gid,id),snap=await getDoc(tRef);
+    if(!snap.exists())throw new Error('錦標賽已不存在。');
+    const t=snap.data();
+    if(t.createdBy!==uid)throw new Error('只有房主可以刪除錦標賽。');
+    const [matches,requests]=await Promise.all([
+      getDocs(query(colRef(gid,'matches'),where('tournamentId','==',id))),
+      getDocs(collection(db,'groups',gid,'tournaments',id,'requests'))
+    ]);
+    if(matches.size>40||requests.size>40)throw new Error('關聯紀錄數量異常，請先檢查。');
+    const oldUpdated=t.updatedAt?.toMillis?.()||0;
+    await runTransaction(db,async tx=>{
+      const latest=await tx.get(tRef);
+      if(!latest.exists()||latest.data().createdBy!==uid)throw new Error('沒有刪除權限或賽事已不存在。');
+      if((latest.data().updatedAt?.toMillis?.()||0)!==oldUpdated)throw new Error('刪除前賽程已更新，請重新整理再試。');
+      const recorded=deserializeTournamentRounds(latest.data().rounds).flat().filter(m=>m.matchId).length;
+      if(recorded!==matches.size)throw new Error('關聯戰績與賽程不一致，請先檢查，避免遺漏資料。');
+      for(const m of matches.docs)tx.delete(m.ref);
+      for(const request of requests.docs)tx.delete(request.ref);
+      tx.delete(tRef);
+      tx.delete(publicTournamentRef(t.publicId));
+      tx.delete(publicTournamentOwnerRef(t.publicId));
+    });
+  },
   async askRule(question,edition){
     if(!this.aiEnabled)throw new Error('尚未啟用 Firebase AI Logic 與 App Check，請依部署文件設定。');
     const ai=getAI(app,{backend:new GoogleAIBackend()});

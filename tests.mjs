@@ -653,3 +653,82 @@ test('v2.1 計時對戰雙方牌組顯示大圖，並支援錦標賽選牌及篩
  assert.ok(css.includes('.quick-player-visual .deck-art-battle>img'));
  assert.ok(css.includes('.tournament-deck-choices'));
 });
+
+import {sideRecordStats,deckDetailStats} from './core.mjs';
+test('v2.2 先後攻資訊只從實際記錄計算，歷史缺欄位不猜測',()=>{
+ const matches=[
+  {status:'active',playerA:'a',playerB:'b',deckA:'a1',deckB:'b1',winner:'a',firstPlayer:'a'},
+  {status:'active',playerA:'b',playerB:'a',deckA:'b1',deckB:'a1',winner:'b',firstPlayer:'a'},
+  {status:'active',playerA:'a',playerB:'b',deckA:'a1',deckB:'b1',winner:'a',firstPlayer:'b'},
+  {status:'active',playerA:'a',playerB:'b',deckA:'a1',deckB:'b1',winner:'a'},
+  {status:'void',playerA:'a',playerB:'b',deckA:'a1',deckB:'b1',winner:'b',firstPlayer:'b'}
+ ];
+ const x=sideRecordStats('a',matches);
+ assert.deepEqual(x.first,{games:2,wins:1,losses:1,rate:50});
+ assert.deepEqual(x.second,{games:1,wins:1,losses:0,rate:100});
+ assert.equal(x.known,3);assert.equal(x.unknown,1);
+ assert.equal(computeStats(people,decks,matches).totalMatches,4);
+});
+test('v2.2 牌組詳情包含先後攻勝率與對特定玩家牌組的克制關係',()=>{
+ const matches=[
+  {status:'active',playerA:'a',deckA:'a1',playerB:'b',deckB:'b1',winner:'a',firstPlayer:'a'},
+  {status:'active',playerA:'b',deckA:'b1',playerB:'a',deckB:'a1',winner:'a',firstPlayer:'b'},
+  {status:'active',playerA:'a',deckA:'a1',playerB:'b',deckB:'b1',winner:'b',firstPlayer:'b'},
+  {status:'active',playerA:'a',deckA:'a1',playerB:'c',deckB:'c1',winner:'c'}
+ ];
+ const info=deckDetailStats('a','a1',matches,
+  [{id:'a',nickname:'甲'},{id:'b',nickname:'乙'},{id:'c',nickname:'丙'}],
+  [{id:'a1',name:'甲組'},{id:'b1',name:'乙組'},{id:'c1',name:'丙組'}]);
+ assert.equal(info.games,4);assert.equal(info.wins,2);assert.equal(info.losses,2);
+ assert.equal(info.sides.first.wins,1);assert.equal(info.sides.second.wins,1);
+ assert.equal(info.sides.unknown,1);
+ assert.equal(info.mostDefeated.playerName,'乙');assert.equal(info.mostDefeated.deckName,'乙組');
+ assert.equal(info.mostDefeated.wins,2);
+ assert.equal(info.mostLostTo.playerName,'乙');assert.equal(info.mostLostTo.deckName,'乙組');
+});
+test('v2.2 新計時場次抽出決定者、選好先攻後才可啟動',()=>{
+ const initial=createQuickMatch({playerA:'a',playerB:'b',deckA:'d1',deckB:'d2'},'a',origin);
+ assert.equal(initial.duelRolled,false);assert.equal(initial.firstPlayer,'');
+ assert.throws(()=>changeQuickMatch(initial,'start',{playerId:'a',uid:'a',now:origin+1000}));
+ const drawn=changeQuickMatch(initial,'draw',{playerId:'b',uid:'a',now:origin+1000});
+ assert.equal(drawn.decider,'b');
+ assert.throws(()=>changeQuickMatch(drawn,'draw',{playerId:'a',uid:'a',now:origin+1300}));
+ const chosen=changeQuickMatch(drawn,'choose',{playerId:'b',uid:'a',now:origin+1400});
+ assert.equal(chosen.firstPlayer,'b');assert.equal(chosen.startedAtMs,0);
+ assert.throws(()=>changeQuickMatch(chosen,'start',{playerId:'a',uid:'a',now:origin+1800}));
+ const running=changeQuickMatch(chosen,'start',{playerId:'b',uid:'a',now:origin+2000});
+ assert.equal(running.startedAtMs,origin+2000);assert.equal(running.activePlayer,'b');
+ const handed=changeQuickMatch(running,'end',{uid:'a',now:origin+12000});
+ assert.equal(handed.activePlayer,'a');assert.equal(handed.activeSinceMs,origin+12000);
+ assert.equal(quickClock(handed,origin+12000).unattributedMs,0);
+ const end=changeQuickMatch(handed,'finish',{uid:'a',matchId:'x1',now:origin+19000});
+ assert.equal(end.activePlayer,'');assert.equal(end.turns.length,2);
+ assert.equal(quickClock(end,origin+19000).playerBMs,10000);
+ assert.equal(quickClock(end,origin+19000).playerAMs,7000);
+});
+test('v2.2 前端、Firebase 及規則皆保留先後攻，並提供牌組詳情彈窗',()=>{
+ const app=readFileSync(new URL('./app.js',import.meta.url),'utf8');
+ const rules=readFileSync(new URL('./firestore.rules',import.meta.url),'utf8');
+ const adapter=readFileSync(new URL('./firebase-adapter.js',import.meta.url),'utf8');
+ const css=readFileSync(new URL('./styles.css',import.meta.url),'utf8');
+ assert.ok(app.includes('data-action="duel-draw"'));
+ assert.ok(app.includes('data-action="duel-choose"'));
+ assert.ok(app.includes("crypto.getRandomValues(bytes)"));
+ assert.ok(app.includes('function deckDetailBody()'));
+ assert.ok(app.includes('function firstTurnDetails()'));
+ assert.ok(app.includes('data-action="deck-detail"'));
+ assert.ok(app.includes('data-action="turn-stats"'));
+ assert.ok(app.includes('firstPlayerSelect('));
+ assert.ok(app.includes("case 'duel-choose'"));
+ assert.ok(app.includes("firstPlayer:fields.firstPlayer"));
+ assert.ok(app.includes("data-action=\"deck-settings\""));
+ assert.ok(adapter.includes('firstPlayer:before.firstPlayer'));
+ assert.ok(adapter.includes("m.firstPlayer?{firstPlayer:m.firstPlayer}"));
+ assert.ok(adapter.includes("payload.firstPlayer?{firstPlayer:payload.firstPlayer}"));
+ assert.ok(rules.includes("request.resource.data.duelRolled == false"));
+ assert.ok(rules.includes("request.resource.data.firstPlayer in [resource.data.playerA,resource.data.playerB]"));
+ assert.ok(rules.includes("request.resource.data.activePlayer == (resource.data.activePlayer == resource.data.playerA ? resource.data.playerB : resource.data.playerA)"));
+ assert.ok(rules.includes("'playedAt','firstPlayer'"));
+ assert.ok(css.includes('.duel-stage'));
+ assert.ok(css.includes('.deck-detail-roles'));
+});

@@ -1,3 +1,17 @@
+# UA Arena v1.7 — 放大牌組圖片與自訂玩家頭像
+
+- **戰績詳情**：兩位玩家的牌組改成上半部大幅封面圖、下半部玩家暱稱、牌組名稱、勝負狀態，手機維持雙欄且避免圖片拉伸造成跑版。
+- **玩家名片**：依照每副牌組在目前戰團的勝率排序，最多五副，使用上圖下資訊的卡片呈現。原先的最愛牌組可在前五名內顯示標記。
+- **玩家頭像**：個人資料可以直接上傳與移除頭像。圖片會在瀏覽器中央裁切成正方形、縮小至 192px 以下並轉成小型 JPEG；原始照片不會上傳。頭像顯示在個人資料、側邊欄、排行榜、玩家名片與對戰詳情。
+- **資料儲存**：頭像保存在本人 `/users/{uid}` 與所屬戰團 `/groups/{gid}/members/{uid}` 的 `avatarData`，只有本人能修改。團員能讀取其所加入戰團的成員頭像，非成員不能存取團員清單。
+- **舊資料**：原有牌組封面與歷史戰績都不需修改，沒有頭像或牌組封面時顯示預設佔位。
+
+## 需要手動發布 Firestore Rules（重要）
+
+頭像新增 `avatarData` 欄位及有限格式／大小驗證，**GitHub Pages 部署不會自動套用 Firestore Rules**。開啟 https://console.firebase.google.com/project/ua-arena-web/firestore/rules ，把 https://github.com/samuel8796/ua-arena-web/blob/main/firestore.rules 的完整規則更新到 Firebase 並 Publish；否則上傳頭像會出現 permission-denied。牌組圖片放大不需更動資料庫。
+
+---
+
 # UA Arena Web v1.5 — 勝率、歷史戰績、詳情與手機版
 
 本次更新會**保留既有團員、牌組、戰績與錦標賽**，不需要搬移資料；原有的 createdAt 繼續代表系統登錄時間。

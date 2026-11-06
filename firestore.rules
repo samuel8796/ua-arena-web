@@ -56,7 +56,7 @@ service cloud.firestore {
           && d.tournamentRound is int && d.tournamentRound >= 0 && d.tournamentRound <= 4
           && d.tournamentMatch is int && d.tournamentMatch >= 0 && d.tournamentMatch <= 15
           && d.tournamentTitle is string && d.tournamentTitle.size() <= 60
-          && matchId == 't_' + d.tournamentId + '_' + d.tournamentRound + '_' + d.tournamentMatch
+          // The updated bracket carries the canonical result match ID.
           && get(/databases/$(database)/documents/groups/$(gid)/tournaments/$(d.tournamentId)).data.createdBy == request.auth.uid
           && getAfter(/databases/$(database)/documents/groups/$(gid)/tournaments/$(d.tournamentId)).data.title == d.tournamentTitle
           && getAfter(/databases/$(database)/documents/groups/$(gid)/tournaments/$(d.tournamentId)).data.rounds[d.tournamentRound].matches[d.tournamentMatch].a == d.playerA

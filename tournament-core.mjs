@@ -15,7 +15,7 @@ const clone = value => JSON.parse(JSON.stringify(value));
  * Accept legacy already-decoded arrays, as well as stored object rounds. */
 export function serializeTournamentRounds(rounds=[]) {
   return deserializeTournamentRounds(rounds).map(round=>({matches:round.map(m=>({
-    a:m.a||'',b:m.b||'',winner:m.winner||'',bye:!!m.bye
+    a:m.a||'',b:m.b||'',winner:m.winner||'',bye:!!m.bye,...(m.matchId?{matchId:m.matchId}:{})
   }))}));
 }
 export function deserializeTournamentRounds(rounds=[]) {
@@ -85,13 +85,14 @@ function propagate(rounds){
   }
   return rounds;
 }
-export function recordTournamentWinner(tournament,roundIndex,matchIndex,winner){
+export function recordTournamentWinner(tournament,roundIndex,matchIndex,winner,matchId=''){
   if(tournament.status!=='running')throw new Error('賽事尚未開始或已結束。');
   const rounds=clone(deserializeTournamentRounds(tournament.rounds));
   const match=rounds[roundIndex]?.[matchIndex];
   if(!match || !match.a || !match.b || match.winner)throw new Error('此場對戰尚未開放或已有結果。');
   if(winner!==match.a && winner!==match.b)throw new Error('勝者必須是該場參賽者。');
   match.winner=winner;
+  if(matchId)match.matchId=matchId;
   propagate(rounds);
   const champion=rounds.at(-1)?.[0]?.winner||'';
   return {...tournament,rounds,champion,status:champion?'completed':'running'};
@@ -120,6 +121,7 @@ export function publicTournamentSnapshot(tournament){
     participants:tournament.participants.map(p=>({name:p.nickname})),
     rounds:serializeTournamentRounds(deserializeTournamentRounds(tournament.rounds)
       .map(round=>round.map(m=>({a:nameFor(m.a),b:nameFor(m.b),winner:nameFor(m.winner),bye:!!m.bye})))),
-    champion:nameFor(tournament.champion)
+    champion:nameFor(tournament.champion),
+    ...(tournament.eventAt?{eventAt:tournament.eventAt}:{})
   };
 }

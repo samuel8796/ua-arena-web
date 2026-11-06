@@ -750,7 +750,7 @@ async function handleAction(action,el){
   });break;
   case 'more-menu':openModal('more');break;
   case 'streak-guide':openModal('streak-guide');break;
-  case 'open-card-settings':openModal('card-settings',{cardCoverData:state.myCard?.coverData||''});break;
+  case 'open-card-settings':openModal('card-settings',{cardCoverData:state.myCard?.coverData||'',cardCoverSourceData:validCropSource(state.profile?.cardCoverSourceData)||state.myCard?.coverData||''});break;
   case 'open-account-info':openModal('account-info');break;
   case 'tournament-detail':openModal('tournament-detail',{id:el.dataset.id,groupId:el.dataset.group||state.groupId});break;
   case 'new-tournament':openModal('tournament-create');break;
@@ -783,22 +783,53 @@ async function handleAction(action,el){
   case 'tournament-match':openModal('tournament-match',{round:Number(el.dataset.round),match:Number(el.dataset.match)});break;
   case 'watch-home':location.assign(location.pathname);break;
   case 'select-existing-group':{const gid=$('#group-select')?.value;if(gid)await runBusy(async()=>await loadGroup(gid));else toast('請先選擇群組。',true);break}
-  case 'remove-card-cover':
-     state.draft.cardCoverData='';
-     document.getElementById('card-cover-preview').innerHTML='<span class="profile-cover-placeholder">尚未設定名片背景</span>';
-     el.disabled=true;break;
-   case 'remove-profile-cover':if(guardedCover(state.profile?.profileCoverData)&&confirm('確定移除個人資料背景？')){
-     await runBusy(async()=>{await adapter.saveProfileCover(state.user.uid,'');state.profile={...state.profile,profileCoverData:''};render();toast('個人資料背景已移除。')});
+  case 'toggle-image-settings':{
+     const tools=el.closest('.image-settings'),menu=tools?.querySelector('.image-settings-menu');
+     if(menu){menu.hidden=!menu.hidden;el.setAttribute('aria-expanded',String(!menu.hidden));}
+     break;
+   }
+   case 'edit-avatar-image':{
+     const source=validCropSource(state.profile?.avatarSourceData)||validCropSource(state.profile?.avatarData);
+     if(!source)throw new Error('請先上傳頭像。');
+     await applyAvatarCrop(source);break;
+   }
+   case 'edit-profile-cover-image':{
+     const source=validCropSource(state.profile?.profileCoverSourceData)||validCropSource(state.profile?.profileCoverData);
+     if(!source)throw new Error('請先上傳背景圖片。');
+     await applyProfileCoverCrop(source);break;
+   }
+   case 'edit-deck-image':{
+     const source=validCropSource(state.draft.imageSourceData)||validCropSource(state.draft.imageData);
+     if(!source)throw new Error('請先上傳牌組圖片。');
+     await applyDeckCrop(source);break;
+   }
+   case 'remove-deck-image':
+     state.draft.imageData='';state.draft.imageSourceData='';
+     render();toast('已從編輯畫面移除圖片，可重新上傳；儲存牌組後生效。');break;
+   case 'edit-card-cover-image':{
+     const source=validCropSource(state.draft.cardCoverSourceData)||validCropSource(state.draft.cardCoverData);
+     if(!source)throw new Error('請先上傳名片背景。');
+     await applyCardCoverCrop(source);break;
+   }
+   case 'remove-card-cover':
+     state.draft.cardCoverData='';state.draft.cardCoverSourceData='';
+     syncCardCoverEditor();toast('名片背景已移除，儲存公開名片後生效。');break;
+   case 'remove-profile-cover':if(guardedCover(state.profile?.profileCoverData)&&confirm('確定移除個人資料背景？移除後才能上傳其他圖片。')){
+     await runBusy(async()=>{
+       await adapter.saveProfileCover(state.user.uid,'','');
+       state.profile={...state.profile,profileCoverData:'',profileCoverSourceData:''};
+       render();toast('個人資料背景已移除。');
+     });
    }break;
-   case 'remove-avatar':if(guardedAvatar(state.profile?.avatarData)&&confirm('確定移除個人頭像？同戰團成員將恢復顯示你的暱稱首字。')){
-    await runBusy(async()=>{
-      const result=await adapter.saveAvatar(state.user.uid,'',state.groupIds);
-      state.profile={...state.profile,avatarData:''};
-      state.players=state.players.map(p=>p.id===state.user.uid?{...p,avatarData:''}:p);
-      render();toast(result.failures?.length?'頭像已清除，但部分戰團同步失敗。':'頭像已移除');
-    });
-  }break;
-  case 'new-match':newMatch();break;
+   case 'remove-avatar':if(guardedAvatar(state.profile?.avatarData)&&confirm('確定移除頭像？移除後才能上傳其他照片。')){
+     await runBusy(async()=>{
+       const result=await adapter.saveAvatar(state.user.uid,'',state.groupIds,'');
+       state.profile={...state.profile,avatarData:'',avatarSourceData:''};
+       state.players=state.players.map(p=>p.id===state.user.uid?{...p,avatarData:''}:p);
+       render();toast(result.failures?.length?'頭像已清除，但部分戰團同步失敗。':'頭像已移除。');
+     });
+   }break;
+   case 'new-match':newMatch();break;
    case 'match-detail':openModal('match-detail',{id:el.dataset.id,settingsOpen:false});break;
    case 'match-settings':state.draft.settingsOpen=!state.draft.settingsOpen;render();break;
    case 'match-edit':{
@@ -846,10 +877,10 @@ async function handleAction(action,el){
   case 'quick-turn-end':await runBusy(async()=>{await adapter.changeQuickMatch(state.groupId,state.quickSessionId,state.user.uid,'end');toast('已自動切換到另一位玩家的回合。')});break;
   case 'deck-detail':openModal('deck-detail',{id:el.dataset.id,settingsOpen:false});break;
   case 'deck-settings':state.draft.settingsOpen=!state.draft.settingsOpen;render();break;
-  case 'deck-edit-from-detail':{const d=deck(el.dataset.id);if(d&&d.ownerUid===state.user.uid)newDeck(d);break;}
+  case 'deck-edit-from-detail':{const d=deck(el.dataset.id);if(d&&d.ownerUid===state.user.uid)await newDeck(d);break;}
   case 'turn-stats':openModal('turn-stats');break;
-  case 'new-deck':newDeck();break;
-  case 'edit-deck':{const d=deck(el.dataset.id);if(d)newDeck(d);break;}
+  case 'new-deck':await newDeck();break;
+  case 'edit-deck':{const d=deck(el.dataset.id);if(d)await newDeck(d);break;}
   case 'archive-deck':if(confirm('封存這副牌組？歷史對戰會保留，但不能用於新對戰。'))await runBusy(async()=>{await adapter.archiveDeck(state.groupId,el.dataset.id);state.modal=null;render();toast('牌組已封存。')});break;
   case 'void-match':if(confirm('確定撤銷這筆紀錄？它會保留稽核痕跡，但不計入統計。'))await runBusy(async()=>{await adapter.voidMatch(state.groupId,el.dataset.id);state.modal=null;render();toast('已撤銷對戰紀錄。')});break;
   case 'player-detail':{

@@ -269,7 +269,7 @@ function playerModalBody(){
       <div class="stats-cell"><b>${stats.games}</b><span>場次</span></div>
       <div class="stats-cell"><b>${stats.wins}</b><span>勝場</span></div>
       <div class="stats-cell"><b>${stats.rate}%</b><span>勝率</span></div></div>`:''}
-    ${topDecks.length?`<section class="card" style="margin-top:14px"><div class="section-head"><h3>牌組勝率 TOP 5</h3><span class="tag">此戰團 · 最多五副</span></div><div class="deck-top-five">${topDecks.map((d,i)=>`<div class="deck-top-five-item"><span class="deck-top-five-rank">${i+1}</span>${deckArtwork(stats.id,d.id,d.name,'deck-art-top-five')}<div class="deck-top-five-info"><strong>${e(d.name)}${card?.showFavoriteDeck&&favoriteId===d.id?' <span class="deck-fav-tag">♡ 最愛</span>':''}</strong><span>${e(colorOf(d.color).name)} · ${d.games} 場 / ${d.wins} 勝 / ${d.losses} 敗</span></div><b class="deck-top-five-rate">${d.rate}%</b></div>`).join('')}</div><p class="hint">依勝率排序；相同勝率優先顯示場次較多的牌組。</p></section>`:''}
+    ${topDecks.length?`<section class="card" style="margin-top:14px"><div class="section-head"><h3>牌組勝率 TOP 5</h3><span class="tag">此戰團 · 最多五副</span></div><div class="deck-top-five">${topDecks.map((d,i)=>`<div class="deck-top-five-item"><span class="deck-top-five-rank">${i+1}</span><button type="button" class="deck-top-five-open" data-action="deck-detail" data-id="${e(d.id)}" aria-label="查看 ${e(d.name)} 詳細牌組戰績">${deckArtwork(stats.id,d.id,d.name,'deck-art-top-five')}</button><div class="deck-top-five-info"><strong>${e(d.name)}${card?.showFavoriteDeck&&favoriteId===d.id?' <span class="deck-fav-tag">♡ 最愛</span>':''}</strong><span>${e(colorOf(d.color).name)} · ${d.games} 場 / ${d.wins} 勝 / ${d.losses} 敗</span></div><b class="deck-top-five-rate">${d.rate}%</b></div>`).join('')}</div><p class="hint">依勝率排序；相同勝率優先顯示場次較多的牌組。</p></section>`:''}
     ${total?`<h3 style="margin-top:18px">個人公開總戰績</h3><div class="stats-detail">
       <div class="stats-cell"><b>${Number(total.games)||0}</b><span>總場次</span></div>
       <div class="stats-cell"><b>${Number(total.wins)||0}</b><span>勝場</span></div>
@@ -618,7 +618,7 @@ function restartPersonalHistory(){
   historyUnsub=adapter.subscribePersonalHistory(state.groupIds,state.user.uid,records=>{
     state.personalHistory=records;
     state.historyReady=state.groupIds.every(id=>Object.prototype.hasOwnProperty.call(records,id));
-    if(state.tab==='profile'&&!state.modal)render();
+    if((['profile','decks'].includes(state.tab)&&!state.modal)||['deck-detail','turn-stats'].includes(state.modal))render();
   },err=>{console.warn('個人戰績同步失敗',err);toast(readableError(err),true)});
 }
 async function afterAuth(user){

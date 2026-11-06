@@ -1,6 +1,7 @@
 import { firebaseConfig, aiSettings } from './firebase-config.js';
 import {chooseAvatarCrop} from './avatar-crop-ui.mjs?v=1.8';
-import {chooseWideCrop} from './wide-crop-ui.mjs?v=2.3';
+import {chooseWideCrop} from './wide-crop-ui.mjs?v=2.4';
+import {prepareImageSource} from './image-source.mjs?v=2.4';
 import { COLORS, colorOf, safeText as e, shortId, formatDate, assertMatch, computeStats, aggregatePersonalStats, aggregateDeckWinRates, filterMatches, filteredMatchStats, matchTimeMs, matchDateValue, parsePlayedAt, sideRecordStats, deckDetailStats, topDecksByWinRate, sortDeckLibrary, playerWinStreak, streakTier, resolvePlayerDeckSelection, GUEST_PLAYER_ID, GUEST_DECK_ID, guestPlayer, personalGroupId, isGuestMatch, guestDeckLabel } from './core.mjs?v=2.3';
 import { demoAdapter } from './demo-adapter.js?v=2.3';
 import { QUICK_MATCH_LIMIT_MS, quickClock, mmss } from './quick-core.mjs?v=2.2.1';
@@ -30,6 +31,17 @@ const guardedImage=src=>typeof src==='string' && /^data:image\/(webp|jpeg);base6
 // document; keep the initial placeholder until an upload is available.
 const guardedAvatar=src=>typeof src==='string'&&src.length<=40000&&/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(src)?src:'';
 const guardedCover=src=>typeof src==='string'&&src.length<=90000&&/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(src)?src:'';
+const validCropSource=src=>typeof src==='string'&&src.length<=160000&&/^data:image\/(jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(src)?src:'';
+function imageSettings(kind,hasImage,inputName,label){
+  const removeAction=({avatar:'remove-avatar','profile-cover':'remove-profile-cover',deck:'remove-deck-image','card-cover':'remove-card-cover'})[kind];
+  return `<div class="image-settings image-settings-${kind}" data-image-settings="${kind}">
+    <button type="button" class="image-settings-gear" data-action="toggle-image-settings" aria-label="${e(label)}設定" aria-expanded="false" title="${e(label)}設定">⚙</button>
+    <div class="image-settings-menu" hidden>
+      ${hasImage?`<button type="button" data-action="edit-${kind}-image">✎ 編輯圖片</button><button type="button" class="image-settings-danger" data-action="${removeAction}">移除圖片</button>`:
+      `<label class="image-settings-upload">📷 上傳圖片<input type="file" name="${inputName}" accept="image/*" aria-label="上傳${e(label)}"></label>`}
+    </div>
+  </div>`;
+}
 function playerAvatar(uid,extra='',forcedTier=undefined) {
   const p=player(uid),label=uid===state.user?.uid?userLabel():p?.nickname||'玩家';
   const src=guardedAvatar(uid===state.user?.uid?(state.profile?.avatarData||p?.avatarData):p?.avatarData);
@@ -269,7 +281,19 @@ function timedMatchEditBody(){
   <div class="modal-footer"><button type="button" class="btn btn-ghost" data-action="close-modal">取消</button><button type="submit" class="btn btn-primary">儲存修改</button></div>
  </form>`;
 }
-function deckModalBody(){const d=state.draft;return `<form data-form="save-deck"><div class="field"><label>牌組圖片</label><div class="upload" id="deck-upload">${guardedImage(d.imageData)?`<img src="${guardedImage(d.imageData)}" alt="牌組圖片預覽">`:'<div style="font-size:33px">▧</div><strong>點擊上傳牌組圖片</strong><span class="sm muted">選取圖片後可裁切為 16:9；所有頁面都會完整顯示相同畫面</span>'}<input name="cover" type="file" accept="image/*" aria-label="上傳牌組圖片" /></div></div><div class="field mt"><label>牌組名稱</label><input name="name" required minlength="1" maxlength="42" value="${e(d.name||'')}" placeholder="例如：紫色魯夫" /></div><div class="field mt"><label>牌組持有者</label><input name="ownerUid" type="hidden" value="${e(state.user.uid)}"><div class="mode-note">${e(userLabel())} · 個人牌組庫（所有已加入戰團共用）</div></div><div class="field mt"><label>牌組顏色</label><div class="color-choices">${COLORS.map(c=>`<button type="button" class="color-choice ${d.color===c.id?'selected':''}" data-action="pick-deck-color" data-color="${c.id}"><span class="dot" style="background:${c.hex}"></span>${c.name}</button>`).join('')}</div></div><div class="modal-footer"><button class="btn btn-ghost" type="button" data-action="close-modal">取消</button><button class="btn btn-primary" type="submit">${d.id?'儲存修改':'建立牌組'} →</button></div></form>`}
+function deckModalBody(){
+ const d=state.draft,hasImage=!!guardedImage(d.imageData);
+ return `<form data-form="save-deck"><div class="field"><label>牌組圖片</label>
+   <div class="deck-image-editor">
+     <div class="deck-image-preview" id="deck-upload">${hasImage?`<img src="${guardedImage(d.imageData)}" alt="牌組圖片預覽">`:'<span class="deck-image-empty">尚未上傳圖片 · 點右上角設定</span>'}</div>
+     ${imageSettings('deck',hasImage,'cover','牌組圖片')}
+   </div>
+   <p class="hint">可固定裁切比例為 16:9；已有圖片請按右上角編輯，移除後才能重新上傳。</p></div>
+   <div class="field mt"><label>牌組名稱</label><input name="name" required minlength="1" maxlength="42" value="${e(d.name||'')}" placeholder="例如：紫色魯夫"></div>
+   <div class="field mt"><label>牌組持有者</label><input name="ownerUid" type="hidden" value="${e(state.user.uid)}"><div class="mode-note">${e(userLabel())} · 個人牌組庫（所有已加入戰團共用）</div></div>
+   <div class="field mt"><label>牌組顏色</label><div class="color-choices">${COLORS.map(c=>`<button type="button" class="color-choice ${d.color===c.id?'selected':''}" data-action="pick-deck-color" data-color="${c.id}"><span class="dot" style="background:${c.hex}"></span>${c.name}</button>`).join('')}</div></div>
+   <div class="modal-footer"><button class="btn btn-ghost" type="button" data-action="close-modal">取消</button><button class="btn btn-primary" type="submit">${d.id?'儲存修改':'建立牌組'} →</button></div></form>`;
+}
 
 function playerModalBody(){
   const stats=getStats().players.find(p=>p.id===state.draft.id);
@@ -384,7 +408,7 @@ function playerCardSettings(){
   <section class="card card-settings-content">
     <div class="section-head"><h3>◉ 公開玩家名片設定</h3><span class="tag">自行決定分享內容</span></div>
     <p class="muted sm">其他登入玩家點你的名片會看到你勾選的項目；Email、群組清單與完整私人對戰明細不會公開。</p>
-    <form data-form="save-card" style="margin-top:15px"><div class="field card-cover-editor"><label>個人名片背景圖片</label><p class="hint">只顯示在名片上方、頭像與名字後方，會自動暗化，不會覆蓋戰績。</p><div class="card-cover-preview" id="card-cover-preview">${guardedCover(state.draft.cardCoverData??c.coverData)?`<img src="${guardedCover(state.draft.cardCoverData??c.coverData)}" alt="名片背景預覽">`:'<span class="profile-cover-placeholder">尚未設定名片背景</span>'}</div><div class="card-cover-controls"><label class="card-cover-upload-label"><input type="file" name="cardCover" accept="image/*" aria-label="上傳名片背景">📷 上傳／裁切名片背景</label><button type="button" class="btn btn-ghost btn-sm" data-action="remove-card-cover" ${!guardedCover(state.draft.cardCoverData??c.coverData)?'disabled':''}>移除背景</button></div></div><div class="divider"></div>
+    <form data-form="save-card" style="margin-top:15px"><div class="field card-cover-editor"><label>個人名片背景圖片</label><p class="hint">只顯示在名片上方、頭像與名字後方，會自動暗化，不會覆蓋戰績。</p><div class="card-cover-preview" id="card-cover-preview">${guardedCover(state.draft.cardCoverData??c.coverData)?`<img src="${guardedCover(state.draft.cardCoverData??c.coverData)}" alt="名片背景預覽">`:'<span class="profile-cover-placeholder">尚未設定名片背景</span>'}</div>${imageSettings('card-cover',!!guardedCover(state.draft.cardCoverData??c.coverData),'cardCover','名片背景圖片')}</div><div class="divider"></div>
       <label class="field"><input type="checkbox" name="showBio" ${checked('showBio')}> 公開我的個人簡介</label>
       <label class="field" style="margin-top:11px"><input type="checkbox" name="showGroupStats" ${checked('showGroupStats')}> 名片顯示目前戰團戰績</label>
       <label class="field" style="margin-top:11px"><input type="checkbox" name="showOverallStats" ${checked('showOverallStats')}> 公開跨戰團的個人總戰績</label>
@@ -484,7 +508,7 @@ function streakGuide(){
 }
 function profilePage(){
   const me=getStats().players.find(p=>p.id===state.user?.uid);
-  return `<div class="page-head"><div><div class="label-up">ACCOUNT / PERSONAL PROFILE</div><h1>我的個人資料</h1><p>編輯你的全站暱稱，並查看帳號所屬的對戰團。</p></div></div><div class="profile-grid profile-grid-single"><section class="card"><div class="profile-cover">${guardedCover(state.profile?.profileCoverData)?`<img src="${guardedCover(state.profile.profileCoverData)}" alt="個人資料背景">`:'<span class="profile-cover-placeholder">上傳自己的背景圖片</span>'}<div class="profile-cover-actions"><label class="profile-cover-upload"><input type="file" name="profileCover" accept="image/*" aria-label="上傳個人資料背景">📷 更換背景</label><button class="btn btn-ghost btn-sm" type="button" data-action="remove-profile-cover" ${!guardedCover(state.profile?.profileCoverData)?'disabled':''}>移除</button></div></div><div class="profile-heading">${playerAvatar(state.user?.uid,'avatar-large')}<div><h2>${e(userLabel())}</h2><p class="muted sm">個人資料 · 點選「查看帳號資訊」可檢視 Email</p></div></div><button class="btn btn-ghost btn-sm streak-guide-trigger" type="button" data-action="streak-guide">✦ 連勝外框說明</button><div class="avatar-editor"><label class="avatar-upload-control"><input type="file" name="avatar" accept="image/*" aria-label="上傳個人頭像"><span>📷 更換頭像</span></label><button class="btn btn-ghost btn-sm" data-action="remove-avatar" type="button" ${!guardedAvatar(state.profile?.avatarData)?'disabled':''}>移除頭像</button><p class="hint">圖片會裁切成正方形並壓縮，供已加入戰團的成員查看；按「確認使用」後才會儲存。</p></div><div class="divider"></div><form data-form="save-profile"><div class="field"><label>公開玩家暱稱</label><input name="nickname" minlength="2" maxlength="24" required value="${e(userLabel())}" placeholder="你的顯示名稱"></div><div class="field mt"><label>個人簡介（只有你自己能在此頁查看）</label><textarea name="bio" maxlength="160" rows="4" placeholder="例如：喜歡紫色牌組">${e(state.profile?.bio||'')}</textarea></div><div class="profile-quick-actions"><button type="button" class="btn btn-outline" data-action="open-card-settings">◉ 設定個人名片</button><button type="button" class="btn btn-outline" data-action="open-account-info">▤ 查看帳號資訊</button></div><div class="hint">儲存後會同步更新你已加入對戰團的玩家暱稱；歷史勝負不會因此刪除。</div><button class="btn btn-primary" type="submit" style="margin-top:18px">儲存個人資料</button></form></section></div>` + tournamentMedalPanel() + personalExtras();
+  return `<div class="page-head"><div><div class="label-up">ACCOUNT / PERSONAL PROFILE</div><h1>我的個人資料</h1><p>編輯你的全站暱稱，並查看帳號所屬的對戰團。</p></div></div><div class="profile-grid profile-grid-single"><section class="card"><div class="profile-cover">${guardedCover(state.profile?.profileCoverData)?`<img src="${guardedCover(state.profile.profileCoverData)}" alt="個人資料背景">`:'<span class="profile-cover-placeholder">尚未設定背景圖片</span>'}${imageSettings('profile-cover',!!guardedCover(state.profile?.profileCoverData),'profileCover','個人資料背景')}</div><div class="profile-heading">${playerAvatar(state.user?.uid,'avatar-large')}<div><h2>${e(userLabel())}</h2><p class="muted sm">個人資料 · 點選「查看帳號資訊」可檢視 Email</p></div>${imageSettings('avatar',!!guardedAvatar(state.profile?.avatarData),'avatar','個人頭像')}</div><button class="btn btn-ghost btn-sm streak-guide-trigger" type="button" data-action="streak-guide">✦ 連勝外框說明</button><div class="avatar-editor"><p class="hint">頭像可再次調整裁切範圍；如需上傳新照片，請先從頭像設定移除舊圖。</p></div><div class="divider"></div><form data-form="save-profile"><div class="field"><label>公開玩家暱稱</label><input name="nickname" minlength="2" maxlength="24" required value="${e(userLabel())}" placeholder="你的顯示名稱"></div><div class="field mt"><label>個人簡介（只有你自己能在此頁查看）</label><textarea name="bio" maxlength="160" rows="4" placeholder="例如：喜歡紫色牌組">${e(state.profile?.bio||'')}</textarea></div><div class="profile-quick-actions"><button type="button" class="btn btn-outline" data-action="open-card-settings">◉ 設定個人名片</button><button type="button" class="btn btn-outline" data-action="open-account-info">▤ 查看帳號資訊</button></div><div class="hint">儲存後會同步更新你已加入對戰團的玩家暱稱；歷史勝負不會因此刪除。</div><button class="btn btn-primary" type="submit" style="margin-top:18px">儲存個人資料</button></form></section></div>` + tournamentMedalPanel() + personalExtras();
 }
 const tournamentStatus=s=>({registration:'開放報名',running:'進行中',completed:'已完賽',cancelled:'已取消'})[s]||'未知狀態';
 function spectatorUrl(publicId){const u=new URL(location.href);u.search='';u.hash='';u.searchParams.set('watch',publicId);return u.href;}

@@ -201,7 +201,7 @@ function playerModalBody(){
     ${self?'<button class="btn btn-outline btn-full" data-tab="profile" style="margin-top:18px">編輯我的公開名片</button>':''}`;
 }
 
-function renderModal(){if(!state.modal)return '';let title,body;switch(state.modal){case 'match':title='新增對戰紀錄';body=matchModalBody();break;case 'match-detail':title='對戰詳情';body=matchDetailBody();break;case 'streak-guide':title='連勝外框說明';body=streakGuide();break;case 'tournament-detail':title='錦標賽詳情';body=tournamentDetailBody();break;case 'deck':title=state.draft.id?'編輯牌組':'新增牌組';body=deckModalBody();break;case 'player':title='玩家詳細戰績';body=playerModalBody();break;case 'tournament-create':title='建立錦標賽';body=`<form data-form="create-tournament"><div class="field"><label>錦標賽名稱</label><input name="title" minlength="2" maxlength="60" required placeholder="例如：UA 週末冠軍盃"></div><div class="field mt"><label>賽事說明（選填）</label><textarea name="description" maxlength="240" rows="3" placeholder="例如：採單敗淘汰，房主確認結果"></textarea></div><div class="alert" style="margin-top:14px">僅房主可新增參賽者、開始賽程與登錄勝者。公開觀賽連結可免登入查看賽程，不會公開私人對戰團與牌組資料。</div><div class="modal-footer"><button type="button" class="btn btn-ghost" data-action="close-modal">取消</button><button type="submit" class="btn btn-primary">建立錦標賽</button></div></form>`;break;case 'more':title='功能選單';body=`<div class="more-links">${[['profile','◉ 個人資料'],['groups','⇄ 我的對戰團'],['players','♟ 玩家排行'],['rules','✦ 規則 AI']].map(([id,label])=>`<button class="nav" data-tab="${id}">${label}</button>`).join('')}</div>`;break;case 'invite':title='邀請朋友';body=`<p class="muted sm">將連結傳給朋友，對方註冊登入後就能加入你的對戰群組。具有連結的人可申請加入，請只傳給信任的朋友。</p><div class="divider"></div><label>對戰團名稱</label><div class="group-pill" style="display:inline-block;margin-bottom:17px">${e(state.group?.name)}</div><label>邀請連結</label><div class="invite-id"><span class="mono">${e(inviteUrl())}</span><button class="btn btn-primary btn-sm" data-action="copy-invite">複製</button></div><div class="hint">好友完成登入後即可進入群組；同一個帳號可參加多個群組。</div>`;break;default:body='';title='';}
+function renderModal(){if(!state.modal)return '';let title,body;switch(state.modal){case 'match':title='新增對戰紀錄';body=matchModalBody();break;case 'match-detail':title='對戰詳情';body=matchDetailBody();break;case 'streak-guide':title='連勝外框說明';body=streakGuide();break;case 'card-settings':title='設定個人名片';body=playerCardSettings();break;case 'account-info':title='帳號資訊';body=accountInfoBody();break;case 'tournament-detail':title='錦標賽詳情';body=tournamentDetailBody();break;case 'deck':title=state.draft.id?'編輯牌組':'新增牌組';body=deckModalBody();break;case 'player':title='玩家詳細戰績';body=playerModalBody();break;case 'tournament-create':title='建立錦標賽';body=`<form data-form="create-tournament"><div class="field"><label>錦標賽名稱</label><input name="title" minlength="2" maxlength="60" required placeholder="例如：UA 週末冠軍盃"></div><div class="field mt"><label>賽事說明（選填）</label><textarea name="description" maxlength="240" rows="3" placeholder="例如：採單敗淘汰，房主確認結果"></textarea></div><div class="alert" style="margin-top:14px">僅房主可新增參賽者、開始賽程與登錄勝者。公開觀賽連結可免登入查看賽程，不會公開私人對戰團與牌組資料。</div><div class="modal-footer"><button type="button" class="btn btn-ghost" data-action="close-modal">取消</button><button type="submit" class="btn btn-primary">建立錦標賽</button></div></form>`;break;case 'more':title='功能選單';body=`<div class="more-links">${[['profile','◉ 個人資料'],['groups','⇄ 我的對戰團'],['players','♟ 玩家排行'],['rules','✦ 規則 AI']].map(([id,label])=>`<button class="nav" data-tab="${id}">${label}</button>`).join('')}</div>`;break;case 'invite':title='邀請朋友';body=`<p class="muted sm">將連結傳給朋友，對方註冊登入後就能加入你的對戰群組。具有連結的人可申請加入，請只傳給信任的朋友。</p><div class="divider"></div><label>對戰團名稱</label><div class="group-pill" style="display:inline-block;margin-bottom:17px">${e(state.group?.name)}</div><label>邀請連結</label><div class="invite-id"><span class="mono">${e(inviteUrl())}</span><button class="btn btn-primary btn-sm" data-action="copy-invite">複製</button></div><div class="hint">好友完成登入後即可進入群組；同一個帳號可參加多個群組。</div>`;break;default:body='';title='';}
   return `<div class="modal-backdrop" data-action="backdrop"><div class="modal" role="dialog" aria-modal="true" aria-label="${e(title)}"><div class="modal-header"><h2>${e(title)}</h2><button class="close" data-action="close-modal" aria-label="關閉視窗">✕</button></div>${body}</div></div>`;
 }
 
@@ -234,7 +234,15 @@ function personalExtras(){
     <div class="section-head"><h3>▤ 我的牌組勝率</h3><span class="tag">跨戰團累計</span></div>
     <div class="deck-rate-list">${personalDeckStats().map(d=>`<div class="deck-rate-row"><span>${e(d.name)}</span><strong>${d.rate}%</strong><small>${d.games} 場 · ${d.wins} 勝 · ${d.losses} 敗</small></div>`).join('')||'<div class="empty">尚無個人牌組的對戰紀錄。</div>'}</div>
   </section>
-  <section class="card" style="margin-top:20px">
+`;
+}
+
+
+function playerCardSettings(){
+ const c=state.myCard||{},mine=state.decks.filter(d=>d.ownerUid===state.user?.uid&&d.active!==false);
+ const checked=key=>c[key]!==false?'checked':'',fav=c.favoriteDeck?.name||'';
+ return `<div class="card-settings-modal">
+  <section class="card card-settings-content">
     <div class="section-head"><h3>◉ 公開玩家名片設定</h3><span class="tag">自行決定分享內容</span></div>
     <p class="muted sm">其他登入玩家點你的名片會看到你勾選的項目；Email、群組清單與完整私人對戰明細不會公開。</p>
     <form data-form="save-card" style="margin-top:15px">
@@ -249,10 +257,21 @@ function personalExtras(){
       <p class="hint">總戰績會在儲存公開名片時建立快照；之後他人新增你的戰績，快照不會自動變動。戰團排行榜仍依實際紀錄計算。</p>
       <button class="btn btn-primary" type="submit" style="margin-top:18px">儲存公開名片</button>
     </form>
-  </section>`;
+  </section>
+ </div>`;
 }
-
-
+function accountInfoBody(){
+ const me=getStats().players.find(p=>p.id===state.user?.uid);
+ return `<section class="card account-info-modal">
+ <div class="profile-info-row"><span>Email</span><strong>${e(state.user?.email||'未設定')}</strong></div>
+ <div class="profile-info-row"><span>信箱驗證</span><strong>${state.user?.emailVerified?'已驗證':'尚未驗證'}</strong></div>
+ <div class="profile-info-row"><span>加入對戰團</span><strong>${state.groupIds.length} 個</strong></div>
+ <div class="profile-info-row"><span>目前團內戰績</span><strong>${me?`${me.wins} 勝 / ${me.losses} 敗`:'尚無紀錄'}</strong></div>
+ <div class="divider"></div><h3>我加入的對戰團</h3>
+ ${state.groupIds.map(id=>`<button class="nav" data-action="select-group-card" data-id="${e(id)}">⇄ ${e(state.groupDetails[id]||id)} ${id===state.groupId?'· 目前':''}</button>`).join('')}
+ <div class="hint">Email 與密碼由 Firebase Authentication 管理，無法在此直接修改。</div>
+ </section>`;
+}
 function personalTournamentEntries(){
  return Object.entries(state.personalTournaments||{}).flatMap(([groupId,ts])=>(ts||[]).map(t=>({...t,groupId})));
 }
@@ -326,7 +345,7 @@ function streakGuide(){
 }
 function profilePage(){
   const me=getStats().players.find(p=>p.id===state.user?.uid);
-  return `<div class="page-head"><div><div class="label-up">ACCOUNT / PERSONAL PROFILE</div><h1>我的個人資料</h1><p>編輯你的全站暱稱，並查看帳號所屬的對戰團。</p></div></div><div class="profile-grid"><section class="card"><div class="profile-heading">${playerAvatar(state.user?.uid,'avatar-large')}<div><h2>${e(userLabel())}</h2><p class="muted sm">${e(state.user?.email||'展示帳號')}</p></div></div><button class="btn btn-ghost btn-sm streak-guide-trigger" type="button" data-action="streak-guide">✦ 連勝外框說明</button><div class="avatar-editor"><label class="avatar-upload-control"><input type="file" name="avatar" accept="image/*" aria-label="上傳個人頭像"><span>📷 更換頭像</span></label><button class="btn btn-ghost btn-sm" data-action="remove-avatar" type="button" ${!guardedAvatar(state.profile?.avatarData)?'disabled':''}>移除頭像</button><p class="hint">圖片會裁切成正方形並壓縮，供已加入戰團的成員查看；按「確認使用」後才會儲存。</p></div><div class="divider"></div><form data-form="save-profile"><div class="field"><label>公開玩家暱稱</label><input name="nickname" minlength="2" maxlength="24" required value="${e(userLabel())}" placeholder="你的顯示名稱"></div><div class="field mt"><label>個人簡介（只有你自己能在此頁查看）</label><textarea name="bio" maxlength="160" rows="4" placeholder="例如：喜歡紫色牌組">${e(state.profile?.bio||'')}</textarea></div><div class="hint">儲存後會同步更新你已加入對戰團的玩家暱稱；歷史勝負不會因此刪除。</div><button class="btn btn-primary" type="submit" style="margin-top:18px">儲存個人資料</button></form></section><section class="card"><h3>帳號資訊</h3><div class="profile-info-row"><span>Email</span><strong>${e(state.user?.email||'未設定')}</strong></div><div class="profile-info-row"><span>信箱驗證</span><strong>${state.user?.emailVerified?'已驗證':'尚未驗證'}</strong></div><div class="profile-info-row"><span>加入對戰團</span><strong>${state.groupIds.length} 個</strong></div><div class="profile-info-row"><span>目前團內戰績</span><strong>${me?`${me.wins} 勝 / ${me.losses} 敗`:'尚無紀錄'}</strong></div><div class="divider"></div><h3>我加入的對戰團</h3>${state.groupIds.map(id=>`<button class="nav" data-action="select-group-card" data-id="${e(id)}">⇄ ${e(state.groupDetails[id]||id)} ${id===state.groupId?'· 目前':''}</button>`).join('')}<div class="hint">Email 與密碼由 Firebase Authentication 管理；此頁先提供安全的暱稱與簡介編輯。</div></section></div>` + tournamentMedalPanel() + personalExtras();
+  return `<div class="page-head"><div><div class="label-up">ACCOUNT / PERSONAL PROFILE</div><h1>我的個人資料</h1><p>編輯你的全站暱稱，並查看帳號所屬的對戰團。</p></div></div><div class="profile-grid profile-grid-single"><section class="card"><div class="profile-heading">${playerAvatar(state.user?.uid,'avatar-large')}<div><h2>${e(userLabel())}</h2><p class="muted sm">${e(state.user?.email||'展示帳號')}</p></div></div><button class="btn btn-ghost btn-sm streak-guide-trigger" type="button" data-action="streak-guide">✦ 連勝外框說明</button><div class="avatar-editor"><label class="avatar-upload-control"><input type="file" name="avatar" accept="image/*" aria-label="上傳個人頭像"><span>📷 更換頭像</span></label><button class="btn btn-ghost btn-sm" data-action="remove-avatar" type="button" ${!guardedAvatar(state.profile?.avatarData)?'disabled':''}>移除頭像</button><p class="hint">圖片會裁切成正方形並壓縮，供已加入戰團的成員查看；按「確認使用」後才會儲存。</p></div><div class="divider"></div><form data-form="save-profile"><div class="field"><label>公開玩家暱稱</label><input name="nickname" minlength="2" maxlength="24" required value="${e(userLabel())}" placeholder="你的顯示名稱"></div><div class="field mt"><label>個人簡介（只有你自己能在此頁查看）</label><textarea name="bio" maxlength="160" rows="4" placeholder="例如：喜歡紫色牌組">${e(state.profile?.bio||'')}</textarea></div><div class="profile-quick-actions"><button type="button" class="btn btn-outline" data-action="open-card-settings">◉ 設定個人名片</button><button type="button" class="btn btn-outline" data-action="open-account-info">▤ 查看帳號資訊</button></div><div class="hint">儲存後會同步更新你已加入對戰團的玩家暱稱；歷史勝負不會因此刪除。</div><button class="btn btn-primary" type="submit" style="margin-top:18px">儲存個人資料</button></form></section></div>` + tournamentMedalPanel() + personalExtras();
 }
 const tournamentStatus=s=>({registration:'開放報名',running:'進行中',completed:'已完賽',cancelled:'已取消'})[s]||'未知狀態';
 function spectatorUrl(publicId){const u=new URL(location.href);u.search='';u.hash='';u.searchParams.set('watch',publicId);return u.href;}
@@ -516,6 +535,8 @@ async function handleAction(action,el){
   });break;
   case 'more-menu':openModal('more');break;
   case 'streak-guide':openModal('streak-guide');break;
+  case 'open-card-settings':openModal('card-settings');break;
+  case 'open-account-info':openModal('account-info');break;
   case 'tournament-detail':openModal('tournament-detail',{id:el.dataset.id,groupId:el.dataset.group||state.groupId});break;
   case 'new-tournament':openModal('tournament-create');break;
   case 'select-tournament':{
@@ -662,7 +683,7 @@ app.addEventListener('submit',event=>{
         favoriteDeckStats:fields.showFavoriteDeck?{games:favoriteStats.games,wins:favoriteStats.wins,losses:favoriteStats.losses,rate:favoriteStats.rate}:{games:0,wins:0,losses:0,rate:0},
         totalStats:visibleTotal};
       await adapter.savePlayerCard(state.user.uid,card);
-      state.myCard=card;render();toast('公開玩家名片已儲存。');break;
+      state.myCard=card;state.modal=null;render();toast('公開玩家名片已儲存。');break;
     }
     case 'create-tournament':{
       const id=await adapter.createTournament(state.groupId,state.user.uid,fields.title,fields.description||'',userLabel());

@@ -329,7 +329,7 @@ test('v1.6 戰績詳情顯示雙方圖片；玩家名片包含最高五副與最
   assert.ok(ui.includes("deck-art-favorite"));
   assert.ok(ui.includes("card?.showFavoriteDeck&&card.favoriteDeck?.name&&!topDecks.length"));
   assert.ok(ui.includes("favoriteId===d.id"));
-  assert.ok(ui.includes("from './core.mjs?v=2.1'"));
+  assert.ok(ui.includes("from './core.mjs?v=2.2'"));
   assert.ok(ui.includes('aria-label="尚未上傳牌組圖片"'));
   assert.ok(css.includes("object-fit:scale-down"));
   assert.ok(css.includes("@media(max-width:380px)"));
@@ -390,7 +390,7 @@ test('v1.7.1 手機牌組圖片完整填滿容器、不留上下黑邊',()=>{
  assert.ok(css.includes('min-height:100%;'));
  assert.ok(css.includes('object-fit:cover;'));
  assert.ok(css.includes('height:clamp(132px,38vw,170px);'));
- assert.ok(html.includes('href="./styles.css?v=2.1"'));
+ assert.ok(html.includes('href="./styles.css?v=2.2"'));
 });
 
 import {avatarCropGeometry,avatarSourceCrop} from './avatar-crop-core.mjs';
@@ -434,8 +434,8 @@ test('v1.8 圓形預覽需確認才保存，取消不寫入，支援手機雙指
   assert.ok(ui.includes("document.body.style.overflow=previousOverflow"));
   assert.ok(ui.includes('URL.revokeObjectURL(url)'));
   assert.ok(css.includes('touch-action:none'));
-  assert.ok(html.includes('styles.css?v=2.1'));
-  assert.ok(html.includes('app.js?v=2.1'));
+  assert.ok(html.includes('styles.css?v=2.2'));
+  assert.ok(html.includes('app.js?v=2.2'));
   assert.ok(wf.includes('avatar-crop-ui.mjs avatar-crop-core.mjs'));
 });
 

@@ -2,10 +2,12 @@
  * The source is private for avatar/profile/card and the owner's deck library.
  * Never overwrite this source when only adjusting the visible crop. */
 export async function prepareImageSource(file,limit=145000){
-  if(!file||!file.type?.startsWith('image/'))throw new Error('請選擇圖片檔案。');
-  if(file.size>12*1024*1024)throw new Error('圖片超過 12 MB，請先縮小後上傳。');
+  const stored=typeof file==='string';
+  if(stored&&!/^data:image\/(jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(file))throw new Error('已儲存的來源圖片無效。');
+  if(!stored&&(!file||!file.type?.startsWith('image/')))throw new Error('請選擇圖片檔案。');
+  if(!stored&&file.size>12*1024*1024)throw new Error('圖片超過 12 MB，請先縮小後上傳。');
   if(!Number.isInteger(limit)||limit<40000||limit>160000)throw new Error('圖片壓縮參數不正確。');
-  const url=URL.createObjectURL(file),image=new Image();
+  const url=stored?file:URL.createObjectURL(file),image=new Image();
   try{
     await new Promise((resolve,reject)=>{
       image.onload=resolve;
@@ -29,6 +31,6 @@ export async function prepareImageSource(file,limit=145000){
     }
     throw new Error('完整圖片壓縮後仍過大，請選擇另一張圖片。');
   }finally{
-    URL.revokeObjectURL(url);
+    if(!stored)URL.revokeObjectURL(url);
   }
 }

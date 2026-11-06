@@ -162,7 +162,20 @@ function decksPage(){
   <option value="name" ${state.deckSort==='name'?'selected':''}>名稱（筆畫／字母順序）</option>
  </select></div><div class="deck-grid">${filtered.length?filtered.map(deckCard).join(''):`<div class="empty" style="grid-column:1/-1"><span class="empty-icon">▤</span><h3>還沒有牌組</h3><p>新增圖片、名稱與顏色，建立你的第一副牌組。</p><button class="btn btn-primary btn-sm" data-action="new-deck">新增牌組</button></div>`}</div>`;
 }
-function deckCard(d){const cover=guardedImage(d.imageData),canEdit=d.ownerUid===state.user?.uid&&!d.legacy;const dr=personalDeckStats().find(x=>x.id===d.id)||{games:0,wins:0,rate:0};return `<article class="deck-card"><div class="deck-cover">${cover?`<img src="${cover}" alt="${e(d.name)} 封面">`:'<span class="deck-placeholder">UA</span>'}<span class="deck-color"><span class="dot" style="background:${colorOf(d.color).hex}"></span> ${e(colorOf(d.color).name)}</span></div><div class="deck-info"><h3>${e(d.name)}</h3><p>持有者：${e(playerName(d.ownerUid))}</p><div class="deck-winrate"><strong>${dr.rate}% 勝率</strong><span>${dr.games} 場 · ${dr.wins} 勝</span></div><div class="deck-actions">${canEdit?`<button class="btn btn-ghost btn-sm" data-action="edit-deck" data-id="${e(d.id)}">編輯</button><button class="btn btn-ghost btn-sm" data-action="archive-deck" data-id="${e(d.id)}">封存</button>`:d.legacy&&d.ownerUid===state.user?.uid?'<span class="tag">舊牌組搬移中</span>':'<span class="tag">朋友的牌組</span>'}</div></div></article>`}
+function deckCard(d){
+ const cover=guardedImage(d.imageData);
+ const mine=d.ownerUid===state.user?.uid&&!d.legacy;
+ const dr=mine?personalDeckStats().find(x=>x.id===d.id)||{games:0,wins:0,rate:0}:deckRateInGroup(d.ownerUid,d.id);
+ return `<article class="deck-card">
+  <button type="button" class="deck-cover deck-cover-detail" data-action="deck-detail" data-id="${e(d.id)}" aria-label="查看 ${e(d.name)} 牌組詳細戰績">
+    ${cover?`<img src="${cover}" alt="${e(d.name)} 封面">`:'<span class="deck-placeholder">UA</span>'}
+    <span class="deck-color"><span class="dot" style="background:${colorOf(d.color).hex}"></span> ${e(colorOf(d.color).name)}</span>
+  </button>
+  <div class="deck-info"><h3>${e(d.name)}</h3><p>持有者：${e(playerName(d.ownerUid))}</p>
+    <div class="deck-winrate"><strong>${dr.rate}% 勝率</strong><span>${dr.games} 場 · ${dr.wins} 勝</span></div>
+    <button class="btn btn-ghost btn-full btn-sm" data-action="deck-detail" data-id="${e(d.id)}">查看詳細資料</button>
+  </div></article>`;
+}
 function playersPage(){
   const s=getStats();const ranked=[...s.players].sort((a,b)=>b.rate-a.rate||b.wins-a.wins);
   return `<div class="page-head"><div><div class="label-up">PLAYERS / LEADERBOARD</div><h1 style="margin-top:7px">玩家戰績榜</h1><p>勝率、常用牌組與對戰成績，所有成員都能查看。</p></div><button class="btn btn-ghost" data-action="share-invite">↗ 邀請朋友加入</button></div><div class="player-grid">${ranked.map(p=>`<button class="player-card" data-action="player-detail" data-id="${e(p.id)}" style="text-align:left;color:inherit"><div class="player-line">${playerAvatar(p.id)}<div><strong>${e(p.nickname)}</strong><p class="muted sm">${p.id===state.user?.uid?'你自己':p.role==='owner'?'群組建立者':'對戰成員'}</p></div></div><div class="big-rate">${p.rate}% <span class="muted sm">WIN RATE</span></div><div class="bar-track"><div class="bar-fill" style="width:${p.rate}%"></div></div><div class="row-stats" style="margin-top:15px"><span><b>${p.games}</b> 場</span><span><b>${p.wins}</b> 勝</span><span><b>${p.losses}</b> 敗</span><span>${e(p.favorite?.name||'尚無牌組')}</span></div></button>`).join('')||'<div class="empty">尚無玩家</div>'}</div>`;
@@ -321,6 +334,11 @@ function personalExtras(){
       <div class="stats-cell"><b>${totals.wins}</b><span>總勝場</span></div>
       <div class="stats-cell"><b>${totals.losses}</b><span>總敗場</span></div>
       <div class="stats-cell"><b>${totals.rate}%</b><span>總勝率</span></div>
+    </div>
+    <div class="role-summary-compact">
+      <div><strong>⚔ 先攻</strong><span>${sideRecordStats(state.user?.uid,ownMatchHistory()).first.wins} 勝 · ${sideRecordStats(state.user?.uid,ownMatchHistory()).first.rate}%</span></div>
+      <div><strong>🛡 後攻</strong><span>${sideRecordStats(state.user?.uid,ownMatchHistory()).second.wins} 勝 · ${sideRecordStats(state.user?.uid,ownMatchHistory()).second.rate}%</span></div>
+      <button type="button" class="btn btn-outline btn-sm" data-action="turn-stats">查看先後攻詳細 →</button>
     </div>
     <div class="divider"></div><h3>各戰團戰績</h3>
     <div class="table-wrap" style="margin-top:12px"><table class="table"><thead><tr>
@@ -504,6 +522,7 @@ function quickResultForm(s){
     <p class="muted sm">${e(playerName(d.playerA))}（${e(battleDeckName(d,'A'))}） VS ${e(playerName(d.playerB))}（${e(battleDeckName(d,'B'))}）</p>
     ${timed?`<p class="hint">提交時會自動結束目前回合，儲存每回合及兩位玩家累計用時。時間用完不會自動判定勝者。</p>`:''}
     <form data-form="quick-result"><div class="field mt"><label>本場勝利者</label><select name="winner" required><option value="${e(d.playerA)}">🏆 ${e(playerName(d.playerA))}</option><option value="${e(d.playerB)}">🏆 ${e(playerName(d.playerB))}</option></select></div>
+    ${!timed?firstPlayerSelect(d.playerA,d.playerB,d.playerA):''}
     ${!timed?`<div class="field mt"><label>實際對戰日期與時間</label><input type="datetime-local" name="playedAt" required value="${localDateTimeValue()}"><div class="hint">可回填過去時間；登錄時間另外保存。</div></div>`:`<div class="hint">對戰時間使用計時開始時間。</div>`}<div class="field mt"><label>備註（選填）</label><textarea name="note" maxlength="200" placeholder="例如：時間到、加賽等"></textarea></div>
     <button class="btn btn-primary" type="submit" style="margin-top:15px">確認儲存結果 →</button></form></section>`;
 }
@@ -696,6 +715,10 @@ async function handleAction(action,el){
   case 'quick-result-close':state.quickResultOpen=false;render();break;
   case 'quick-turn-start':await runBusy(async()=>{await adapter.changeQuickMatch(state.groupId,state.quickSessionId,state.user.uid,'start',el.dataset.player);toast('回合已開始計時。')});break;
   case 'quick-turn-end':await runBusy(async()=>{await adapter.changeQuickMatch(state.groupId,state.quickSessionId,state.user.uid,'end');toast('已記錄本回合用時。')});break;
+  case 'deck-detail':openModal('deck-detail',{id:el.dataset.id,settingsOpen:false});break;
+  case 'deck-settings':state.draft.settingsOpen=!state.draft.settingsOpen;render();break;
+  case 'deck-edit-from-detail':{const d=deck(el.dataset.id);if(d&&d.ownerUid===state.user.uid)newDeck(d);break;}
+  case 'turn-stats':openModal('turn-stats');break;
   case 'new-deck':newDeck();break;
   case 'edit-deck':{const d=deck(el.dataset.id);if(d)newDeck(d);break;}
   case 'archive-deck':if(confirm('封存這副牌組？歷史對戰會保留，但不能用於新對戰。'))await runBusy(async()=>{await adapter.archiveDeck(state.groupId,el.dataset.id);toast('牌組已封存。')});break;
@@ -852,7 +875,7 @@ app.addEventListener('submit',event=>{
       if(state.quickPending){
         assertMatch({...state.quickPending,winner},state.players,state.decks,{allowGuest:isPersonal()});
         parsePlayedAt(fields.playedAt);
-        await adapter.addMatch(state.groupId,state.user.uid,{...state.quickPending,winner,note,playedAt:fields.playedAt});
+        await adapter.addMatch(state.groupId,state.user.uid,{...state.quickPending,winner,firstPlayer:fields.firstPlayer,note,playedAt:fields.playedAt});
       } else {
         const selected=state.quickMatches.find(x=>x.id===state.quickSessionId);
         if(!selected)throw new Error('找不到計時中的對戰，請重整頁面。');

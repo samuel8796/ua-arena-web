@@ -23,6 +23,15 @@ const ownStats=()=>aggregatePersonalStats(state.user?.uid||'',state.personalHist
 const isOwner=()=>state.group?.createdBy===state.user?.uid;
 const isPersonal=()=>state.groupId===personalGroupId(state.user?.uid||'');
 const guardedImage=src=>typeof src==='string' && /^data:image\/(webp|jpeg);base64,[A-Za-z0-9+/=]+$/.test(src) ? src : '';
+// Player portraits are stored as compact JPEG data on the player's group-member
+// document; keep the initial placeholder until an upload is available.
+const guardedAvatar=src=>typeof src==='string'&&src.length<=40000&&/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(src)?src:'';
+function playerAvatar(uid,extra='') {
+  const p=player(uid),label=uid===state.user?.uid?userLabel():p?.nickname||'玩家';
+  const src=guardedAvatar(uid===state.user?.uid?(state.profile?.avatarData||p?.avatarData):p?.avatarData);
+  return `<span class="avatar${extra?' '+extra:''}">${src?`<img src="${src}" alt="${e(label)} 的頭像" decoding="async" loading="lazy">`:e((label[0]||'?').toUpperCase())}</span>`;
+}
+
 /** Reuse existing personal/legacy deck images without re-encoding them.
  * Match both deck ID and participant UID so similarly named decks stay distinct.
  * Empty or missing images use the same neutral placeholder on all devices. */
@@ -64,7 +73,7 @@ function setupPage(){
 const menu=[['overview','總覽'],['quick','Quick Match'],['matches','戰績紀錄'],['decks','我的牌組'],['players','玩家排行'],['tournaments','錦標賽'],['groups','我的對戰團'],['profile','個人資料'],['rules','規則 AI']];
 const mobileMenu=['overview','quick','tournaments','matches','decks'];
 function shell(content){
-  app.innerHTML=`<div class="shell"><aside class="sidebar"><div class="logo"><span class="logo-icon">UA</span><span>UA <span class="arena">ARENA</span></span></div><div class="nav-group">MAIN MENU</div>${menu.map(([id,title])=>`<button class="nav ${state.tab===id?'active':''}" data-tab="${id}"><span class="ico">${pathIcon(id)}</span>${title}</button>`).join('')}<div class="sidebar-bottom"><button class="nav" data-action="share-invite"><span class="ico">↗</span>邀請朋友</button><button class="nav" data-tab="groups"><span class="ico">⇄</span>切換群組</button><button class="nav" data-tab="profile"><span class="ico">◉</span>個人資料</button><button class="nav" data-action="logout"><span class="ico">⇥</span>登出</button><button class="profile profile-button" data-tab="profile" aria-label="查看個人資料"><span class="avatar">${e(userLabel()[0]?.toUpperCase()||'U')}</span><div class="who"><b>${e(userLabel())}</b><small>${e(state.user?.email||'本機展示模式')}</small></div></button></div></aside><main class="main"><div class="topbar"><div class="mobile-head">UA <span>ARENA</span></div><div class="top-label"><span class="label-up">YOUR BATTLESPACE</span></div><div class="top-actions"><button class="group-pill" data-tab="groups">⌘ ${e(state.group?.name||'對戰團')} ▾</button>${adapter?.mode==='demo'?'<span class="tag">DEMO</span>':''}<button class="circle-action" data-action="share-invite" title="分享群組連結">↗</button></div></div>${adapter?.mode==='demo'?'<div class="setup-banner" style="margin-top:16px">展示模式：資料只保存在此瀏覽器。如需多人登入共用，請依 README 連接 Firebase。</div>':''}<div class="page">${content}<div class="copyright">UA ARENA · Community battle tracker · 非 BANDAI 官方網站</div></div></main><nav class="mobile-nav">${mobileMenu.map(id=>`<button data-tab="${id}" class="${state.tab===id?'active':''}"><span class="icon">${pathIcon(id)}</span>${({overview:'總覽',quick:'速配',tournaments:'賽事',matches:'戰績',decks:'牌組'})[id]}</button>`).join('')}<button data-action="more-menu" class="${['profile','groups','players','rules'].includes(state.tab)?'active':''}"><span class="icon">☰</span>更多</button></nav></div>${renderModal()}`;
+  app.innerHTML=`<div class="shell"><aside class="sidebar"><div class="logo"><span class="logo-icon">UA</span><span>UA <span class="arena">ARENA</span></span></div><div class="nav-group">MAIN MENU</div>${menu.map(([id,title])=>`<button class="nav ${state.tab===id?'active':''}" data-tab="${id}"><span class="ico">${pathIcon(id)}</span>${title}</button>`).join('')}<div class="sidebar-bottom"><button class="nav" data-action="share-invite"><span class="ico">↗</span>邀請朋友</button><button class="nav" data-tab="groups"><span class="ico">⇄</span>切換群組</button><button class="nav" data-tab="profile"><span class="ico">◉</span>個人資料</button><button class="nav" data-action="logout"><span class="ico">⇥</span>登出</button><button class="profile profile-button" data-tab="profile" aria-label="查看個人資料">${playerAvatar(state.user?.uid)}<div class="who"><b>${e(userLabel())}</b><small>${e(state.user?.email||'本機展示模式')}</small></div></button></div></aside><main class="main"><div class="topbar"><div class="mobile-head">UA <span>ARENA</span></div><div class="top-label"><span class="label-up">YOUR BATTLESPACE</span></div><div class="top-actions"><button class="group-pill" data-tab="groups">⌘ ${e(state.group?.name||'對戰團')} ▾</button>${adapter?.mode==='demo'?'<span class="tag">DEMO</span>':''}<button class="circle-action" data-action="share-invite" title="分享群組連結">↗</button></div></div>${adapter?.mode==='demo'?'<div class="setup-banner" style="margin-top:16px">展示模式：資料只保存在此瀏覽器。如需多人登入共用，請依 README 連接 Firebase。</div>':''}<div class="page">${content}<div class="copyright">UA ARENA · Community battle tracker · 非 BANDAI 官方網站</div></div></main><nav class="mobile-nav">${mobileMenu.map(id=>`<button data-tab="${id}" class="${state.tab===id?'active':''}"><span class="icon">${pathIcon(id)}</span>${({overview:'總覽',quick:'速配',tournaments:'賽事',matches:'戰績',decks:'牌組'})[id]}</button>`).join('')}<button data-action="more-menu" class="${['profile','groups','players','rules'].includes(state.tab)?'active':''}"><span class="icon">☰</span>更多</button></nav></div>${renderModal()}`;
 }
 function overviewPage(){
   const s=getStats(),me=s.players.find(x=>x.id===state.user?.uid)||{games:0,wins:0,rate:0,favorite:null};
@@ -83,7 +92,7 @@ function recentList(matches){
  if(!matches.length)return `<div class="empty"><span class="empty-icon">⚔</span><h3>還沒有對戰紀錄</h3><p>先記錄第一場，讓戰績開始累積。</p><button class="btn btn-primary btn-sm" data-action="new-match">登錄第一場</button></div>`;
  return matches.map(m=>`<button type="button" class="match-row match-preview" data-action="match-detail" data-id="${e(m.id)}"><div class="match-icon">⚔</div><div class="match-pair"><strong>${e(playerName(m.playerA))} <span class="muted">vs</span> ${e(playerName(m.playerB))}</strong><small>${e(matchDateLabel(m))} · 點擊查看完整資訊</small></div><span class="win-badge">🏆 ${e(playerName(m.winner))}</span></button>`).join('');
 }
-function leaderRows(players){if(!players.length)return `<div class="empty">尚無玩家</div>`;return players.map((p,i)=>`<button class="leaderboard-item" style="width:100%;border-left:0;border-right:0;border-top:0;background:transparent;color:inherit;text-align:left" data-action="player-detail" data-id="${e(p.id)}"><span class="rank">${String(i+1).padStart(2,'0')}</span><span class="avatar" style="width:31px;height:31px;font-size:12px">${e(p.nickname?.[0]||'?')}</span><span class="name">${e(p.nickname)} <small>· ${n(p.games)} 場</small></span><span class="pct">${p.wins} 勝</span></button>`).join('')}
+function leaderRows(players){if(!players.length)return `<div class="empty">尚無玩家</div>`;return players.map((p,i)=>`<button class="leaderboard-item" style="width:100%;border-left:0;border-right:0;border-top:0;background:transparent;color:inherit;text-align:left" data-action="player-detail" data-id="${e(p.id)}"><span class="rank">${String(i+1).padStart(2,'0')}</span>${playerAvatar(p.id,'avatar-small')}<span class="name">${e(p.nickname)} <small>· ${n(p.games)} 場</small></span><span class="pct">${p.wins} 勝</span></button>`).join('')}
 function matchesPage(){
  const all=filterMatches(state.matches,{playerId:state.playerFilter,from:state.matchFrom,to:state.matchTo});
  const stats=filteredMatchStats(all,state.playerFilter);
@@ -110,7 +119,7 @@ function matchDetailBody(){
  const allowed=m.status==='active'&&(m.recordedBy===state.user?.uid||m.playerA===state.user?.uid||m.playerB===state.user?.uid||isOwner());
  const turns=q?.turns||[];
  return `<div class="match-detail-header"><span class="tag">${m.status==='void'?'已撤銷':'有效對戰'}</span><strong>🏆 ${e(playerName(m.winner))} 勝</strong></div>
- <div class="detail-participants"><div class="detail-side">${battleDeckArtwork(m,'A')}<strong>${e(playerName(m.playerA))}</strong><span>${e(battleDeckName(m,'A'))}</span></div><b>VS</b><div class="detail-side">${battleDeckArtwork(m,'B')}<strong>${e(playerName(m.playerB))}</strong><span>${e(battleDeckName(m,'B'))}</span></div></div>
+ <div class="detail-participants"><div class="detail-side">${battleDeckArtwork(m,'A')}<div class="detail-side-info"><div class="detail-side-user">${playerAvatar(m.playerA,'avatar-match')}<strong>${e(playerName(m.playerA))}</strong></div><span class="detail-side-deck">${e(battleDeckName(m,'A'))}</span><span class="detail-side-result">${m.winner===m.playerA?'🏆 本場勝利':'本場敗北'}</span></div></div><b>VS</b><div class="detail-side">${battleDeckArtwork(m,'B')}<div class="detail-side-info"><div class="detail-side-user">${playerAvatar(m.playerB,'avatar-match')}<strong>${e(playerName(m.playerB))}</strong></div><span class="detail-side-deck">${e(battleDeckName(m,'B'))}</span><span class="detail-side-result">${m.winner===m.playerB?'🏆 本場勝利':'本場敗北'}</span></div></div></div>
  <div class="detail-facts"><div><span>實際對戰時間</span><b>${e(matchDateLabel(m))}</b></div><div><span>登錄時間</span><b>${e(formatDate(m.createdAt))}</b></div><div><span>登錄人</span><b>${e(playerName(m.recordedBy))}</b></div><div><span>備註</span><b>${e(m.note||'無')}</b></div></div>
  ${m.timing?.enabled?`<div class="detail-timing"><h3>⏱ 30 分鐘計時紀錄</h3><div class="history-stats"><span><b>${mmss(m.timing.playerAMs)}</b> ${e(playerName(m.playerA))}</span><span><b>${mmss(m.timing.playerBMs)}</b> ${e(playerName(m.playerB))}</span><span><b>${mmss(m.timing.unattributedMs)}</b> 間隔</span></div>
  ${turns.length?`<div class="table-wrap"><table class="table"><thead><tr><th>回合</th><th>玩家</th><th>時間</th></tr></thead><tbody>${turns.map((t,i)=>`<tr><td>${i+1}</td><td>${e(playerName(t.playerId))}</td><td>${mmss(t.durationMs)}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted sm">沒有保存逐回合明細。</p>'}</div>`:''}
@@ -123,7 +132,7 @@ function decksPage(){
 function deckCard(d){const cover=guardedImage(d.imageData),canEdit=d.ownerUid===state.user?.uid&&!d.legacy;const dr=personalDeckStats().find(x=>x.id===d.id)||{games:0,wins:0,rate:0};return `<article class="deck-card"><div class="deck-cover">${cover?`<img src="${cover}" alt="${e(d.name)} 封面">`:'<span class="deck-placeholder">UA</span>'}<span class="deck-color"><span class="dot" style="background:${colorOf(d.color).hex}"></span> ${e(colorOf(d.color).name)}</span></div><div class="deck-info"><h3>${e(d.name)}</h3><p>持有者：${e(playerName(d.ownerUid))}</p><div class="deck-winrate"><strong>${dr.rate}% 勝率</strong><span>${dr.games} 場 · ${dr.wins} 勝</span></div><div class="deck-actions">${canEdit?`<button class="btn btn-ghost btn-sm" data-action="edit-deck" data-id="${e(d.id)}">編輯</button><button class="btn btn-ghost btn-sm" data-action="archive-deck" data-id="${e(d.id)}">封存</button>`:d.legacy&&d.ownerUid===state.user?.uid?'<span class="tag">舊牌組搬移中</span>':'<span class="tag">朋友的牌組</span>'}</div></div></article>`}
 function playersPage(){
   const s=getStats();const ranked=[...s.players].sort((a,b)=>b.rate-a.rate||b.wins-a.wins);
-  return `<div class="page-head"><div><div class="label-up">PLAYERS / LEADERBOARD</div><h1 style="margin-top:7px">玩家戰績榜</h1><p>勝率、常用牌組與對戰成績，所有成員都能查看。</p></div><button class="btn btn-ghost" data-action="share-invite">↗ 邀請朋友加入</button></div><div class="player-grid">${ranked.map(p=>`<button class="player-card" data-action="player-detail" data-id="${e(p.id)}" style="text-align:left;color:inherit"><div class="player-line"><span class="avatar">${e(p.nickname?.[0]||'?')}</span><div><strong>${e(p.nickname)}</strong><p class="muted sm">${p.id===state.user?.uid?'你自己':p.role==='owner'?'群組建立者':'對戰成員'}</p></div></div><div class="big-rate">${p.rate}% <span class="muted sm">WIN RATE</span></div><div class="bar-track"><div class="bar-fill" style="width:${p.rate}%"></div></div><div class="row-stats" style="margin-top:15px"><span><b>${p.games}</b> 場</span><span><b>${p.wins}</b> 勝</span><span><b>${p.losses}</b> 敗</span><span>${e(p.favorite?.name||'尚無牌組')}</span></div></button>`).join('')||'<div class="empty">尚無玩家</div>'}</div>`;
+  return `<div class="page-head"><div><div class="label-up">PLAYERS / LEADERBOARD</div><h1 style="margin-top:7px">玩家戰績榜</h1><p>勝率、常用牌組與對戰成績，所有成員都能查看。</p></div><button class="btn btn-ghost" data-action="share-invite">↗ 邀請朋友加入</button></div><div class="player-grid">${ranked.map(p=>`<button class="player-card" data-action="player-detail" data-id="${e(p.id)}" style="text-align:left;color:inherit"><div class="player-line">${playerAvatar(p.id)}<div><strong>${e(p.nickname)}</strong><p class="muted sm">${p.id===state.user?.uid?'你自己':p.role==='owner'?'群組建立者':'對戰成員'}</p></div></div><div class="big-rate">${p.rate}% <span class="muted sm">WIN RATE</span></div><div class="bar-track"><div class="bar-fill" style="width:${p.rate}%"></div></div><div class="row-stats" style="margin-top:15px"><span><b>${p.games}</b> 場</span><span><b>${p.wins}</b> 勝</span><span><b>${p.losses}</b> 敗</span><span>${e(p.favorite?.name||'尚無牌組')}</span></div></button>`).join('')||'<div class="empty">尚無玩家</div>'}</div>`;
 }
 function rulesPage(){
   return `<div class="page-head"><div><div class="label-up">RULE ENGINE / AI ASSISTANT</div><h1 style="margin-top:7px">UA 規則助手</h1><p>只討論 UNION ARENA。請明確提供卡號、版本與完整效果文字，判斷會更準確。</p></div></div><div class="two-col"><section class="card"><div class="section-head"><h3>✦ 問 Gemini 一個規則問題</h3><span class="tag">${adapter?.aiEnabled?'AI 已啟用':'需要啟用 AI'}</span></div><div class="alert">AI 答覆不是官方裁定。系統已設定 UA 專屬提示，但目前未建立官方 FAQ 檢索資料庫；有爭議時仍應以適用版本的官方規則為準。</div><form data-form="ask-rule" style="margin-top:20px"><div class="field"><label>適用卡牌版本</label><select name="edition">${['繁體中文版','日文版','英文版','簡體中文版','混合版本'].map(v=>`<option ${state.rulesEdition===v?'selected':''}>${v}</option>`).join('')}</select></div><div class="field" style="margin-top:16px"><label>你的問題</label><textarea name="question" required minlength="6" maxlength="900" placeholder="例如：對手回合能否使用起動主要？如果涉及特定卡片，請提供卡號與效果文字。">${e(state.rulesQuestion)}</textarea></div><button class="btn btn-primary" type="submit" style="margin-top:14px" ${adapter?.aiEnabled?'':'disabled'}>✦ 送出問題</button></form>${state.rulesReply?`<div class="ai-results">${e(state.rulesReply)}</div>`:''}${!adapter?.aiEnabled?'<div class="hint" style="margin-top:12px">請依 README 啟用 Firebase AI Logic 並設定 App Check，按鈕才會生效；不可直接把 Gemini API Key 寫在公開的 GitHub Pages 原始碼中。</div>':''}</section><aside class="card"><h3>官方規則參考</h3><p class="muted sm" style="margin-top:10px">混合版本不代表所有語系的規則自動一致。遇到牌組與卡牌效果問題，請先指定版本。</p><div class="divider"></div><div class="source-links" style="flex-direction:column"><a target="_blank" rel="noopener noreferrer" href="https://www.unionarena-tcg.com/tc/rules/">↗ UA 繁體中文官方規則</a><a target="_blank" rel="noopener noreferrer" href="https://www.unionarena-tcg.com/na/faq/">↗ UA 英文版官方 FAQ</a><a target="_blank" rel="noopener noreferrer" href="https://www.unionarena-tcg.com/jp/">↗ UA 日文官方網站</a></div></aside></div>`;
@@ -155,7 +164,7 @@ function playerModalBody(){
     ?state.decks.filter(d=>d.ownerUid===stats.id&&d.name===card.favoriteDeck.name&&d.color===card.favoriteDeck.color)
     :[];
   const favoriteId=favoriteMatches.length===1?favoriteMatches[0].id:'';
-  return `<div class="player-line"><span class="avatar" style="width:52px;height:52px;font-size:22px">${e(stats.nickname?.[0]||'?')}</span>
+  return `<div class="player-line">${playerAvatar(stats.id,'avatar-player')}
     <div><h2>${e(stats.nickname)}</h2><p class="muted sm">${self?'你自己的玩家名片':'其他玩家的名片'} · ${e(state.group?.name||'')}</p></div></div>
     ${cardIntro}
     ${card?.showBio&&card.bio?`<section class="card" style="margin-top:14px"><h3>關於我</h3><p class="muted">${e(card.bio)}</p></section>`:''}
@@ -226,7 +235,7 @@ function personalExtras(){
 
 function profilePage(){
   const me=getStats().players.find(p=>p.id===state.user?.uid);
-  return `<div class="page-head"><div><div class="label-up">ACCOUNT / PERSONAL PROFILE</div><h1>我的個人資料</h1><p>編輯你的全站暱稱，並查看帳號所屬的對戰團。</p></div></div><div class="profile-grid"><section class="card"><div class="profile-heading"><span class="avatar avatar-large">${e((userLabel()[0]||'?').toUpperCase())}</span><div><h2>${e(userLabel())}</h2><p class="muted sm">${e(state.user?.email||'展示帳號')}</p></div></div><div class="divider"></div><form data-form="save-profile"><div class="field"><label>公開玩家暱稱</label><input name="nickname" minlength="2" maxlength="24" required value="${e(userLabel())}" placeholder="你的顯示名稱"></div><div class="field mt"><label>個人簡介（只有你自己能在此頁查看）</label><textarea name="bio" maxlength="160" rows="4" placeholder="例如：喜歡紫色牌組">${e(state.profile?.bio||'')}</textarea></div><div class="hint">儲存後會同步更新你已加入對戰團的玩家暱稱；歷史勝負不會因此刪除。</div><button class="btn btn-primary" type="submit" style="margin-top:18px">儲存個人資料</button></form></section><section class="card"><h3>帳號資訊</h3><div class="profile-info-row"><span>Email</span><strong>${e(state.user?.email||'未設定')}</strong></div><div class="profile-info-row"><span>信箱驗證</span><strong>${state.user?.emailVerified?'已驗證':'尚未驗證'}</strong></div><div class="profile-info-row"><span>加入對戰團</span><strong>${state.groupIds.length} 個</strong></div><div class="profile-info-row"><span>目前團內戰績</span><strong>${me?`${me.wins} 勝 / ${me.losses} 敗`:'尚無紀錄'}</strong></div><div class="divider"></div><h3>我加入的對戰團</h3>${state.groupIds.map(id=>`<button class="nav" data-action="select-group-card" data-id="${e(id)}">⇄ ${e(state.groupDetails[id]||id)} ${id===state.groupId?'· 目前':''}</button>`).join('')}<div class="hint">Email 與密碼由 Firebase Authentication 管理；此頁先提供安全的暱稱與簡介編輯。</div></section></div>` + personalExtras();
+  return `<div class="page-head"><div><div class="label-up">ACCOUNT / PERSONAL PROFILE</div><h1>我的個人資料</h1><p>編輯你的全站暱稱，並查看帳號所屬的對戰團。</p></div></div><div class="profile-grid"><section class="card"><div class="profile-heading">${playerAvatar(state.user?.uid,'avatar-large')}<div><h2>${e(userLabel())}</h2><p class="muted sm">${e(state.user?.email||'展示帳號')}</p></div></div><div class="avatar-editor"><label class="avatar-upload-control"><input type="file" name="avatar" accept="image/*" aria-label="上傳個人頭像"><span>📷 更換頭像</span></label><button class="btn btn-ghost btn-sm" data-action="remove-avatar" type="button" ${!guardedAvatar(state.profile?.avatarData)?'disabled':''}>移除頭像</button><p class="hint">圖片會裁切成正方形並壓縮，供已加入戰團的成員查看；選取後自動儲存。</p></div><div class="divider"></div><form data-form="save-profile"><div class="field"><label>公開玩家暱稱</label><input name="nickname" minlength="2" maxlength="24" required value="${e(userLabel())}" placeholder="你的顯示名稱"></div><div class="field mt"><label>個人簡介（只有你自己能在此頁查看）</label><textarea name="bio" maxlength="160" rows="4" placeholder="例如：喜歡紫色牌組">${e(state.profile?.bio||'')}</textarea></div><div class="hint">儲存後會同步更新你已加入對戰團的玩家暱稱；歷史勝負不會因此刪除。</div><button class="btn btn-primary" type="submit" style="margin-top:18px">儲存個人資料</button></form></section><section class="card"><h3>帳號資訊</h3><div class="profile-info-row"><span>Email</span><strong>${e(state.user?.email||'未設定')}</strong></div><div class="profile-info-row"><span>信箱驗證</span><strong>${state.user?.emailVerified?'已驗證':'尚未驗證'}</strong></div><div class="profile-info-row"><span>加入對戰團</span><strong>${state.groupIds.length} 個</strong></div><div class="profile-info-row"><span>目前團內戰績</span><strong>${me?`${me.wins} 勝 / ${me.losses} 敗`:'尚無紀錄'}</strong></div><div class="divider"></div><h3>我加入的對戰團</h3>${state.groupIds.map(id=>`<button class="nav" data-action="select-group-card" data-id="${e(id)}">⇄ ${e(state.groupDetails[id]||id)} ${id===state.groupId?'· 目前':''}</button>`).join('')}<div class="hint">Email 與密碼由 Firebase Authentication 管理；此頁先提供安全的暱稱與簡介編輯。</div></section></div>` + personalExtras();
 }
 const tournamentStatus=s=>({registration:'開放報名',running:'進行中',completed:'已完賽',cancelled:'已取消'})[s]||'未知狀態';
 function spectatorUrl(publicId){const u=new URL(location.href);u.search='';u.hash='';u.searchParams.set('watch',publicId);return u.href;}
@@ -390,6 +399,27 @@ async function imageToCompressedDataUrl(file){
   }finally{bitmap.close?.();}
   throw new Error('壓縮後圖片仍過大，請改用尺寸較小的圖片。');
 }
+async function imageToAvatarDataUrl(file){
+  if(!file.type.startsWith('image/'))throw new Error('請選擇圖片檔案。');
+  if(file.size>12*1024*1024)throw new Error('圖片超過 12 MB，請先縮小後上傳。');
+  const bitmap=await createImageBitmap(file);
+  try {
+    const side=Math.min(bitmap.width,bitmap.height);
+    for(const size of [192,160,144,128]){
+      const canvas=document.createElement('canvas');
+      canvas.width=canvas.height=size;
+      const ctx=canvas.getContext('2d');
+      if(!ctx)throw new Error('瀏覽器不支援圖片處理。');
+      ctx.fillStyle='#162030';ctx.fillRect(0,0,size,size);
+      ctx.drawImage(bitmap,(bitmap.width-side)/2,(bitmap.height-side)/2,side,side,0,0,size,size);
+      for(const quality of [.78,.66,.55]){
+        const data=canvas.toDataURL('image/jpeg',quality);
+        if(data.length<=30000)return data;
+      }
+    }
+  }finally{bitmap.close?.();}
+  throw new Error('圖片無法壓縮至頭像大小，請選擇其他圖片。');
+}
 async function handleAction(action,el){
   switch(action){
   case 'start-demo':state.preview=true;await afterAuth({uid:'demo-user',displayName:'Samuel',email:'demo@ua-arena.local'});break;
@@ -422,6 +452,14 @@ async function handleAction(action,el){
   case 'tournament-winner':if(confirm(`確認此場由 ${playerName(el.dataset.winner)} 獲勝？結果將自動晉級，不能直接覆寫。`))await runBusy(async()=>{await adapter.changeTournament(state.groupId,state.tournamentId,state.user.uid,'result',{round:Number(el.dataset.round),match:Number(el.dataset.match),winner:el.dataset.winner});toast('已更新賽程')});break;
   case 'watch-home':location.assign(location.pathname);break;
   case 'select-existing-group':{const gid=$('#group-select')?.value;if(gid)await runBusy(async()=>await loadGroup(gid));else toast('請先選擇群組。',true);break}
+  case 'remove-avatar':if(guardedAvatar(state.profile?.avatarData)&&confirm('確定移除個人頭像？同戰團成員將恢復顯示你的暱稱首字。')){
+    await runBusy(async()=>{
+      const result=await adapter.saveAvatar(state.user.uid,'',state.groupIds);
+      state.profile={...state.profile,avatarData:''};
+      state.players=state.players.map(p=>p.id===state.user.uid?{...p,avatarData:''}:p);
+      render();toast(result.failures?.length?'頭像已清除，但部分戰團同步失敗。':'頭像已移除');
+    });
+  }break;
   case 'new-match':newMatch();break;case 'match-detail':openModal('match-detail',{id:el.dataset.id});break;case 'clear-match-filters':state.playerFilter='';state.matchFrom='';state.matchTo='';render();break;
   case 'open-quick':state.tab='quick';state.modal=null;state.quickCreate=true;state.quickPending=null;state.quickResultOpen=false;ensureQuickDraft();render();break;
   case 'quick-new':state.quickCreate=true;state.quickSessionId='';state.quickPending=null;state.quickResultOpen=false;ensureQuickDraft(true);render();break;
@@ -474,6 +512,17 @@ app.addEventListener('change',async event=>{
     if(target.id==='match-from')state.matchFrom=target.value;
     if(target.id==='match-to')state.matchTo=target.value;
     render();return;
+  }
+  if(target.name==='avatar'&&target.files?.[0]){
+    const file=target.files[0];
+    await runBusy(async()=>{
+      const data=await imageToAvatarDataUrl(file);
+      const result=await adapter.saveAvatar(state.user.uid,data,state.groupIds);
+      state.profile={...state.profile,avatarData:data};
+      state.players=state.players.map(p=>p.id===state.user.uid?{...p,avatarData:data}:p);
+      render();toast(result.failures?.length?'頭像已更新，但部分戰團同步失敗。':'個人頭像已更新！');
+    });
+    return;
   }
   if(target.name==='cover'&&target.files?.[0]){
     await runBusy(async()=>{state.draft.imageData=await imageToCompressedDataUrl(target.files[0]);render();toast('圖片已壓縮並準備儲存。')});return;

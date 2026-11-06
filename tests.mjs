@@ -283,3 +283,48 @@ test('v1.5 公開名片、回填日期和雙方取消的 Rules 有限制',()=>{
  assert.ok(ui.includes("case 'quick-remove'"));
  assert.ok(ui.includes("const checked=key=>c[key]!==false?'checked':'';"));
 });
+
+
+// v1.6: shared artwork and exactly five highest-win-rate decks per card.
+import { topDecksByWinRate } from './core.mjs';
+
+test('v1.6 名片勝率前五名排序，排除未出賽且不得超過五副',()=>{
+  const rows=[
+    {id:'a',name:'A',games:10,wins:5,rate:50},
+    {id:'b',name:'B',games:3,wins:3,rate:100},
+    {id:'c',name:'C',games:8,wins:4,rate:50},
+    {id:'d',name:'D',games:6,wins:5,rate:83},
+    {id:'e',name:'E',games:1,wins:1,rate:100},
+    {id:'f',name:'F',games:12,wins:5,rate:42},
+    {id:'g',name:'G',games:0,wins:0,rate:0}
+  ];
+  assert.deepEqual(topDecksByWinRate(rows).map(x=>x.id),['b','e','d','a','c']);
+  assert.equal(topDecksByWinRate(rows).length,5);
+  assert.equal(rows[0].id,'a','do not mutate original stats');
+});
+test('v1.6 相同勝率優先比較場次，勝率比較採實際分數而非四捨五入',()=>{
+  const data=[
+    {id:'less',name:'less',games:7,wins:5,rate:71},
+    {id:'more',name:'more',games:14,wins:10,rate:71},
+    {id:'lower',name:'lower',games:1000,wins:714,rate:71}
+  ];
+  assert.deepEqual(topDecksByWinRate(data).map(x=>x.id),['more','less','lower']);
+  assert.deepEqual(topDecksByWinRate(null),[]);
+  assert.deepEqual(topDecksByWinRate(data,0),[]);
+});
+test('v1.6 戰績詳情顯示雙方圖片；玩家名片包含最高五副與最愛牌組圖片',()=>{
+  const ui=readFileSync(new URL('./app.js',import.meta.url),'utf8');
+  const css=readFileSync(new URL('./styles.css',import.meta.url),'utf8');
+  const adapter=readFileSync(new URL('./firebase-adapter.js',import.meta.url),'utf8');
+  assert.ok(ui.includes("battleDeckArtwork(m,'A')"));
+  assert.ok(ui.includes("battleDeckArtwork(m,'B')"));
+  assert.ok(ui.includes("d.id===deckId&&d.ownerUid===ownerUid"));
+  assert.ok(ui.includes("topDecksByWinRate(stats.deckStats,5)"));
+  assert.ok(ui.includes("groupVisible?topDecksByWinRate"));
+  assert.ok(ui.includes("deck-art-top-five"));
+  assert.ok(ui.includes("deck-art-favorite"));
+  assert.ok(ui.includes('aria-label="尚未上傳牌組圖片"'));
+  assert.ok(css.includes("object-fit:scale-down"));
+  assert.ok(css.includes("@media(max-width:380px)"));
+  assert.ok(adapter.includes("onSnapshot(personalDeckCol(uid)"));
+});

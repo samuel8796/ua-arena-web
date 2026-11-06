@@ -732,3 +732,21 @@ test('v2.2 前端、Firebase 及規則皆保留先後攻，並提供牌組詳情
  assert.ok(css.includes('.duel-stage'));
  assert.ok(css.includes('.deck-detail-roles'));
 });
+
+test('v2.2.1 尚未由先攻者開始計時時，不能提前完成正式計時戰績',()=>{
+ let q=createQuickMatch({playerA:'a',playerB:'b',deckA:'d1',deckB:'d2'},'a',origin);
+ q=changeQuickMatch(q,'draw',{playerId:'a',uid:'a',now:origin+1000});
+ q=changeQuickMatch(q,'choose',{playerId:'b',uid:'a',now:origin+1500});
+ assert.equal(q.startedAtMs,0);
+ assert.throws(()=>changeQuickMatch(q,'finish',{uid:'a',matchId:'no-start',now:origin+1800}));
+});
+test('v2.2.1 個人名片牌組封面可以點開唯讀詳情，先後攻勝場會即時更新',()=>{
+ const app=readFileSync(new URL('./app.js',import.meta.url),'utf8');
+ const css=readFileSync(new URL('./styles.css',import.meta.url),'utf8');
+ assert.ok(app.includes('class="deck-top-five-open" data-action="deck-detail"'));
+ assert.ok(app.includes('class="deck-role-mini"'));
+ assert.ok(app.includes("['profile','decks'].includes(state.tab)"));
+ assert.ok(app.includes('d.createdAt?e(new Date(dateNum(d.createdAt))'));
+ assert.ok(app.includes('s.duelRolled===undefined||!!s.startedAtMs'));
+ assert.ok(css.includes('.deck-top-five-open'));
+});

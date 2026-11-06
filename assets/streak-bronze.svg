@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200" fill="none" role="img" aria-label="銅框連勝裝飾外框">
+<defs>
+<linearGradient id="metal-bronze" x1="0%" y1="10%" x2="95%" y2="95%"><stop offset="0%" stop-color="#7b3d26"/><stop offset="28%" stop-color="#f7c795"/><stop offset="49%" stop-color="#c47d51"/><stop offset="72%" stop-color="#7b3d26"/><stop offset="100%" stop-color="#f7c795"/></linearGradient>
+<linearGradient id="gloss-bronze" x1="15%" y1="10%" x2="80%" y2="95%"><stop offset="0%" stop-color="#f7d6ae" stop-opacity=".96"/><stop offset="46%" stop-color="#c47d51"/><stop offset="100%" stop-color="#7b3d26"/></linearGradient>
+<radialGradient id="gem-bronze" cx="30%" cy="25%" r="80%"><stop offset="0" stop-color="#ffffff"/><stop offset=".24" stop-color="#f7d6ae"/><stop offset=".58" stop-color="#e89c6c"/><stop offset="1" stop-color="#7b3d26"/></radialGradient>
+<linearGradient id="iris-bronze" x1="8%" y1="20%" x2="94%" y2="75%"><stop offset="0%" stop-color="#ff74c5"/><stop offset="20%" stop-color="#bc8cff"/><stop offset="39%" stop-color="#75dfff"/><stop offset="61%" stop-color="#78ffc4"/><stop offset="82%" stop-color="#ffe889"/><stop offset="100%" stop-color="#fe9bbb"/></linearGradient>
+<filter id="glow-bronze" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="2.7"/></filter>
+</defs>
+<circle cx="100" cy="100" r="71.8" fill="none" stroke="#c26c34" stroke-width="13" opacity=".32" filter="url(#glow-bronze)"/>
+<circle cx="100" cy="100" r="71.9" fill="none" stroke="url(#metal-bronze)" stroke-width="6"/>
+<circle cx="100" cy="100" r="76.2" fill="none" stroke="url(#gloss-bronze)" stroke-width="1.5" opacity=".95"/>
+<circle cx="100" cy="100" r="68.7" fill="none" stroke="#f7d6ae" stroke-width="1.2" opacity=".72"/>
+<path d="M53 48 A71 71 0 0 1 147 48" fill="none" stroke="white" opacity=".31" stroke-width="1.7"/>
+
+<g><path d="M65 44 Q24 65 25 104 Q27 140 65 158" fill="none" stroke="url(#metal-bronze)" stroke-width="3.2" stroke-linecap="round"/>
+  <path d="M46 55 Q26 34 24 36 Q26 55 42 63Z M34 76 Q15 61 12 65 Q20 82 32 86Z M29 99 Q9 89 9 94 Q14 112 29 112Z M35 123 Q13 123 15 130 Q26 141 43 136Z M52 146 Q37 154 40 160 Q57 166 67 150Z" fill="url(#gloss-bronze)" stroke="#7b3d26" stroke-width="1.5"/>
+  <path d="M38 51 27 39 M29 78 15 68 M27 101 11 96 M36 129 17 130 M50 151 42 157" stroke="#f7d6ae" stroke-width=".9" opacity=".8"/></g><g transform="translate(200 0) scale(-1 1)"><path d="M65 44 Q24 65 25 104 Q27 140 65 158" fill="none" stroke="url(#metal-bronze)" stroke-width="3.2" stroke-linecap="round"/>
+  <path d="M46 55 Q26 34 24 36 Q26 55 42 63Z M34 76 Q15 61 12 65 Q20 82 32 86Z M29 99 Q9 89 9 94 Q14 112 29 112Z M35 123 Q13 123 15 130 Q26 141 43 136Z M52 146 Q37 154 40 160 Q57 166 67 150Z" fill="url(#gloss-bronze)" stroke="#7b3d26" stroke-width="1.5"/>
+  <path d="M38 51 27 39 M29 78 15 68 M27 101 11 96 M36 129 17 130 M50 151 42 157" stroke="#f7d6ae" stroke-width=".9" opacity=".8"/></g>
+<g transform="translate(100 22) scale(1 0.95)"><path d="M0 -14 10 0 0 14 -10 0Z" fill="url(#metal-bronze)" stroke="#f7d6ae" stroke-width="1.7"/><path d="M0 -11 6 0 0 11 -6 0Z" fill="url(#gem-bronze)" opacity=".95"/><path d="M-6 0H6 M0 -11V11" stroke="#fff" stroke-opacity=".54" stroke-width=".7"/></g>
+<g transform="translate(100 178) scale(1 0.95)"><path d="M0 -14 10 0 0 14 -10 0Z" fill="url(#metal-bronze)" stroke="#f7d6ae" stroke-width="1.7"/><path d="M0 -11 6 0 0 11 -6 0Z" fill="url(#gem-bronze)" opacity=".95"/><path d="M-6 0H6 M0 -11V11" stroke="#fff" stroke-opacity=".54" stroke-width=".7"/></g>
+<g fill="#f7d6ae" opacity=".9"><path d="M27 25l2 6 6 2-6 2-2 6-2-6-6-2 6-2Z"/><path d="M174 145l1.7 5.3 5.3 1.7-5.3 1.7-1.7 5.3-1.7-5.3-5.3-1.7 5.3-1.7Z"/><circle cx="22" cy="112" r="1.7"/><circle cx="182" cy="67" r="1.6"/></g>
+</svg>

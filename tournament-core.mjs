@@ -10,6 +10,51 @@ export function validateEntrants(entrants) {
     throw new Error('參賽者不可重複，且必須有有效暱稱。');
 }
 const clone = value => JSON.parse(JSON.stringify(value));
+/** Firestore prohibits nested arrays; save each bracket round as a map
+ * containing an array of match maps. UI/core can still work with round arrays.
+ * Accept legacy already-decoded arrays, as well as stored object rounds. */
+export function serializeTournamentRounds(rounds=[]) {
+  return deserializeTournamentRounds(rounds).map(round=>({matches:round.map(m=>({
+    a:m.a||'',b:m.b||'',winner:m.winner||'',bye:!!m.bye
+  }))}));
+}
+export function deserializeTournamentRounds(rounds=[]) {
+  if(!Array.isArray(rounds))return [];
+  return rounds.map(round=>Array.isArray(round)?round:(Array.isArray(round?.matches)?round.matches:[]));
+}
+/** Completed single elimination: final loser gets runner-up. Without a bronze
+ * playoff the two semifinal losers share third place (some may have a bye). */
+export function tournamentPodium(tournament) {
+  const empty={champion:'',runnerUp:'',thirdPlace:[]};
+  if(!tournament||tournament.status!=='completed')return empty;
+  const rounds=deserializeTournamentRounds(tournament.rounds);
+  const final=rounds.at(-1)?.[0];
+  if(!final?.winner || !final.a || !final.b || ![final.a,final.b].includes(final.winner))return empty;
+  const runnerUp=final.winner===final.a?final.b:final.a;
+  const semi=rounds.length>1?rounds.at(-2):[];
+  const thirdPlace=semi
+    .filter(m=>m.a&&m.b&&m.winner&&[m.a,m.b].includes(m.winner))
+    .map(m=>m.winner===m.a?m.b:m.a)
+    .filter(uid=>uid!==final.winner&&uid!==runnerUp);
+  return {champion:final.winner,runnerUp,thirdPlace:[...new Set(thirdPlace)]};
+}
+export function tournamentPlacement(tournament,uid){
+  if(!uid||!tournament?.participants?.some(p=>p.uid===uid))return '';
+  if(tournament.status!=='completed')return 'participating';
+  const podium=tournamentPodium(tournament);
+  if(podium.champion===uid)return 'champion';
+  if(podium.runnerUp===uid)return 'runnerUp';
+  if(podium.thirdPlace.includes(uid))return 'thirdPlace';
+  return 'participant';
+}
+export function tournamentMedals(uid,allTournaments=[]) {
+  const results=allTournaments.filter(t=>t.status==='completed'&&t.participants?.some(p=>p.uid===uid));
+  return {events:results.length,
+    champion:results.filter(t=>tournamentPlacement(t,uid)==='champion').length,
+    runnerUp:results.filter(t=>tournamentPlacement(t,uid)==='runnerUp').length,
+    thirdPlace:results.filter(t=>tournamentPlacement(t,uid)==='thirdPlace').length};
+}
+
 /** Shuffling is optional for controlled testing, defaults to non-cryptographic random draw. */
 export function createBracket(entrants, random=Math.random) {
   validateEntrants(entrants);
@@ -42,7 +87,7 @@ function propagate(rounds){
 }
 export function recordTournamentWinner(tournament,roundIndex,matchIndex,winner){
   if(tournament.status!=='running')throw new Error('賽事尚未開始或已結束。');
-  const rounds=clone(tournament.rounds);
+  const rounds=clone(deserializeTournamentRounds(tournament.rounds));
   const match=rounds[roundIndex]?.[matchIndex];
   if(!match || !match.a || !match.b || match.winner)throw new Error('此場對戰尚未開放或已有結果。');
   if(winner!==match.a && winner!==match.b)throw new Error('勝者必須是該場參賽者。');
@@ -73,7 +118,8 @@ export function publicTournamentSnapshot(tournament){
     title:tournament.title,description:tournament.description||'',hostName:tournament.hostName||'賽事房主',
     status:tournament.status,public:true,
     participants:tournament.participants.map(p=>({name:p.nickname})),
-    rounds:tournament.rounds.map(round=>round.map(m=>({a:nameFor(m.a),b:nameFor(m.b),winner:nameFor(m.winner),bye:!!m.bye}))),
+    rounds:serializeTournamentRounds(deserializeTournamentRounds(tournament.rounds)
+      .map(round=>round.map(m=>({a:nameFor(m.a),b:nameFor(m.b),winner:nameFor(m.winner),bye:!!m.bye})))),
     champion:nameFor(tournament.champion)
   };
 }

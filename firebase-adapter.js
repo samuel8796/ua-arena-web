@@ -250,6 +250,15 @@ export const firebaseAdapter = {
       ...(m.firstPlayer?{firstPlayer:m.firstPlayer}:{}),playedAt:Timestamp.fromDate(playedAt),
       note:(m.note||'').trim(),recordedBy:uid,status:'active',createdAt:serverTimestamp()});
   },
+  async updateTimedMatch(gid,id,winner,note){
+    const ref=doc(db,'groups',gid,'matches',id);
+    const snap=await getDoc(ref);
+    if(!snap.exists())throw new Error('找不到這場對戰。');
+    const before=snap.data();
+    if(before.status!=='active'||!before.quickMatchId||before.tournamentId||
+       ![before.playerA,before.playerB].includes(winner))throw new Error('此計時對戰不可編輯。');
+    await updateDoc(ref,{winner,note:String(note||'').trim().slice(0,200)});
+  },
   async updateMatch(gid,id,m){
     const ref=doc(db,'groups',gid,'matches',id);
     const snap=await getDoc(ref);

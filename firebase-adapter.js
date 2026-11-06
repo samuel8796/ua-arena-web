@@ -21,6 +21,8 @@ const memberRef = (gid,uid) => doc(db,'groups',gid,'members',uid);
 const userRef = uid => doc(db,'users',uid);
 const personalDeckRef = (uid,id) => doc(db,'users',uid,'decks',id);
 const personalDeckCol = uid => collection(db,'users',uid,'decks');
+const personalDeckImageRef = (uid,id) => doc(db,'users',uid,'deckImageSources',id);
+const validSource = value => typeof value==='string'&&value.length<=150000&&(value===''||/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(value));
 const playerCardRef = uid => doc(db,'playerCards',uid);
 const publicTournamentRef = id => doc(db,'publicTournaments',id);
 const publicTournamentOwnerRef = id => doc(db,'publicTournamentOwners',id);
@@ -111,11 +113,12 @@ export const firebaseAdapter = {
     return groupIds;
   },
   async getProfile(uid){const snap=await getDoc(userRef(uid));return snap.exists()?snap.data():{};},
-  async saveAvatar(uid,avatarData,groupIds){
+  async saveAvatar(uid,avatarData,groupIds,avatarSourceData=''){
     if(auth.currentUser?.uid!==uid)throw new Error('只能修改自己的頭像。');
     if(typeof avatarData!=='string'||(avatarData!==''&&!/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(avatarData))||avatarData.length>40000)
       throw new Error('頭像格式錯誤或檔案太大，請重新選擇圖片。');
-    await setDoc(userRef(uid),{avatarData,updatedAt:serverTimestamp()},{merge:true});
+    if(!validSource(avatarSourceData))throw new Error('頭像原圖格式錯誤或過大。');
+    await setDoc(userRef(uid),{avatarData,avatarSourceData,updatedAt:serverTimestamp()},{merge:true});
     const failures=[];
     for(const gid of groupIds){
       try{await updateDoc(memberRef(gid,uid),{avatarData});}
@@ -123,12 +126,13 @@ export const firebaseAdapter = {
     }
     return {failures};
   },
-  async saveProfileCover(uid,profileCoverData){
+  async saveProfileCover(uid,profileCoverData,profileCoverSourceData=''){
     if(auth.currentUser?.uid!==uid)throw new Error('只能修改自己的資料背景。');
     if(typeof profileCoverData!=='string'||profileCoverData.length>90000||
        (profileCoverData!==''&&!/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(profileCoverData)))
       throw new Error('個人資料背景格式錯誤或圖片太大。');
-    await setDoc(userRef(uid),{profileCoverData,updatedAt:serverTimestamp()},{merge:true});
+    if(!validSource(profileCoverSourceData))throw new Error('背景原圖格式錯誤或過大。');
+    await setDoc(userRef(uid),{profileCoverData,profileCoverSourceData,updatedAt:serverTimestamp()},{merge:true});
   },
   async saveProfile(uid,nickname,bio,groupIds){
     const name=nickname.trim();if(name.length<2||name.length>24)throw new Error('暱稱請使用 2–24 字元。');
@@ -215,7 +219,10 @@ export const firebaseAdapter = {
   },
   async savePlayerCard(uid,card){
     if(auth.currentUser?.uid!==uid)throw new Error('只能修改自己的公開名片。');
-    await setDoc(playerCardRef(uid),{
+    const sourceData=String(card.coverSourceData||'');
+    if(!validSource(sourceData))throw new Error('名片背景原圖無效或過大。');
+    const batch=writeBatch(db);
+    batch.set(playerCardRef(uid),{
       nickname:String(card.nickname||'玩家').trim().slice(0,24),
       coverData:typeof card.coverData==='string'&&card.coverData.length<=90000&&(!card.coverData||/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(card.coverData))?card.coverData:'',
       bio:card.showBio?String(card.bio||'').trim().slice(0,160):'',
@@ -227,16 +234,36 @@ export const firebaseAdapter = {
         losses:Number(card.totalStats?.losses||0),rate:Number(card.totalStats?.rate||0)},
       updatedAt:serverTimestamp()
     });
+    // Keep the full source private; only the cropped banner is publicly readable.
+    batch.set(userRef(uid),{cardCoverSourceData:sourceData,updatedAt:serverTimestamp()},{merge:true});
+    await batch.commit();
+  },
+  async getDeckSource(uid,id){
+    if(auth.currentUser?.uid!==uid)throw new Error('只能檢視自己的牌組圖片來源。');
+    const snap=await getDoc(personalDeckImageRef(uid,id));
+    return snap.exists()?String(snap.data().sourceData||''):'';
   },
   async addDeck(gid,uid,d){
     if(d.ownerUid!==uid)throw new Error('牌組只能新增到自己的帳號。');
-    await addDoc(personalDeckCol(uid),{ownerUid:uid,createdBy:uid,name:d.name.trim(),color:d.color,
+
+    const sourceData=String(d.imageSourceData||'');
+    if(!validSource(sourceData))throw new Error('牌組來源圖片無效或過大。');
+    const ref=doc(personalDeckCol(uid)),batch=writeBatch(db);
+    batch.set(ref,{ownerUid:uid,createdBy:uid,name:d.name.trim(),color:d.color,
       imageData:d.imageData||'',active:true,createdAt:serverTimestamp(),updatedAt:serverTimestamp()});
+    batch.set(personalDeckImageRef(uid,ref.id),{sourceData,updatedAt:serverTimestamp()});
+    await batch.commit();
   },
   async updateDeck(gid,id,d){
     const uid=auth.currentUser?.uid;
     if(!uid||d.ownerUid!==uid)throw new Error('只能修改自己的牌組。');
-    await updateDoc(personalDeckRef(uid,id),{name:d.name.trim(),color:d.color,imageData:d.imageData||'',updatedAt:serverTimestamp()});
+
+    const sourceData=String(d.imageSourceData||'');
+    if(!validSource(sourceData))throw new Error('牌組來源圖片無效或過大。');
+    const batch=writeBatch(db);
+    batch.update(personalDeckRef(uid,id),{name:d.name.trim(),color:d.color,imageData:d.imageData||'',updatedAt:serverTimestamp()});
+    batch.set(personalDeckImageRef(uid,id),{sourceData,updatedAt:serverTimestamp()});
+    await batch.commit();
   },
   async archiveDeck(gid,id){
     const uid=auth.currentUser?.uid;

@@ -350,10 +350,9 @@ test('v1.7 全站頭像同步使用僅本人可寫的帳號與團員文件',()=>
 test('v1.7 改換頭像具備裁切壓縮上傳與移除，並能在各玩家頁面顯示',()=>{
   const app=readFileSync(new URL('./app.js',import.meta.url),'utf8');
   assert.ok(app.includes('function playerAvatar(uid,extra='));
-  assert.ok(app.includes('imageToAvatarDataUrl(file)'));
-  assert.ok(app.includes('Math.min(bitmap.width,bitmap.height)'));
-  assert.ok(app.includes("canvas.toDataURL('image/jpeg',quality)"));
-  assert.ok(app.includes('if(data.length<=30000)return data'));
+  assert.ok(app.includes('chooseAvatarCrop(file)'));
+  assert.ok(app.includes('if(!data)return; // Cancel never sends a Firebase write.'));
+  assert.ok(!app.includes('imageToAvatarDataUrl(file)'));
   assert.ok(app.includes('case \'remove-avatar\''));
   assert.ok(app.includes("target.name==='avatar'"));
   assert.ok(app.includes("data-action=\"remove-avatar\""));
@@ -388,4 +387,50 @@ test('v1.7.1 手機牌組圖片完整填滿容器、不留上下黑邊',()=>{
  assert.ok(css.includes('object-fit:cover;'));
  assert.ok(css.includes('height:clamp(132px,38vw,170px);'));
  assert.ok(html.includes('href="./styles.css?v=1.7.1"'));
+});
+
+import {avatarCropGeometry,avatarSourceCrop} from './avatar-crop-core.mjs';
+test('v1.8 可手動拖移放大圓形頭像，矩形裁切範圍始終在原圖之內',()=>{
+  const cases=[[640,480],[480,640],[1400,200],[200,1400],[300,300]];
+  for(const [w,h] of cases){
+    for(const zoom of [1,1.5,3]){
+      for(const [x,y] of [[0,0],[9999,-9999],[-9999,9999]]){
+        const g=avatarCropGeometry(w,h,320,zoom,x,y),src=avatarSourceCrop(g);
+        assert.ok(g.offsetX<=Math.max(0,(g.width-g.radius*2)/2)+1e-5);
+        assert.ok(src.x>=-1e-5&&src.y>=-1e-5);
+        assert.ok(src.x+src.size<=w+1e-5);
+        assert.ok(src.y+src.size<=h+1e-5);
+        assert.ok(src.size>0);
+      }
+    }
+  }
+});
+test('v1.8 縮放界限及資料正確，重設置中後裁切範圍恢復原位',()=>{
+  const base=avatarCropGeometry(1200,800,320,1,0,0);
+  const restored=avatarCropGeometry(1200,800,320,1,0,0);
+  assert.deepEqual(avatarSourceCrop(base),avatarSourceCrop(restored));
+  assert.equal(avatarCropGeometry(1200,800,320,100,0,0).zoom,3);
+  assert.equal(avatarCropGeometry(1200,800,320,-5,0,0).zoom,1);
+  assert.throws(()=>avatarCropGeometry(0,100,320,1,0,0));
+});
+test('v1.8 圓形預覽需確認才保存，取消不寫入，支援手機雙指及滑桿',()=>{
+  const app=readFileSync(new URL('./app.js',import.meta.url),'utf8');
+  const ui=readFileSync(new URL('./avatar-crop-ui.mjs',import.meta.url),'utf8');
+  const css=readFileSync(new URL('./styles.css',import.meta.url),'utf8');
+  const html=readFileSync(new URL('./index.html',import.meta.url),'utf8');
+  const wf=readFileSync(new URL('./.github/workflows/pages.yml',import.meta.url),'utf8');
+  assert.ok(app.includes('chooseAvatarCrop(file)'));
+  assert.ok(app.includes('if(!data)return;'));
+  assert.ok(ui.includes('role="dialog"'));
+  assert.ok(ui.includes("data-crop-action=\"cancel\""));
+  assert.ok(ui.includes("data-crop-action=\"save\""));
+  assert.ok(ui.includes('canvas.setPointerCapture(ev.pointerId)'));
+  assert.ok(ui.includes("canvas.addEventListener('pointermove'"));
+  assert.ok(ui.includes("slider.addEventListener('input'"));
+  assert.ok(ui.includes("document.body.style.overflow=previousOverflow"));
+  assert.ok(ui.includes('URL.revokeObjectURL(url)'));
+  assert.ok(css.includes('touch-action:none'));
+  assert.ok(html.includes('styles.css?v=1.8'));
+  assert.ok(html.includes('app.js?v=1.8'));
+  assert.ok(wf.includes('avatar-crop-ui.mjs avatar-crop-core.mjs'));
 });

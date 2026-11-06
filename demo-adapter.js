@@ -47,12 +47,12 @@ export const demoAdapter={
     publish();listeners.add(publish);return ()=>listeners.delete(publish);
   },
   async getPlayerCard(uid){return (data.playerCards||{})[uid]||null;},
-  async savePlayerCard(uid,card){data.playerCards||={};data.playerCards[uid]={...card,updatedAt:Date.now()};save();},
+  async savePlayerCard(uid,card){data.playerCards||={};data.profile||={};data.profile.cardCoverSourceData=card.coverSourceData||'';const {coverSourceData:_privateSource,...publicCard}=card;data.playerCards[uid]={...publicCard,updatedAt:Date.now()};save();},
 
-  async saveAvatar(uid,avatarData){if(uid!==demoUser.uid)throw new Error('只能修改自己的頭像。');data.profile||={};data.profile.avatarData=avatarData;data.members.filter(m=>m.uid===uid).forEach(m=>m.avatarData=avatarData);save();return {failures:[]};},
-  async saveProfileCover(uid,profileCoverData){
+  async saveAvatar(uid,avatarData,groupIds=[],avatarSourceData=''){if(uid!==demoUser.uid)throw new Error('只能修改自己的頭像。');data.profile||={};data.profile.avatarData=avatarData;data.profile.avatarSourceData=avatarSourceData;data.members.filter(m=>m.uid===uid).forEach(m=>m.avatarData=avatarData);save();return {failures:[]};},
+  async saveProfileCover(uid,profileCoverData,profileCoverSourceData=''){
     if(uid!==demoUser.uid)throw new Error('只能修改自己的資料背景。');
-    data.profile||={};data.profile.profileCoverData=profileCoverData;save();
+    data.profile||={};data.profile.profileCoverData=profileCoverData;data.profile.profileCoverSourceData=profileCoverSourceData;save();
   },
   async saveProfile(uid,nickname,bio){data.profile={...(data.profile||{}),nickname,bio};demoUser.displayName=nickname;data.members.filter(m=>m.uid===uid).forEach(m=>m.nickname=nickname);save();return {failures:[]};},
   subscribePublicTournament(id,cb){const publish=()=>cb(data.tournaments.find(t=>t.publicId===id)?{...publicTournamentSnapshot(data.tournaments.find(t=>t.publicId===id)),id}:null);publish();const fn=()=>publish();listeners.add(fn);return ()=>listeners.delete(fn);},
@@ -67,8 +67,9 @@ export const demoAdapter={
       tournaments:gid===personalGroupId(demoUser.uid)?[]:(data.tournaments||[])});
     send();listeners.add(send);return ()=>listeners.delete(send);
   },
-  async addDeck(gid,uid,d){if(d.ownerUid!==uid)throw new Error('只能建立自己的牌組');data.decks.push({...d,id:`d-${Date.now().toString(36)}`,createdBy:uid,active:true,createdAt:Date.now()});save();},
-  async updateDeck(gid,id,d){Object.assign(data.decks.find(x=>x.id===id),d);save();},
+  async getDeckSource(uid,id){return (data.deckImageSources||{})[id]||'';},
+  async addDeck(gid,uid,d){if(d.ownerUid!==uid)throw new Error('只能建立自己的牌組');const {imageSourceData,...publicDeck}=d;const id=`d-${Date.now().toString(36)}`;data.decks.push({...publicDeck,id,createdBy:uid,active:true,createdAt:Date.now()});data.deckImageSources||={};data.deckImageSources[id]=imageSourceData||'';save();},
+  async updateDeck(gid,id,d){const {imageSourceData,...publicDeck}=d;Object.assign(data.decks.find(x=>x.id===id),publicDeck);data.deckImageSources||={};data.deckImageSources[id]=imageSourceData||'';save();},
   async archiveDeck(gid,id){data.decks.find(x=>x.id===id).active=false;save();},
   async addMatch(gid,uid,m){data.matches.unshift({...m,groupId:gid,id:`m-${Date.now().toString(36)}`,recordedBy:uid,status:'active',createdAt:Date.now(),playedAt:m.playedAt?parsePlayedAt(m.playedAt).getTime():Date.now()});save();},
   async updateMatch(gid,id,m){

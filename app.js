@@ -239,6 +239,63 @@ function personalExtras(){
   </section>`;
 }
 
+
+function personalTournamentEntries(){
+ return Object.entries(state.personalTournaments||{}).flatMap(([groupId,ts])=>(ts||[]).map(t=>({...t,groupId})));
+}
+function tournamentNickname(t,uid){return t.participants?.find(p=>p.uid===uid)?.nickname||'未知玩家'}
+function tournamentCompletedTime(t){return dateNum(t.updatedAt)||dateNum(t.createdAt)}
+function tournamentResultCard(t,groupId){
+ const podium=tournamentPodium(t);
+ const third=podium.thirdPlace.map(id=>tournamentNickname(t,id)).join('、')||'未產生';
+ return `<article class="tournament-result-item">
+  <div class="tournament-result-main"><small>${e(formatDate(t.updatedAt||t.createdAt))} · ${t.participants?.length||0} 人參賽</small>
+   <strong>🏆 ${e(t.title)}</strong>
+   <span>🥇 ${e(tournamentNickname(t,podium.champion))}　🥈 ${e(tournamentNickname(t,podium.runnerUp))}　🥉 ${e(third)}</span></div>
+  <button class="btn btn-outline btn-sm" type="button" data-action="tournament-detail" data-id="${e(t.id)}" data-group="${e(groupId)}">賽事詳情</button>
+ </article>`;
+}
+function tournamentMedalPanel(){
+ const entries=personalTournamentEntries()
+   .filter(t=>t.status==='completed'&&t.participants?.some(p=>p.uid===state.user?.uid))
+   .sort((a,b)=>tournamentCompletedTime(b)-tournamentCompletedTime(a));
+ const medal=tournamentMedals(state.user?.uid,entries);
+ return `<section class="card tournament-medal-panel">
+   <div class="section-head"><h3>🏆 我的錦標賽戰績</h3><span class="tag">跨戰團</span></div>
+   <div class="tournament-medal-stats">
+     <div><span>🥇</span><b>${medal.champion}</b><small>冠軍</small></div>
+     <div><span>🥈</span><b>${medal.runnerUp}</b><small>亞軍</small></div>
+     <div><span>🥉</span><b>${medal.thirdPlace}</b><small>季軍</small></div>
+     <div><span>🏟</span><b>${medal.events}</b><small>完賽次數</small></div>
+   </div>
+   ${!state.tournamentHistoryReady?'<p class="hint">正在載入已加入戰團的賽事紀錄…</p>':''}
+   <div class="tournament-results-list">${entries.map(t=>tournamentResultCard(t,t.groupId)).join('')||'<p class="muted sm">尚無已完賽的錦標賽。</p>'}</div>
+   <p class="hint">若單敗淘汰賽沒有季軍戰，準決賽落敗者會並列季軍。</p>
+ </section>`;
+}
+function tournamentDetailBody(){
+ const gid=state.draft.groupId,id=state.draft.id;
+ const list=gid===state.groupId?state.tournaments:state.personalTournaments[gid]||[];
+ const t=list.find(x=>x.id===id);
+ if(!t)return '<div class="empty">找不到賽事，請確認目前的戰團或重新載入。</div>';
+ const podium=tournamentPodium(t),snapshot=publicTournamentSnapshot(t);
+ return `<div class="tournament-detail">
+  <div class="label-up">TOURNAMENT RESULTS</div>
+  <h3>${e(t.title)}</h3>
+  <p class="muted sm">${e(state.groupDetails[gid]||gid)} · ${e(formatDate(t.updatedAt||t.createdAt))} · ${t.participants?.length||0} 人參加 · ${e(tournamentStatus(t.status))}</p>
+  <p class="muted sm">${e(t.description||'單敗淘汰賽')}</p>
+  <div class="tournament-podium-list">
+    <div><b>🥇 冠軍</b><span>${podium.champion?e(tournamentNickname(t,podium.champion)):'尚未產生'}</span></div>
+    <div><b>🥈 亞軍</b><span>${podium.runnerUp?e(tournamentNickname(t,podium.runnerUp)):'尚未產生'}</span></div>
+    <div><b>🥉 季軍</b><span>${podium.thirdPlace.length?e(podium.thirdPlace.map(id=>tournamentNickname(t,id)).join('、')):'尚未產生'}</span></div>
+  </div>
+  <h4>參賽名單 · ${t.participants?.length||0} 人</h4>
+  <div class="tournament-detail-entrants">${(t.participants||[]).map(p=>`<span class="tag">${e(p.nickname)}</span>`).join('')}</div>
+  <h4>完整賽程與結果</h4>
+  ${tournamentBracket(snapshot.rounds,true,false)}
+ </div>`;
+}
+
 function streakGuide(){
   const streak=playerWinStreak(state.user?.uid,state.matches);
   const tiers=[{id:'bronze',threshold:2,name:'銅框'},{id:'silver',threshold:5,name:'銀框'},

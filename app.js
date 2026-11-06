@@ -3,6 +3,7 @@ import {chooseAvatarCrop} from './avatar-crop-ui.mjs?v=1.8';
 import { COLORS, colorOf, safeText as e, shortId, formatDate, assertMatch, computeStats, aggregatePersonalStats, aggregateDeckWinRates, filterMatches, filteredMatchStats, matchTimeMs, matchDateValue, parsePlayedAt, topDecksByWinRate, playerWinStreak, streakTier, resolvePlayerDeckSelection, GUEST_PLAYER_ID, GUEST_DECK_ID, guestPlayer, personalGroupId, isGuestMatch, guestDeckLabel } from './core.mjs?v=1.9';
 import { demoAdapter } from './demo-adapter.js';
 import { QUICK_MATCH_LIMIT_MS, quickClock, mmss } from './quick-core.mjs';
+import { deserializeTournamentRounds, tournamentPodium, tournamentPlacement, tournamentMedals, publicTournamentSnapshot } from './tournament-core.mjs';
 
 const $=q=>document.querySelector(q);
 const safeStoreGet=k=>{try{return localStorage.getItem(k)}catch{return null}};
@@ -10,8 +11,8 @@ const safeStoreSet=(k,v)=>{try{localStorage.setItem(k,v)}catch{}};
 const app=$('#app');
 const configured=Boolean(firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId);
 const params=new URLSearchParams(location.search);
-let adapter=null, unsub=()=>{}, historyUnsub=()=>{}, tournamentRequestUnsub=()=>{}, toastTimer;
-const state={user:null,profile:{},personalHistory:{},historyReady:false,myCard:null,playerCard:null,groupDetails:{},tournaments:[],tournamentRequests:[],myTournamentRequest:false,tournamentId:'',publicTournament:null,publicWatchError:'',groupId:'',groupIds:[],group:null,players:[],decks:[],matches:[],tab:'overview',modal:null,draft:{},filter:'ALL',playerFilter:'',matchFrom:'',matchTo:'',inviteId:params.get('join')||'',authMode:'login',preview:false,rulesReply:'',rulesQuestion:'',rulesEdition:'繁體中文版',busy:false,quickMatches:[],quickSessionId:'',quickCreate:true,quickDraft:{},quickPending:null,quickResultOpen:false};
+let adapter=null, unsub=()=>{}, historyUnsub=()=>{}, personalTournamentUnsub=()=>{}, tournamentRequestUnsub=()=>{}, toastTimer;
+const state={user:null,profile:{},personalHistory:{},historyReady:false,personalTournaments:{},tournamentHistoryReady:false,myCard:null,playerCard:null,groupDetails:{},tournaments:[],tournamentRequests:[],myTournamentRequest:false,tournamentId:'',publicTournament:null,publicWatchError:'',groupId:'',groupIds:[],group:null,players:[],decks:[],matches:[],tab:'overview',modal:null,draft:{},filter:'ALL',playerFilter:'',matchFrom:'',matchTo:'',inviteId:params.get('join')||'',authMode:'login',preview:false,rulesReply:'',rulesQuestion:'',rulesEdition:'繁體中文版',busy:false,quickMatches:[],quickSessionId:'',quickCreate:true,quickDraft:{},quickPending:null,quickResultOpen:false};
 const player=id=>state.players.find(x=>x.id===id);
 const playerName=id=>player(id)?.nickname||'未知玩家';
 const deck=id=>state.decks.find(x=>x.id===id);
@@ -260,7 +261,8 @@ function profilePage(){
 const tournamentStatus=s=>({registration:'開放報名',running:'進行中',completed:'已完賽',cancelled:'已取消'})[s]||'未知狀態';
 function spectatorUrl(publicId){const u=new URL(location.href);u.search='';u.hash='';u.searchParams.set('watch',publicId);return u.href;}
 function tournamentBracket(rounds,isPublic=false,host=false){
-  if(!rounds?.length)return '<div class="empty">尚未抽籤產生賽程</div>';
+  rounds=deserializeTournamentRounds(rounds);
+  if(!rounds.length)return '<div class="empty">尚未抽籤產生賽程</div>';
   const label=uid=>isPublic?uid:(uid?state.players.find(p=>p.id===uid)?.nickname||'參賽者':'待決定');
   return `<div class="bracket-scroller"><div class="bracket-board">${rounds.map((round,ri)=>`<section class="bracket-round"><h3>ROUND ${ri+1}${ri===rounds.length-1?' · 決賽':''}</h3>${round.map((m,mi)=>{
     const a=isPublic?m.a:label(m.a),b=isPublic?m.b:label(m.b),winner=m.winner?(isPublic?m.winner:label(m.winner)):'';

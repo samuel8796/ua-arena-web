@@ -232,7 +232,7 @@ function deckDetailBody(){
    <div class="stats-cell"><b>${info.losses}</b><span>敗場</span></div>
    <div class="stats-cell"><b>${info.rate}%</b><span>總勝率</span></div>
   </div>
-  <p class="muted sm">建立時間：${e(formatDate(d.createdAt))}</p>
+  <p class="muted sm">建立時間：${d.createdAt?e(new Date(dateNum(d.createdAt)).toLocaleString('zh-TW',{timeZone:'Asia/Taipei',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})):'—'}</p>
   <h3>先後攻戰績</h3>
   <div class="deck-detail-roles">${renderRole('⚔ 先攻',info.sides.first)}${renderRole('🛡 後攻',info.sides.second)}</div>
   <p class="hint">未記錄先後攻：${info.sides.unknown} 場；僅列入總戰績，不納入先後攻勝率。</p>
@@ -552,7 +552,7 @@ function quickSessionPage(s){
  </div>`).join('')}</div>
  <div class="hint">按「回合結束」會立即啟動另一位玩家的回合；整場計時不因關閉頁面而停止。</div>
  <div class="quick-summary"><span>已完成回合：<b>${c.turns}</b></span><span>未歸屬空檔：<b class="qm-gap">${mmss(c.unattributedMs)}</b></span></div>
- ${playing?`${s.duelRolled===undefined||!!s.firstPlayer?`<button class="btn btn-primary btn-full" data-action="quick-result-open" style="margin-top:18px">🏆 結束對戰並登錄結果</button>`:''}<button class="btn btn-ghost btn-full" style="margin-top:8px" data-action="quick-cancel">取消本場（不計勝負）</button>`:''}
+ ${playing?`${s.duelRolled===undefined||!!s.startedAtMs?`<button class="btn btn-primary btn-full" data-action="quick-result-open" style="margin-top:18px">🏆 結束對戰並登錄結果</button>`:''}<button class="btn btn-ghost btn-full" style="margin-top:8px" data-action="quick-cancel">取消本場（不計勝負）</button>`:''}
  ${(s.turns||[]).length?`<div class="divider"></div><h3 class="quick-history-title">回合用時紀錄</h3><div class="table-wrap"><table class="table"><thead><tr><th>回合</th><th>玩家</th><th>花費時間</th></tr></thead><tbody>${turnRows}</tbody></table></div>`:''}
  </section>${state.quickResultOpen&&playing?quickResultForm(s):''}`;
 }

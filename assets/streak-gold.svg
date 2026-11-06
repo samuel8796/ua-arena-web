@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200" fill="none" role="img" aria-label="金框連勝裝飾外框">
+<defs>
+<linearGradient id="metal-gold" x1="0%" y1="10%" x2="95%" y2="95%"><stop offset="0%" stop-color="#935419"/><stop offset="28%" stop-color="#fff0a6"/><stop offset="49%" stop-color="#f4bd37"/><stop offset="72%" stop-color="#935419"/><stop offset="100%" stop-color="#fff0a6"/></linearGradient>
+<linearGradient id="gloss-gold" x1="15%" y1="10%" x2="80%" y2="95%"><stop offset="0%" stop-color="#ffe08a" stop-opacity=".96"/><stop offset="46%" stop-color="#f4bd37"/><stop offset="100%" stop-color="#935419"/></linearGradient>
+<radialGradient id="gem-gold" cx="30%" cy="25%" r="80%"><stop offset="0" stop-color="#ffffff"/><stop offset=".24" stop-color="#ffe08a"/><stop offset=".58" stop-color="#ffe28c"/><stop offset="1" stop-color="#935419"/></radialGradient>
+<linearGradient id="iris-gold" x1="8%" y1="20%" x2="94%" y2="75%"><stop offset="0%" stop-color="#ff74c5"/><stop offset="20%" stop-color="#bc8cff"/><stop offset="39%" stop-color="#75dfff"/><stop offset="61%" stop-color="#78ffc4"/><stop offset="82%" stop-color="#ffe889"/><stop offset="100%" stop-color="#fe9bbb"/></linearGradient>
+<filter id="glow-gold" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="2.7"/></filter>
+</defs>
+<circle cx="100" cy="100" r="71.8" fill="none" stroke="#f7b738" stroke-width="13" opacity=".32" filter="url(#glow-gold)"/>
+<circle cx="100" cy="100" r="71.9" fill="none" stroke="url(#metal-gold)" stroke-width="6"/>
+<circle cx="100" cy="100" r="76.2" fill="none" stroke="url(#gloss-gold)" stroke-width="1.5" opacity=".95"/>
+<circle cx="100" cy="100" r="68.7" fill="none" stroke="#ffe08a" stroke-width="1.2" opacity=".72"/>
+<path d="M53 48 A71 71 0 0 1 147 48" fill="none" stroke="white" opacity=".31" stroke-width="1.7"/>
+
+<g><path d="M67 42 Q24 58 20 103 Q25 147 65 166" fill="none" stroke="url(#metal-gold)" stroke-width="5"/>
+  <path d="M56 52 Q29 22 25 28 Q31 58 44 67Z M35 72 Q12 43 10 54 Q18 80 30 92Z M30 96 Q1 82 6 96 Q14 118 33 118Z M33 120 Q6 120 11 133 Q29 147 48 138Z M50 143 Q26 156 32 169 Q55 174 68 157Z" fill="url(#gloss-gold)" stroke="#ffe08a" stroke-width="1.5"/>
+  <path d="M43 61 26 30 M28 83 10 55 M26 108 7 95 M36 133 12 132 M49 160 34 168" stroke="#fff7be" stroke-opacity=".6" stroke-width="1"/></g><g transform="translate(200 0) scale(-1 1)"><path d="M67 42 Q24 58 20 103 Q25 147 65 166" fill="none" stroke="url(#metal-gold)" stroke-width="5"/>
+  <path d="M56 52 Q29 22 25 28 Q31 58 44 67Z M35 72 Q12 43 10 54 Q18 80 30 92Z M30 96 Q1 82 6 96 Q14 118 33 118Z M33 120 Q6 120 11 133 Q29 147 48 138Z M50 143 Q26 156 32 169 Q55 174 68 157Z" fill="url(#gloss-gold)" stroke="#ffe08a" stroke-width="1.5"/>
+  <path d="M43 61 26 30 M28 83 10 55 M26 108 7 95 M36 133 12 132 M49 160 34 168" stroke="#fff7be" stroke-opacity=".6" stroke-width="1"/></g>
+<path d="M67 28 60 2 82 17 100 0 118 17 140 2 133 28 100 35Z" fill="url(#metal-gold)" stroke="#ffe08a" stroke-width="1.8"/><path d="M72 25 69 11 83 22 100 7 117 22 131 11 128 25Z" fill="url(#gloss-gold)" opacity=".95"/><g transform="translate(100 13) scale(1 0.64)"><path d="M0 -14 10 0 0 14 -10 0Z" fill="url(#metal-gold)" stroke="#ffe08a" stroke-width="1.7"/><path d="M0 -11 6 0 0 11 -6 0Z" fill="url(#gem-gold)" opacity=".95"/><path d="M-6 0H6 M0 -11V11" stroke="#fff" stroke-opacity=".54" stroke-width=".7"/></g><circle cx="60" cy="3" r="3" fill="url(#gem-gold)"/><circle cx="140" cy="3" r="3" fill="url(#gem-gold)"/>
+<path d="M48 166Q67 191 100 185Q133 191 152 166Q120 179 100 172Q80 179 48 166Z" fill="url(#gloss-gold)" stroke="#ffe08a" stroke-width="1.7"/><g transform="translate(100 181) scale(1 1)"><path d="M0 -14 10 0 0 14 -10 0Z" fill="url(#metal-gold)" stroke="#ffe08a" stroke-width="1.7"/><path d="M0 -11 6 0 0 11 -6 0Z" fill="url(#gem-gold)" opacity=".95"/><path d="M-6 0H6 M0 -11V11" stroke="#fff" stroke-opacity=".54" stroke-width=".7"/></g>
+<g fill="#ffe08a" opacity=".9"><path d="M27 25l2 6 6 2-6 2-2 6-2-6-6-2 6-2Z"/><path d="M174 145l1.7 5.3 5.3 1.7-5.3 1.7-1.7 5.3-1.7-5.3-5.3-1.7 5.3-1.7Z"/><circle cx="22" cy="112" r="1.7"/><circle cx="182" cy="67" r="1.6"/></g>
+</svg>

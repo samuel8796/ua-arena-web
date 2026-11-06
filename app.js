@@ -148,13 +148,20 @@ function matchDetailBody(){
  const allowed=!m.tournamentId&&m.status==='active'&&(m.recordedBy===state.user?.uid||m.playerA===state.user?.uid||m.playerB===state.user?.uid||isOwner());
  const turns=q?.turns||[];
  const firstKnown=[m.playerA,m.playerB].includes(m.firstPlayer);
- return `<div class="match-detail-header"><span class="tag">${m.status==='void'?'已撤銷':m.tournamentId?'🏆 錦標賽對戰':'有效對戰'}</span><strong>🏆 ${e(playerName(m.winner))} 勝</strong></div>
+ return `<div class="match-detail-header"><span class="tag">${m.status==='void'?'已撤銷':m.tournamentId?'🏆 錦標賽對戰':'有效對戰'}</span><strong>🏆 ${e(playerName(m.winner))} 勝</strong>
+  ${allowed?`<div class="match-detail-settings">
+    <button type="button" class="btn btn-ghost btn-sm" data-action="match-settings" aria-expanded="${!!state.draft.settingsOpen}">⚙ 設定</button>
+    ${state.draft.settingsOpen?`<div class="match-setting-menu">
+       <button type="button" class="btn btn-outline btn-sm" data-action="match-edit" data-id="${e(m.id)}">✎ 編輯戰績</button>
+       <button type="button" class="btn btn-danger btn-sm" data-action="void-match" data-id="${e(m.id)}">移除戰績（撤銷）</button>
+     </div>`:''}
+   </div>`:''}</div>
  <div class="detail-participants"><div class="detail-side">${battleDeckArtwork(m,'A')}<div class="detail-side-info"><div class="detail-side-user">${playerAvatar(m.playerA,'avatar-match')}<strong>${e(playerName(m.playerA))}</strong></div><span class="detail-side-deck">${e(battleDeckName(m,'A'))}</span>${firstKnown?`<span class="turn-position">${m.firstPlayer===m.playerA?'⚔ 先攻':'🛡 後攻'}</span>`:''}<span class="detail-side-result">${m.winner===m.playerA?'🏆 本場勝利':'本場敗北'}</span></div></div><b>VS</b><div class="detail-side">${battleDeckArtwork(m,'B')}<div class="detail-side-info"><div class="detail-side-user">${playerAvatar(m.playerB,'avatar-match')}<strong>${e(playerName(m.playerB))}</strong></div><span class="detail-side-deck">${e(battleDeckName(m,'B'))}</span>${firstKnown?`<span class="turn-position">${m.firstPlayer===m.playerB?'⚔ 先攻':'🛡 後攻'}</span>`:''}<span class="detail-side-result">${m.winner===m.playerB?'🏆 本場勝利':'本場敗北'}</span></div></div></div>
  ${m.tournamentId?`<button type="button" class="btn btn-outline btn-full" data-action="tournament-detail" data-group="${e(state.groupId)}" data-id="${e(m.tournamentId)}" style="margin-top:15px">🏆 ${e(m.tournamentTitle||'錦標賽')} · 查看賽事詳情</button>`:''}
   <div class="detail-facts"><div><span>實際對戰時間</span><b>${e(matchDateLabel(m))}</b></div><div><span>登錄時間</span><b>${e(formatDate(m.createdAt))}</b></div><div><span>登錄人</span><b>${e(playerName(m.recordedBy))}</b></div><div><span>備註</span><b>${e(m.note||'無')}</b></div></div>
  ${m.timing?.enabled?`<div class="detail-timing"><h3>⏱ 30 分鐘計時紀錄</h3><div class="history-stats"><span><b>${mmss(m.timing.playerAMs)}</b> ${e(playerName(m.playerA))}</span><span><b>${mmss(m.timing.playerBMs)}</b> ${e(playerName(m.playerB))}</span><span><b>${mmss(m.timing.unattributedMs)}</b> 間隔</span></div>
  ${turns.length?`<div class="table-wrap"><table class="table"><thead><tr><th>回合</th><th>玩家</th><th>時間</th></tr></thead><tbody>${turns.map((t,i)=>`<tr><td>${i+1}</td><td>${e(playerName(t.playerId))}</td><td>${mmss(t.durationMs)}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted sm">沒有保存逐回合明細。</p>'}</div>`:''}
- ${allowed?`<button type="button" class="btn btn-danger btn-full" data-action="void-match" data-id="${e(m.id)}" style="margin-top:20px">撤銷這場戰績（雙方皆可）</button>`:''}`;
+ `;
 }
 function decksPage(){
   const filtered=sortDeckLibrary(state.decks.filter(d=>d.ownerUid===state.user?.uid&&d.active!==false&&(state.filter==='ALL'||d.color===state.filter)),personalDeckStats(),state.deckSort);
@@ -714,7 +721,18 @@ async function handleAction(action,el){
       render();toast(result.failures?.length?'頭像已清除，但部分戰團同步失敗。':'頭像已移除');
     });
   }break;
-  case 'new-match':newMatch();break;case 'match-detail':openModal('match-detail',{id:el.dataset.id});break;case 'clear-match-filters':state.playerFilter='';state.matchFrom='';state.matchTo='';render();break;
+  case 'new-match':newMatch();break;
+   case 'match-detail':openModal('match-detail',{id:el.dataset.id,settingsOpen:false});break;
+   case 'match-settings':state.draft.settingsOpen=!state.draft.settingsOpen;render();break;
+   case 'match-edit':{
+     const m=state.matches.find(x=>x.id===el.dataset.id);
+     if(!m||m.status!=='active'||m.tournamentId)throw new Error('此戰績無法直接編輯。');
+     if(m.quickMatchId){openModal('match-edit-timed',{id:m.id,playerA:m.playerA,playerB:m.playerB,winner:m.winner,note:m.note||''});break;}
+     openModal('match-edit',{id:m.id,isEdit:true,playerA:m.playerA,playerB:m.playerB,
+       deckA:m.deckA,deckB:m.deckB,guestDeck:m.guestDeck||guestDefault(),
+       firstPlayer:m.firstPlayer||'',winner:m.winner,note:m.note||'',playedAt:localDateTimeValue(matchTimeMs(m))});
+     break;
+   }case 'clear-match-filters':state.playerFilter='';state.matchFrom='';state.matchTo='';render();break;
   case 'open-quick':state.tab='quick';state.modal=null;state.quickCreate=true;state.quickPending=null;state.quickResultOpen=false;ensureQuickDraft();render();break;
   case 'quick-new':state.quickCreate=true;state.quickSessionId='';state.quickPending=null;state.quickResultOpen=false;ensureQuickDraft(true);render();break;
   case 'quick-select':state.tab='quick';state.quickSessionId=el.dataset.id;state.quickCreate=false;state.quickPending=null;state.quickResultOpen=false;render();break;

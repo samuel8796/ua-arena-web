@@ -1,8 +1,8 @@
 import { firebaseConfig, aiSettings } from './firebase-config.js';
 import {chooseAvatarCrop} from './avatar-crop-ui.mjs?v=1.8';
 import { COLORS, colorOf, safeText as e, shortId, formatDate, assertMatch, computeStats, aggregatePersonalStats, aggregateDeckWinRates, filterMatches, filteredMatchStats, matchTimeMs, matchDateValue, parsePlayedAt, sideRecordStats, deckDetailStats, topDecksByWinRate, sortDeckLibrary, playerWinStreak, streakTier, resolvePlayerDeckSelection, GUEST_PLAYER_ID, GUEST_DECK_ID, guestPlayer, personalGroupId, isGuestMatch, guestDeckLabel } from './core.mjs?v=2.2';
-import { demoAdapter } from './demo-adapter.js?v=2.2';
-import { QUICK_MATCH_LIMIT_MS, quickClock, mmss } from './quick-core.mjs?v=2.2';
+import { demoAdapter } from './demo-adapter.js?v=2.2.1';
+import { QUICK_MATCH_LIMIT_MS, quickClock, mmss } from './quick-core.mjs?v=2.2.1';
 import { deserializeTournamentRounds, tournamentPodium, tournamentPlacement, tournamentMedals, publicTournamentSnapshot } from './tournament-core.mjs?v=2.1';
 
 const $=q=>document.querySelector(q);
@@ -944,13 +944,13 @@ async function init(){
   if(watchId){
     if(!/^[a-zA-Z0-9_-]{12,80}$/.test(watchId)){state.publicWatchError='觀賽連結格式不正確。';publicWatchPage();return;}
     try{
-      adapter=configured?(await import('./firebase-adapter.js?v=2.2')).firebaseAdapter:demoAdapter;
+      adapter=configured?(await import('./firebase-adapter.js?v=2.2.1')).firebaseAdapter:demoAdapter;
       adapter.subscribePublicTournament(watchId,t=>{state.publicTournament=t;state.publicWatchError=t?'':'找不到賽事或公開資料尚未建立。';publicWatchPage();},err=>{state.publicWatchError=readableError(err);publicWatchPage();});
       publicWatchPage();return;
     }catch(err){state.publicWatchError=readableError(err);publicWatchPage();return;}
   }
   if(!configured){adapter=demoAdapter;state.user=null;authPage();return}
-  try{const mod=await import('./firebase-adapter.js?v=2.2');adapter=mod.firebaseAdapter;adapter.onAuth(afterAuth);}
+  try{const mod=await import('./firebase-adapter.js?v=2.2.1');adapter=mod.firebaseAdapter;adapter.onAuth(afterAuth);}
   catch(error){console.error(error);app.innerHTML=`<div class="intro-box"><h2>Firebase 初始化失敗</h2><p>${e(readableError(error))}</p><p>請檢查 firebase-config.js 的專案設定，並確認已啟用 Authentication 與 Firestore。</p></div>`;}
 }
 init();

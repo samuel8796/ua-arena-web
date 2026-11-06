@@ -108,6 +108,14 @@ function matchesPage(){
    ? `<span><b>${stats.games}</b> 場</span><span><b>${stats.wins}</b> 勝</span><span><b>${stats.losses}</b> 敗</span><span><b>${stats.rate}%</b> 勝率</span>`
    : `<span><b>${stats.games}</b> 場有效</span><span><b>${stats.uniquePlayers}</b> 位玩家</span><span><b>${stats.voided}</b> 場已撤銷</span>`;
  const rateTags=!state.playerFilter?computeStats(state.players,state.decks,all).players.filter(p=>p.games>0).sort((a,b)=>b.games-a.games).slice(0,10).map(p=>`<span class="person-rate">${e(p.nickname)} <b>${p.rate}%</b> 勝率</span>`).join(''):'';
+ // Tournament outcomes remain separate from ordinary matches and deck win rates.
+ const start=state.matchFrom?new Date(state.matchFrom+'T00:00:00').getTime():-Infinity;
+ const end=state.matchTo?new Date(state.matchTo+'T23:59:59.999').getTime():Infinity;
+ const tournamentRows=state.tournaments.filter(t=>t.status==='completed'
+   && (!state.playerFilter||t.participants?.some(p=>p.uid===state.playerFilter))
+   && tournamentCompletedTime(t)>=start && tournamentCompletedTime(t)<=end)
+   .sort((a,b)=>tournamentCompletedTime(b)-tournamentCompletedTime(a))
+   .map(t=>tournamentResultCard(t,state.groupId)).join('');
  const rows=all.map(m=>`<article class="history-item ${m.status==='void'?'is-void':''}">
    <div class="history-main"><span class="history-date">${e(matchDateLabel(m))}</span><strong>${e(playerName(m.playerA))} <span class="muted">vs</span> ${e(playerName(m.playerB))}</strong><small>${m.status==='void'?'已撤銷':`🏆 ${e(playerName(m.winner))} 勝`}</small></div>
    <button class="btn btn-outline btn-sm" type="button" data-action="match-detail" data-id="${e(m.id)}">查看詳情</button></article>`).join('');
@@ -118,7 +126,12 @@ function matchesPage(){
    <label>結束日期<input type="date" id="match-to" value="${e(state.matchTo)}"></label>
    <button class="btn btn-ghost btn-sm" data-action="clear-match-filters">清除篩選</button>
  </div><div class="history-stats">${summary}${rateTags}</div></section>
- <section class="card history-results">${rows||'<div class="empty">此篩選條件沒有對戰紀錄。</div>'}</section>`;
+ <section class="card history-results">${rows||'<div class="empty">此篩選條件沒有一般對戰紀錄。</div>'}</section>
+ <section class="card tournament-history-results">
+  <div class="section-head"><h3>🏆 錦標賽結果</h3><span class="tag">已完成賽事</span></div>
+  <p class="muted sm">僅顯示符合日期及玩家條件的賽事結果，不另計入一般對戰的勝率。</p>
+  <div class="tournament-results-list">${tournamentRows||'<div class="empty">此篩選條件沒有已完成的錦標賽。</div>'}</div>
+ </section>`;
 }
 function matchDetailBody(){
  const m=state.matches.find(x=>x.id===state.draft.id);
@@ -502,6 +515,8 @@ async function handleAction(action,el){
     state.tab='matches';state.playerFilter=state.user.uid;render();
   });break;
   case 'more-menu':openModal('more');break;
+  case 'streak-guide':openModal('streak-guide');break;
+  case 'tournament-detail':openModal('tournament-detail',{id:el.dataset.id,groupId:el.dataset.group||state.groupId});break;
   case 'new-tournament':openModal('tournament-create');break;
   case 'select-tournament':{
     tournamentRequestUnsub();tournamentRequestUnsub=()=>{};

@@ -670,6 +670,16 @@ app.addEventListener('click',event=>{
 });
 app.addEventListener('change',async event=>{
   const target=event.target;
+  if(target.closest('[data-form="tournament-result"]')&&['deckA','deckB'].includes(target.name)){
+    const chosen=state.decks.find(d=>d.id===target.value);
+    const frame=target.closest('.tournament-deck-choice')?.querySelector('.deck-art-tournament');
+    if(frame){
+      const image=guardedImage(chosen?.imageData);
+      frame.innerHTML=image?`<img src="${image}" alt="${e(chosen.name)} 牌組封面" loading="lazy">`
+        :'<span class="deck-art-missing" aria-label="尚無牌組圖片">▧<small>尚無圖片</small></span>';
+    }
+    return;
+  }
   if(target.id==='deck-sort'){state.deckSort=target.value;render();return;}
   if(target.id==='match-filter'||target.id==='match-from'||target.id==='match-to'){
     if(target.id==='match-filter')state.playerFilter=target.value;

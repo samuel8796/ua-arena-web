@@ -1,6 +1,6 @@
 import { createQuickMatch, changeQuickMatch, quickMatchResult } from './quick-core.mjs';
 import { personalGroupId, personalGroupName, parsePlayedAt } from './core.mjs';
-import { addTournamentEntrant, removeTournamentEntrant, startTournament, recordTournamentWinner, publicTournamentSnapshot } from './tournament-core.mjs';
+import { addTournamentEntrant, removeTournamentEntrant, startTournament, recordTournamentWinner, publicTournamentSnapshot } from './tournament-core.mjs?v=2.0';
 const K='ua-arena-demo-v1-1';
 const SAMPLE_IMAGE='';
 function seed(){

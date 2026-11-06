@@ -331,3 +331,45 @@ test('v1.6 戰績詳情顯示雙方圖片；玩家名片包含最高五副與最
   assert.ok(css.includes("@media(max-width:380px)"));
   assert.ok(adapter.includes("onSnapshot(personalDeckCol(uid)"));
 });
+
+// v1.7 — shared avatars and mobile half-art cards
+test('v1.7 全站頭像同步使用僅本人可寫的帳號與團員文件',()=>{
+  const rules=readFileSync(new URL('./firestore.rules',import.meta.url),'utf8');
+  const adapter=readFileSync(new URL('./firebase-adapter.js',import.meta.url),'utf8');
+  const demo=readFileSync(new URL('./demo-adapter.js',import.meta.url),'utf8');
+  assert.ok(rules.includes('function validAvatar(data)'));
+  assert.ok(rules.includes("'avatarData'"));
+  assert.ok(rules.includes("uid == request.auth.uid"));
+  assert.ok(rules.includes("hasOnly(['nickname','avatarData'])"));
+  assert.ok(rules.includes("data.avatarData.size() <= 40000"));
+  assert.ok(adapter.includes('async saveAvatar(uid,avatarData,groupIds)'));
+  assert.ok(adapter.includes("updateDoc(memberRef(gid,uid),{avatarData})"));
+  assert.ok(demo.includes('async saveAvatar(uid,avatarData)'));
+  assert.ok(demo.includes('data.profile={...(data.profile||{}),nickname,bio}'));
+});
+test('v1.7 改換頭像具備裁切壓縮上傳與移除，並能在各玩家頁面顯示',()=>{
+  const app=readFileSync(new URL('./app.js',import.meta.url),'utf8');
+  assert.ok(app.includes('function playerAvatar(uid,extra='));
+  assert.ok(app.includes('imageToAvatarDataUrl(file)'));
+  assert.ok(app.includes('Math.min(bitmap.width,bitmap.height)'));
+  assert.ok(app.includes("canvas.toDataURL('image/jpeg',quality)"));
+  assert.ok(app.includes('if(data.length<=30000)return data'));
+  assert.ok(app.includes('case \'remove-avatar\''));
+  assert.ok(app.includes("target.name==='avatar'"));
+  assert.ok(app.includes("data-action=\"remove-avatar\""));
+  assert.ok(app.includes('playerAvatar(stats.id,'));
+  assert.ok(app.includes('playerAvatar(p.id)'));
+  assert.ok(app.includes('playerAvatar(state.user?.uid'));
+});
+test('v1.7 牌組圖片採上半圖下半文字，手機維持兩欄且不溢出',()=>{
+  const css=readFileSync(new URL('./styles.css',import.meta.url),'utf8');
+  const app=readFileSync(new URL('./app.js',import.meta.url),'utf8');
+  assert.ok(css.includes(".detail-participants .detail-side .deck-art-battle"));
+  assert.ok(css.includes(".detail-participants .detail-side .deck-art-battle img"));
+  assert.ok(css.includes('object-fit:cover'));
+  assert.ok(css.includes('.deck-top-five{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))'));
+  assert.ok(css.includes('@media(max-width:380px)'));
+  assert.ok(app.includes('class="detail-side-info"'));
+  assert.ok(app.includes('class="detail-side-user"'));
+  assert.ok(app.includes('deck-top-five-info'));
+});

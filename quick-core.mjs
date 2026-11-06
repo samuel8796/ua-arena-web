@@ -12,6 +12,7 @@ export function changeQuickMatch(s, action, {playerId='', now=Date.now(), uid=''
   if (!Number.isSafeInteger(now) || now < (s.createdAtMs||0)) throw new Error('裝置時間異常，請校正時鐘後重試。');
   if (!['ready','running'].includes(s.status)) throw new Error('這場對戰已結束，無法再修改計時。');
   if (now < (s.lastActionAtMs||0)) throw new Error('時間資料不一致，請同步最新對戰資訊後重試。');
+  if(action==='finish' && s.duelRolled===false&&!s.firstPlayer)throw new Error('請先完成決鬥抽選並決定先後攻。');
   const next={...s,turns:[...(s.turns||[])],lastActionAtMs:now,updatedBy:uid,revision:(s.revision||0)+1};
   if(action==='draw') {
     if(s.status!=='ready'||s.startedAtMs||s.duelRolled!==false)throw new Error('本場已抽選過決定先後攻的人。');

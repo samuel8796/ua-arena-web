@@ -637,7 +637,16 @@ function render(){if(!state.user){authPage();return}if(!state.groupId){setupPage
 function openModal(kind,draft={}){state.modal=kind;state.draft=draft;render()}
 function pickDeck(uid,selectedId=''){return resolvePlayerDeckSelection(uid,selectedId,state.decks)}
 function newMatch(){if(state.players.length<2){toast('請先加入群組或使用個人戰團的訪客模式。',true);return}const pa=state.players.find(p=>p.id===state.user.uid)?.id||state.players[0].id;const pb=isPersonal()?GUEST_PLAYER_ID:state.players.find(p=>p.id!==pa)?.id||'';openModal('match',{playerA:pa,playerB:pb,deckA:pickDeck(pa),deckB:pickDeck(pb),guestDeck:guestDefault(),winner:pa,note:'',playedAt:localDateTimeValue()});}
-function newDeck(d={}){if(d.ownerUid&&d.ownerUid!==state.user?.uid){toast('只能編輯自己的牌組。',true);return}openModal('deck',{id:d.id||'',ownerUid:state.user.uid,name:d.name||'',color:d.color||'PURPLE',imageData:d.imageData||''});}
+async function newDeck(d={}){
+  if(d.ownerUid&&d.ownerUid!==state.user?.uid){toast('只能編輯自己的牌組。',true);return;}
+  let source='';
+  if(d.id&&guardedImage(d.imageData)){
+    try{source=await adapter.getDeckSource(state.user.uid,d.id);}catch(error){console.warn('讀取牌組原始圖片失敗，改用現有顯示圖片',error);}
+    // Old decks had no full-frame source. Use their last saved crop instead.
+    if(!validCropSource(source))source=await prepareImageSource(d.imageData,145000);
+  }
+  openModal('deck',{id:d.id||'',ownerUid:state.user.uid,name:d.name||'',color:d.color||'PURPLE',imageData:d.imageData||'',imageSourceData:source});
+}
 async function loadGroup(gid){
   tournamentRequestUnsub();tournamentRequestUnsub=()=>{};unsub();unsub=()=>{};state.groupId='';state.group=await adapter.getGroup(gid);
   state.groupId=gid;state.tab='overview';state.quickDraft={};state.players=[];state.decks=[];state.matches=[];state.quickMatches=[];state.tournaments=[];state.tournamentRequests=[];state.myTournamentRequest=false;state.tournamentId='';state.quickSessionId='';state.quickCreate=true;state.quickResultOpen=false;state.quickPending=null;
@@ -683,22 +692,49 @@ async function afterAuth(user){
     if(selected)await loadGroup(selected);else render();
   }catch(error){console.error(error);toast(readableError(error),true);render();}
 }
-async function imageToCompressedDataUrl(file){
-  if(!file.type.startsWith('image/'))throw new Error('請選擇圖片檔案。');
-  if(file.size>12*1024*1024)throw new Error('圖片超過 12 MB，請先縮小後上傳。');
-  const bitmap=await createImageBitmap(file);
-  try{
-    let max=700;
-    for(let step=0;step<5;step++){
-      const ratio=Math.min(1,max/Math.max(bitmap.width,bitmap.height));
-      const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(bitmap.width*ratio));canvas.height=Math.max(1,Math.round(bitmap.height*ratio));
-      const ctx=canvas.getContext('2d');ctx.fillStyle='#121b2a';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);
-      const data=canvas.toDataURL('image/jpeg',Math.max(.48,.80-step*.08));
-      if(data.length<=155000)return data;
-      max=Math.round(max*.78);
-    }
-  }finally{bitmap.close?.();}
-  throw new Error('壓縮後圖片仍過大，請改用尺寸較小的圖片。');
+// A saved crop and its editable full-frame source are separate values.
+// Editing never opens the file picker or changes the saved source.
+async function applyAvatarCrop(source){
+  const data=await chooseAvatarCrop(source);
+  if(!data)return;
+  await runBusy(async()=>{
+    const result=await adapter.saveAvatar(state.user.uid,data,state.groupIds,source);
+    state.profile={...state.profile,avatarData:data,avatarSourceData:source};
+    state.players=state.players.map(p=>p.id===state.user.uid?{...p,avatarData:data}:p);
+    render();
+    toast(result.failures?.length?'頭像已更新，但部分戰團同步失敗。':'頭像裁切已更新。');
+  });
+}
+async function applyProfileCoverCrop(source){
+  const data=await chooseWideCrop(source,'profile');
+  if(!data)return;
+  await runBusy(async()=>{
+    await adapter.saveProfileCover(state.user.uid,data,source);
+    state.profile={...state.profile,profileCoverData:data,profileCoverSourceData:source};
+    render();toast('個人資料背景已更新。');
+  });
+}
+async function applyDeckCrop(source){
+  const data=await chooseWideCrop(source,'deck');
+  if(!data)return;
+  state.draft.imageData=data;
+  state.draft.imageSourceData=source;
+  render();toast('已更新裁切範圍，儲存牌組後生效。');
+}
+function syncCardCoverEditor(){
+  const has=!!guardedCover(state.draft.cardCoverData);
+  const preview=document.getElementById('card-cover-preview');
+  if(preview)preview.innerHTML=has?`<img src="${guardedCover(state.draft.cardCoverData)}" alt="名片背景預覽">`:'<span class="profile-cover-placeholder">尚未設定名片背景</span>';
+  const control=document.querySelector('[data-image-settings="card-cover"]');
+  if(control)control.outerHTML=imageSettings('card-cover',has,'cardCover','名片背景圖片');
+}
+async function applyCardCoverCrop(source){
+  const data=await chooseWideCrop(source,'card');
+  if(!data)return;
+  state.draft.cardCoverData=data;
+  state.draft.cardCoverSourceData=source;
+  syncCardCoverEditor();
+  toast('已更新名片背景裁切範圍，記得儲存公開名片。');
 }
 async function handleAction(action,el){
   switch(action){

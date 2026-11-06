@@ -1,9 +1,9 @@
 import { firebaseConfig, aiSettings } from './firebase-config.js';
 import {chooseAvatarCrop} from './avatar-crop-ui.mjs?v=1.8';
 import { COLORS, colorOf, safeText as e, shortId, formatDate, assertMatch, computeStats, aggregatePersonalStats, aggregateDeckWinRates, filterMatches, filteredMatchStats, matchTimeMs, matchDateValue, parsePlayedAt, topDecksByWinRate, playerWinStreak, streakTier, resolvePlayerDeckSelection, GUEST_PLAYER_ID, GUEST_DECK_ID, guestPlayer, personalGroupId, isGuestMatch, guestDeckLabel } from './core.mjs?v=1.9';
-import { demoAdapter } from './demo-adapter.js';
+import { demoAdapter } from './demo-adapter.js?v=2.0';
 import { QUICK_MATCH_LIMIT_MS, quickClock, mmss } from './quick-core.mjs';
-import { deserializeTournamentRounds, tournamentPodium, tournamentPlacement, tournamentMedals, publicTournamentSnapshot } from './tournament-core.mjs';
+import { deserializeTournamentRounds, tournamentPodium, tournamentPlacement, tournamentMedals, publicTournamentSnapshot } from './tournament-core.mjs?v=2.0';
 
 const $=q=>document.querySelector(q);
 const safeStoreGet=k=>{try{return localStorage.getItem(k)}catch{return null}};
@@ -36,7 +36,7 @@ function playerAvatar(uid,extra='',forcedTier=undefined) {
   const frame=['bronze','silver','gold','prismatic'].includes(tier)?tier:null;
   return `<span class="avatar-shell${extra?' '+extra:''}${frame?' is-framed':''}">
     <span class="avatar">${src?`<img src="${src}" alt="${e(label)} 的頭像" decoding="async" loading="lazy">`:e((label[0]||'?').toUpperCase())}</span>
-    ${frame?`<img class="avatar-frame-decoration" src="./assets/streak-${frame}.svg" alt="" aria-hidden="true" loading="lazy" decoding="async">`:''}
+    ${frame?`<img class="avatar-frame-decoration" src="./assets/streak-${frame}.svg?v=2.0" alt="" aria-hidden="true" loading="lazy" decoding="async">`:''}
   </span>`;
 }
 
@@ -737,13 +737,13 @@ async function init(){
   if(watchId){
     if(!/^[a-zA-Z0-9_-]{12,80}$/.test(watchId)){state.publicWatchError='觀賽連結格式不正確。';publicWatchPage();return;}
     try{
-      adapter=configured?(await import('./firebase-adapter.js')).firebaseAdapter:demoAdapter;
+      adapter=configured?(await import('./firebase-adapter.js?v=2.0')).firebaseAdapter:demoAdapter;
       adapter.subscribePublicTournament(watchId,t=>{state.publicTournament=t;state.publicWatchError=t?'':'找不到賽事或公開資料尚未建立。';publicWatchPage();},err=>{state.publicWatchError=readableError(err);publicWatchPage();});
       publicWatchPage();return;
     }catch(err){state.publicWatchError=readableError(err);publicWatchPage();return;}
   }
   if(!configured){adapter=demoAdapter;state.user=null;authPage();return}
-  try{const mod=await import('./firebase-adapter.js');adapter=mod.firebaseAdapter;adapter.onAuth(afterAuth);}
+  try{const mod=await import('./firebase-adapter.js?v=2.0');adapter=mod.firebaseAdapter;adapter.onAuth(afterAuth);}
   catch(error){console.error(error);app.innerHTML=`<div class="intro-box"><h2>Firebase 初始化失敗</h2><p>${e(readableError(error))}</p><p>請檢查 firebase-config.js 的專案設定，並確認已啟用 Authentication 與 Firestore。</p></div>`;}
 }
 init();

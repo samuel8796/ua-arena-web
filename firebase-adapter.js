@@ -239,7 +239,7 @@ export const firebaseAdapter = {
     const playedAt=m.playedAt?parsePlayedAt(m.playedAt):new Date();
     await addDoc(colRef(gid,'matches'),{playerA:m.playerA,deckA:m.deckA,playerB:m.playerB,deckB:m.deckB,winner:m.winner,
       ...(m.guestDeck?{guestDeck:{name:m.guestDeck.name.trim(),color:m.guestDeck.color}}:{}),
-      playedAt:Timestamp.fromDate(playedAt),
+      ...(m.firstPlayer?{firstPlayer:m.firstPlayer}:{}),playedAt:Timestamp.fromDate(playedAt),
       note:(m.note||'').trim(),recordedBy:uid,status:'active',createdAt:serverTimestamp()});
   },
   async voidMatch(gid,id){await updateDoc(doc(db,'groups',gid,'matches',id),{status:'void',cancelledAt:serverTimestamp()});},
@@ -280,7 +280,7 @@ export const firebaseAdapter = {
       const timing=quickMatchResult(next,next.finishedAtMs);
       tx.set(matchDoc,{playerA:before.playerA,deckA:before.deckA,playerB:before.playerB,deckB:before.deckB,
         ...(before.guestDeck?{guestDeck:before.guestDeck}:{}),
-        winner,note:note.trim().slice(0,200),recordedBy:uid,status:'active',createdAt:serverTimestamp(),
+        winner,...(before.firstPlayer?{firstPlayer:before.firstPlayer}:{}),note:note.trim().slice(0,200),recordedBy:uid,status:'active',createdAt:serverTimestamp(),
         quickMatchId:id,timing,playedAt:Timestamp.fromMillis(before.startedAtMs||before.createdAtMs)});
       tx.update(ref,{...next,updatedAt:serverTimestamp()});
     });
@@ -364,7 +364,7 @@ export const firebaseAdapter = {
       if(![side.a,side.b].includes(payload.winner))throw new Error('勝者必須是本場參賽玩家。');
       const next=recordTournamentWinner(current,round,index,payload.winner,matchRef.id);
       tx.set(matchRef,{playerA:side.a,playerB:side.b,deckA:payload.deckA,deckB:payload.deckB,
-        winner:payload.winner,note:String(payload.note||'').trim().slice(0,200),playedAt,recordedBy:uid,status:'active',
+        winner:payload.winner,...(payload.firstPlayer?{firstPlayer:payload.firstPlayer}:{}),note:String(payload.note||'').trim().slice(0,200),playedAt,recordedBy:uid,status:'active',
         tournamentId:id,tournamentRound:round,tournamentMatch:index,tournamentTitle:current.title,
         createdAt:serverTimestamp()});
       tx.update(tRef,{participants:next.participants,rounds:serializeTournamentRounds(next.rounds),

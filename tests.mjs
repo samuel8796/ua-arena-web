@@ -476,7 +476,9 @@ test('v1.9 四款透明連勝外框以獨立 SVG 呈現，圖例僅放在個人�
  assert.ok(app.includes("streakTier(playerWinStreak(uid,state.matches).current)"));
  assert.ok(app.includes("avatar-frame-decoration"));
  assert.ok(app.includes("function streakGuide()"));
- assert.ok(app.includes('streakGuide() + personalExtras()'));
+ assert.ok(app.includes('tournamentMedalPanel() + personalExtras()'));
+ assert.ok(app.includes('case \'streak-guide\''));
+ assert.ok(app.includes('case \'tournament-detail\''));
  assert.ok(!app.includes('玩家自訂名片'));
  assert.ok(app.includes("role")||app.includes("function playerAvatar"));
  assert.ok(css.includes('.avatar-shell>.avatar-frame-decoration'));
@@ -491,4 +493,76 @@ test('v1.9 四款透明連勝外框以獨立 SVG 呈現，圖例僅放在個人�
    assert.ok(frame.includes('<circle cx="100" cy="100"'));
    assert.ok(frame.includes('<defs>'));
  }
+});
+
+
+import {serializeTournamentRounds,deserializeTournamentRounds,tournamentPodium,tournamentPlacement,tournamentMedals} from './tournament-core.mjs';
+test('v2.0 賽程改為 Firestore 可寫入的陣列物件，杜絕巢狀陣列',()=>{
+ const start=startTournament(tourney(),()=>.999);
+ const encoded=serializeTournamentRounds(start.rounds);
+ assert.ok(encoded.length>0);
+ assert.ok(encoded.every(r=>!Array.isArray(r)&&Array.isArray(r.matches)));
+ assert.deepEqual(deserializeTournamentRounds(encoded),start.rounds);
+ const projected=publicTournamentSnapshot({...start,rounds:encoded});
+ assert.ok(projected.rounds.every(r=>!Array.isArray(r)&&Array.isArray(r.matches)));
+ assert.equal(projected.rounds[0].matches[0].a,entrants[0].nickname);
+ const auth=readFileSync(new URL('./firebase-adapter.js',import.meta.url),'utf8');
+ assert.ok(auth.includes('rounds:serializeTournamentRounds(next.rounds)'));
+});
+test('v2.0 從 Firestore 儲存後的賽程續記，產生冠軍、亞軍與並列季軍',()=>{
+ let t=startTournament(tourney(),()=>.999);
+ t={...t,rounds:serializeTournamentRounds(t.rounds)};
+ // Recorded round results persist as encoded maps between transactions.
+ for(let m=0;m<2;m++){
+   const match=deserializeTournamentRounds(t.rounds)[0][m];
+   t=recordTournamentWinner(t,0,m,match.a);
+   t={...t,rounds:serializeTournamentRounds(t.rounds)};
+ }
+ const f=deserializeTournamentRounds(t.rounds)[1][0];
+ t=recordTournamentWinner(t,1,0,f.a);
+ t={...t,rounds:serializeTournamentRounds(t.rounds)};
+ assert.equal(t.status,'completed');
+ const podium=tournamentPodium(t);
+ assert.equal(podium.champion,f.a);
+ assert.equal(podium.runnerUp,f.b);
+ assert.equal(podium.thirdPlace.length,2);
+ assert.ok(podium.thirdPlace.every(x=>![f.a,f.b].includes(x)));
+ assert.equal(tournamentPlacement(t,f.a),'champion');
+ assert.equal(tournamentPlacement(t,f.b),'runnerUp');
+ assert.equal(tournamentPlacement(t,podium.thirdPlace[0]),'thirdPlace');
+ assert.equal(tournamentPlacement(t,'unknown'),'');
+ assert.equal(tournamentMedals(f.a,[t]).champion,1);
+ assert.equal(tournamentMedals(f.b,[t]).runnerUp,1);
+ assert.equal(tournamentMedals(podium.thirdPlace[0],[t]).thirdPlace,1);
+});
+test('v2.0 2 人賽事無季軍；3 人賽事可判定季軍',()=>{
+ let two=startTournament(tourney(entrants.slice(0,2)),()=>.999);
+ two=recordTournamentWinner(two,0,0,two.rounds[0][0].a);
+ assert.equal(tournamentPodium(two).thirdPlace.length,0);
+ assert.ok(tournamentPodium(two).runnerUp);
+ let three=startTournament(tourney(entrants.slice(0,3)),()=>.999);
+ const idx=three.rounds[0].findIndex(m=>m.a&&m.b);
+ three=recordTournamentWinner(three,0,idx,three.rounds[0][idx].a);
+ three=recordTournamentWinner(three,1,0,three.rounds[1][0].a);
+ assert.equal(tournamentPodium(three).thirdPlace.length,1);
+});
+test('v2.0 個人跨戰團獎牌總數與賽事詳情、戰績中的賽事結果',()=>{
+ const app=readFileSync(new URL('./app.js',import.meta.url),'utf8');
+ const firebase=readFileSync(new URL('./firebase-adapter.js',import.meta.url),'utf8');
+ const demo=readFileSync(new URL('./demo-adapter.js',import.meta.url),'utf8');
+ assert.ok(firebase.includes('subscribePersonalTournaments(groupIds,uid,onChange,onError)'));
+ assert.ok(demo.includes('subscribePersonalTournaments(groupIds,uid,cb)'));
+ assert.ok(app.includes('function tournamentMedalPanel()'));
+ assert.ok(app.includes('function tournamentDetailBody()'));
+ assert.ok(app.includes('tournament-history-results'));
+ assert.ok(app.includes('tournamentResultCard(t,state.groupId)'));
+ assert.ok(app.includes('function restartPersonalTournaments()'));
+ assert.ok(app.includes('personalTournamentUnsub();personalTournamentUnsub=()=>{}'));
+ assert.ok(app.includes('deserializeTournamentRounds(rounds)'));
+ assert.ok(app.includes('data-action="streak-guide"'));
+ assert.ok(!app.includes('streakGuide() + personalExtras()'));
+ const css=readFileSync(new URL('./styles.css',import.meta.url),'utf8');
+ assert.ok(css.includes('.tournament-medal-stats'));
+ assert.ok(css.includes('.tournament-podium-list'));
+ assert.ok(css.includes('.modal .streak-guide'));
 });

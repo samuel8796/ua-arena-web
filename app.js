@@ -377,6 +377,17 @@ async function loadGroup(gid){
   unsub=adapter.subscribe(gid,snapshot=>{state.players=isPersonal()?[...snapshot.members.filter(p=>p.id!==GUEST_PLAYER_ID),guestPlayer()]:snapshot.members;state.decks=snapshot.decks;state.matches=snapshot.matches;state.quickMatches=snapshot.quickMatches||[];state.tournaments=snapshot.tournaments||[];render()},error=>toast(readableError(error),true));
   render();
 }
+function restartPersonalTournaments(){
+ personalTournamentUnsub();personalTournamentUnsub=()=>{};
+ state.personalTournaments={};state.tournamentHistoryReady=false;
+ if(!state.user)return;
+ if(!state.groupIds.length){state.tournamentHistoryReady=true;return;}
+ personalTournamentUnsub=adapter.subscribePersonalTournaments(state.groupIds,state.user.uid,records=>{
+   state.personalTournaments=records;
+   state.tournamentHistoryReady=state.groupIds.every(id=>Object.prototype.hasOwnProperty.call(records,id));
+   if(['profile','matches'].includes(state.tab)||state.modal==='tournament-detail')render();
+ },err=>{console.warn('錦標賽戰績同步失敗',err);toast(readableError(err),true)});
+}
 function restartPersonalHistory(){
   historyUnsub();historyUnsub=()=>{};
   state.personalHistory={};state.historyReady=false;
@@ -390,12 +401,12 @@ function restartPersonalHistory(){
 }
 async function afterAuth(user){
   state.user=user;state.groupId='';state.modal=null;
-  if(!user){unsub();historyUnsub();historyUnsub=()=>{};state.personalHistory={};state.historyReady=false;state.groupIds=[];state.myCard=null;render();return}
+  if(!user){unsub();historyUnsub();historyUnsub=()=>{};personalTournamentUnsub();personalTournamentUnsub=()=>{};state.personalHistory={};state.historyReady=false;state.personalTournaments={};state.tournamentHistoryReady=false;state.groupIds=[];state.myCard=null;render();return}
   try{
     state.groupIds=await adapter.getMyGroups(user.uid);
     state.profile=await adapter.getProfile(user.uid);
     try{state.myCard=await adapter.getPlayerCard(user.uid);}catch(err){console.warn('名片讀取尚未啟用',err);state.myCard=null;}
-    restartPersonalHistory();
+    restartPersonalHistory();restartPersonalTournaments();
     const groupInfo=await Promise.allSettled(state.groupIds.map(id=>adapter.getGroup(id)));
     state.groupDetails=Object.fromEntries(groupInfo.map((res,i)=>[state.groupIds[i],res.status==='fulfilled'?res.value.name:state.groupIds[i]]));
     if(state.inviteId){render();return}
@@ -594,8 +605,8 @@ app.addEventListener('submit',event=>{
       if(state.authMode==='register')await adapter.signUp(fields.email.trim(),fields.password,fields.nickname.trim());
       else await adapter.signIn(fields.email.trim(),fields.password);
       break;
-    case 'create-group':{const gid=await adapter.createGroup(state.user.uid,fields.nickname,fields.name);state.groupIds=[...new Set([...state.groupIds,gid])];state.inviteId='';restartPersonalHistory();await loadGroup(gid);toast('對戰團建立成功！');break;}
-    case 'join-group':{let gid=(fields.code||'').trim();if(gid.includes('://')){try{gid=new URL(gid).searchParams.get('join')||gid}catch{}}await adapter.joinGroup(state.user.uid,fields.nickname,gid);state.groupIds=[...new Set([...state.groupIds,gid])];state.inviteId='';restartPersonalHistory();history.replaceState({},'',location.pathname);await loadGroup(gid);toast('成功加入群組！');break;}
+    case 'create-group':{const gid=await adapter.createGroup(state.user.uid,fields.nickname,fields.name);state.groupIds=[...new Set([...state.groupIds,gid])];state.inviteId='';restartPersonalHistory();restartPersonalTournaments();await loadGroup(gid);toast('對戰團建立成功！');break;}
+    case 'join-group':{let gid=(fields.code||'').trim();if(gid.includes('://')){try{gid=new URL(gid).searchParams.get('join')||gid}catch{}}await adapter.joinGroup(state.user.uid,fields.nickname,gid);state.groupIds=[...new Set([...state.groupIds,gid])];state.inviteId='';restartPersonalHistory();restartPersonalTournaments();history.replaceState({},'',location.pathname);await loadGroup(gid);toast('成功加入群組！');break;}
     case 'quick-setup':{
       const d=state.quickDraft;
       const match={playerA:d.playerA,playerB:d.playerB,deckA:d.playerA===GUEST_PLAYER_ID?GUEST_DECK_ID:(fields.deckA||pickDeck(d.playerA,d.deckA)),deckB:d.playerB===GUEST_PLAYER_ID?GUEST_DECK_ID:(fields.deckB||pickDeck(d.playerB,d.deckB)),

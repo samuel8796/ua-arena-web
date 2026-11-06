@@ -483,3 +483,100 @@ input,select,textarea{max-width:100%;min-width:0}
   .avatar-crop-buttons{gap:6px}
   .avatar-crop-btn{font-size:11px}
 }
+
+/* v1.9 · Win-streak avatar frames. The transparent ornament is deliberately
+ * larger than the circular portrait so no badge or jewel covers the face. */
+.avatar-shell{
+  position:relative;
+  display:inline-grid;
+  place-items:center;
+  flex:0 0 auto;
+  vertical-align:middle;
+  width:39px;
+  height:39px;
+  margin:5px;
+  overflow:visible;
+  isolation:isolate;
+  font-size:14px;
+}
+.avatar-shell>.avatar{
+  width:100%;
+  height:100%;
+  min-width:0;
+  min-height:0;
+  font-size:inherit;
+  line-height:1;
+}
+.avatar-shell.is-framed>.avatar{border-color:transparent}
+.avatar-shell>.avatar-frame-decoration{
+  display:block;
+  position:absolute;
+  left:50%;
+  top:50%;
+  width:156%;
+  height:156%;
+  max-width:none;
+  max-height:none;
+  transform:translate(-50%,-50%);
+  pointer-events:none;
+  user-select:none;
+  z-index:2;
+  object-fit:contain;
+  overflow:visible;
+  filter:drop-shadow(0 0 3px rgba(155,216,210,.24));
+}
+.avatar-shell.avatar-small{width:31px;height:31px;font-size:12px;margin:5px 7px}
+.avatar-shell.avatar-large{width:60px;height:60px;font-size:24px;margin:10px 12px}
+.avatar-shell.avatar-player{width:52px;height:52px;font-size:22px;margin:11px 12px}
+.avatar-shell.avatar-match{width:29px;height:29px;font-size:12px;margin:3px 6px 3px 7px}
+.avatar-shell.avatar-tier-preview{width:65px;height:65px;font-size:24px;margin:14px auto 17px}
+.avatar-shell.avatar-player>.avatar,
+.avatar-shell.avatar-large>.avatar,
+.avatar-shell.avatar-small>.avatar,
+.avatar-shell.avatar-match>.avatar{font-size:inherit}
+.streak-guide{margin-top:20px;overflow:visible}
+.streak-guide .section-head{margin-bottom:14px}
+.streak-status{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  gap:10px;
+  padding:12px 14px;
+  margin-bottom:17px;
+  border:1px solid #335c51;
+  border-radius:12px;
+  background:#132d2b;
+}
+.streak-status strong{color:#9ff0ca;font-size:16px;font-variant-numeric:tabular-nums}
+.streak-status span{color:#adbdce;font-size:12px}
+.streak-tier-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.streak-tier-card{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  min-width:0;
+  padding:15px 7px 13px;
+  text-align:center;
+  border:1px solid #374558;
+  border-radius:13px;
+  background:linear-gradient(145deg,#1b293a,#131c2b);
+}
+.streak-tier-card.achieved{border-color:#83d6b8;background:linear-gradient(145deg,#213a3a,#151e30)}
+.streak-tier-card strong{font-size:12px;color:#edf1fa;white-space:nowrap}
+.streak-tier-card small{font-size:11px;color:#a8bad0;margin-top:4px}
+.streak-guide>.hint{margin-top:14px}
+@media(max-width:740px){
+  .avatar-shell.avatar-large{margin:10px 9px 10px 12px}
+  .avatar-shell.avatar-player{margin:10px 9px 10px 12px}
+  .avatar-shell.avatar-match{width:24px;height:24px;font-size:10px;margin:3px 6px}
+  .streak-tier-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .streak-tier-card{padding:13px 7px}
+  .streak-status{align-items:flex-start}
+}
+@media(max-width:380px){
+  .avatar-shell.avatar-match{width:22px;height:22px}
+  .avatar-shell.avatar-tier-preview{width:60px;height:60px}
+  .streak-tier-card strong{font-size:11px}
+}

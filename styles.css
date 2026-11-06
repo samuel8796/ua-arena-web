@@ -997,6 +997,7 @@ input,select,textarea{max-width:100%;min-width:0}
 /* The favorite illustration spans the available width instead of retaining
    the old 4:3 thumbnail window. */
 .deck-favorite-feature .deck-art-favorite{max-width:100%;}
+.deck-detail-top .deck-detail-cover{max-width:350px;}
 .deck-cover > img,
 .deck-art-frame > img,
 .deck-detail-cover > img,

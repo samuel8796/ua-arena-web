@@ -4,7 +4,7 @@ import { createQuickMatch, changeQuickMatch, quickMatchResult } from './quick-co
 import { addTournamentEntrant, removeTournamentEntrant, startTournament, recordTournamentWinner, publicTournamentSnapshot, serializeTournamentRounds, deserializeTournamentRounds } from './tournament-core.mjs?v=2.1';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js';
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signOut, updateProfile } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js';
-import { getFirestore, doc, collection, getDoc, getDocs, setDoc, updateDoc, addDoc, onSnapshot, serverTimestamp, arrayUnion, runTransaction, writeBatch, Timestamp, query, where } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js';
+import { getFirestore, doc, collection, getDoc, getDocs, setDoc, updateDoc, addDoc, onSnapshot, serverTimestamp, arrayUnion, runTransaction, writeBatch, Timestamp, query, where, deleteField } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js';
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-app-check.js';
 import { getAI, getGenerativeModel, GoogleAIBackend } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-ai.js';
 
@@ -123,6 +123,13 @@ export const firebaseAdapter = {
     }
     return {failures};
   },
+  async saveProfileCover(uid,profileCoverData){
+    if(auth.currentUser?.uid!==uid)throw new Error('只能修改自己的資料背景。');
+    if(typeof profileCoverData!=='string'||profileCoverData.length>90000||
+       (profileCoverData!==''&&!/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(profileCoverData)))
+      throw new Error('個人資料背景格式錯誤或圖片太大。');
+    await setDoc(userRef(uid),{profileCoverData,updatedAt:serverTimestamp()},{merge:true});
+  },
   async saveProfile(uid,nickname,bio,groupIds){
     const name=nickname.trim();if(name.length<2||name.length>24)throw new Error('暱稱請使用 2–24 字元。');
     if(bio.length>160)throw new Error('個人簡介不得超過 160 字。');
@@ -210,6 +217,7 @@ export const firebaseAdapter = {
     if(auth.currentUser?.uid!==uid)throw new Error('只能修改自己的公開名片。');
     await setDoc(playerCardRef(uid),{
       nickname:String(card.nickname||'玩家').trim().slice(0,24),
+      coverData:typeof card.coverData==='string'&&card.coverData.length<=90000&&(!card.coverData||/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(card.coverData))?card.coverData:'',
       bio:card.showBio?String(card.bio||'').trim().slice(0,160):'',
       showBio:!!card.showBio,showGroupStats:!!card.showGroupStats,
       showOverallStats:!!card.showOverallStats,showFavoriteDeck:!!card.showFavoriteDeck,
@@ -241,6 +249,21 @@ export const firebaseAdapter = {
       ...(m.guestDeck?{guestDeck:{name:m.guestDeck.name.trim(),color:m.guestDeck.color}}:{}),
       ...(m.firstPlayer?{firstPlayer:m.firstPlayer}:{}),playedAt:Timestamp.fromDate(playedAt),
       note:(m.note||'').trim(),recordedBy:uid,status:'active',createdAt:serverTimestamp()});
+  },
+  async updateMatch(gid,id,m){
+    const ref=doc(db,'groups',gid,'matches',id);
+    const snap=await getDoc(ref);
+    if(!snap.exists())throw new Error('找不到這場對戰。');
+    const before=snap.data();
+    if(before.status!=='active'||before.tournamentId||before.quickMatchId)
+      throw new Error('只有一般對戰可從戰績詳情編輯，計時與錦標賽紀錄不可直接修改。');
+    await updateDoc(ref,{
+      playerA:m.playerA,playerB:m.playerB,deckA:m.deckA,deckB:m.deckB,
+      winner:m.winner,note:(m.note||'').trim().slice(0,200),
+      firstPlayer:m.firstPlayer||deleteField(),
+      playedAt:Timestamp.fromDate(parsePlayedAt(m.playedAt)),
+      guestDeck:m.guestDeck?{name:m.guestDeck.name.trim(),color:m.guestDeck.color}:deleteField()
+    });
   },
   async voidMatch(gid,id){await updateDoc(doc(db,'groups',gid,'matches',id),{status:'void',cancelledAt:serverTimestamp()});},
   async createQuickMatch(gid,uid,payload){

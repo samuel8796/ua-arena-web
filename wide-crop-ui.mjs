@@ -12,9 +12,11 @@ const clamp=(value,low,high)=>Math.min(high,Math.max(low,value));
 export async function chooseWideCrop(file,kind='deck'){
   const preset=PRESETS[kind];
   if(!preset)throw new Error('未知的圖片類型。');
-  if(!file||!file.type.startsWith('image/'))throw new Error('請選擇圖片檔案。');
-  if(file.size>12*1024*1024)throw new Error('圖片超過 12 MB，請先縮小後上傳。');
-  const url=URL.createObjectURL(file),source=new Image();
+  const stored=typeof file==='string';
+  if(stored && !/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(file))throw new Error('已儲存的圖片格式無效。');
+  if(!stored && (!file||!file.type.startsWith('image/')))throw new Error('請選擇圖片檔案。');
+  if(!stored && file.size>12*1024*1024)throw new Error('圖片超過 12 MB，請先縮小後上傳。');
+  const url=stored?file:URL.createObjectURL(file),source=new Image();
   try{
     await new Promise((ok,fail)=>{
       source.onload=ok;
@@ -22,7 +24,7 @@ export async function chooseWideCrop(file,kind='deck'){
       source.src=url;
     });
     if(!source.naturalWidth||!source.naturalHeight)throw new Error('圖片尺寸無效。');
-  }catch(error){URL.revokeObjectURL(url);throw error;}
+  }catch(error){if(!stored)URL.revokeObjectURL(url);throw error;}
   return new Promise(resolve=>{
     let zoom=1,offsetX=0,offsetY=0,geometry=null,done=false,pinch=null;
     const pointers=new Map(),priorOverflow=document.body.style.overflow;
@@ -85,7 +87,7 @@ export async function chooseWideCrop(file,kind='deck'){
       window.removeEventListener('keydown',onKey);
       document.body.style.overflow=priorOverflow;
       overlay.remove();
-      URL.revokeObjectURL(url);
+      if(!stored)URL.revokeObjectURL(url);
       resolve(result);
     }
     function onKey(event){

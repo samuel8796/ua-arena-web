@@ -1,5 +1,5 @@
 import { firebaseConfig, aiSettings } from './firebase-config.js';
-import { COLORS, colorOf, safeText as e, shortId, formatDate, assertMatch, computeStats, aggregatePersonalStats, aggregateDeckWinRates, filterMatches, filteredMatchStats, matchTimeMs, matchDateValue, parsePlayedAt, topDecksByWinRate, resolvePlayerDeckSelection, GUEST_PLAYER_ID, GUEST_DECK_ID, guestPlayer, personalGroupId, isGuestMatch, guestDeckLabel } from './core.mjs';
+import { COLORS, colorOf, safeText as e, shortId, formatDate, assertMatch, computeStats, aggregatePersonalStats, aggregateDeckWinRates, filterMatches, filteredMatchStats, matchTimeMs, matchDateValue, parsePlayedAt, topDecksByWinRate, resolvePlayerDeckSelection, GUEST_PLAYER_ID, GUEST_DECK_ID, guestPlayer, personalGroupId, isGuestMatch, guestDeckLabel } from './core.mjs?v=1.6';
 import { demoAdapter } from './demo-adapter.js';
 import { QUICK_MATCH_LIMIT_MS, quickClock, mmss } from './quick-core.mjs';
 
@@ -159,12 +159,12 @@ function playerModalBody(){
     <div><h2>${e(stats.nickname)}</h2><p class="muted sm">${self?'你自己的玩家名片':'其他玩家的名片'} · ${e(state.group?.name||'')}</p></div></div>
     ${cardIntro}
     ${card?.showBio&&card.bio?`<section class="card" style="margin-top:14px"><h3>關於我</h3><p class="muted">${e(card.bio)}</p></section>`:''}
-    ${card?.showFavoriteDeck&&card.favoriteDeck?.name?`<section class="card" style="margin-top:14px"><h3>♡ 最愛牌組</h3><div class="deck-favorite-feature">${deckArtwork(stats.id,favoriteId,card.favoriteDeck.name,'deck-art-favorite')}<div class="deck-favorite-info"><strong>${e(card.favoriteDeck.name)}</strong><span>${e(colorOf(card.favoriteDeck.color).name)}</span><small>使用此牌組：${Number(card.favoriteDeckStats?.games||0)} 場 · ${Number(card.favoriteDeckStats?.wins||0)} 勝 · ${Number(card.favoriteDeckStats?.rate||0)}% 勝率（公開快照）</small></div></div></section>`:''}
+    ${card?.showFavoriteDeck&&card.favoriteDeck?.name&&!topDecks.length?`<section class="card" style="margin-top:14px"><h3>♡ 最愛牌組</h3><div class="deck-favorite-feature">${deckArtwork(stats.id,favoriteId,card.favoriteDeck.name,'deck-art-favorite')}<div class="deck-favorite-info"><strong>${e(card.favoriteDeck.name)}</strong><span>${e(colorOf(card.favoriteDeck.color).name)}</span><small>使用此牌組：${Number(card.favoriteDeckStats?.games||0)} 場 · ${Number(card.favoriteDeckStats?.wins||0)} 勝 · ${Number(card.favoriteDeckStats?.rate||0)}% 勝率（公開快照）</small></div></div></section>`:''}
     ${groupVisible?`<h3 style="margin-top:18px">目前戰團戰績</h3><div class="stats-detail">
       <div class="stats-cell"><b>${stats.games}</b><span>場次</span></div>
       <div class="stats-cell"><b>${stats.wins}</b><span>勝場</span></div>
       <div class="stats-cell"><b>${stats.rate}%</b><span>勝率</span></div></div>`:''}
-    ${topDecks.length?`<section class="card" style="margin-top:14px"><div class="section-head"><h3>牌組勝率 TOP 5</h3><span class="tag">此戰團 · 最多五副</span></div><div class="deck-top-five">${topDecks.map((d,i)=>`<div class="deck-top-five-item"><span class="deck-top-five-rank">${i+1}</span>${deckArtwork(stats.id,d.id,d.name,'deck-art-top-five')}<div class="deck-top-five-info"><strong>${e(d.name)}</strong><span>${e(colorOf(d.color).name)} · ${d.games} 場 / ${d.wins} 勝 / ${d.losses} 敗</span></div><b class="deck-top-five-rate">${d.rate}%</b></div>`).join('')}</div><p class="hint">依勝率排序；相同勝率優先顯示場次較多的牌組。</p></section>`:''}
+    ${topDecks.length?`<section class="card" style="margin-top:14px"><div class="section-head"><h3>牌組勝率 TOP 5</h3><span class="tag">此戰團 · 最多五副</span></div><div class="deck-top-five">${topDecks.map((d,i)=>`<div class="deck-top-five-item"><span class="deck-top-five-rank">${i+1}</span>${deckArtwork(stats.id,d.id,d.name,'deck-art-top-five')}<div class="deck-top-five-info"><strong>${e(d.name)}${card?.showFavoriteDeck&&favoriteId===d.id?' <span class="deck-fav-tag">♡ 最愛</span>':''}</strong><span>${e(colorOf(d.color).name)} · ${d.games} 場 / ${d.wins} 勝 / ${d.losses} 敗</span></div><b class="deck-top-five-rate">${d.rate}%</b></div>`).join('')}</div><p class="hint">依勝率排序；相同勝率優先顯示場次較多的牌組。</p></section>`:''}
     ${total?`<h3 style="margin-top:18px">個人公開總戰績</h3><div class="stats-detail">
       <div class="stats-cell"><b>${Number(total.games)||0}</b><span>總場次</span></div>
       <div class="stats-cell"><b>${Number(total.wins)||0}</b><span>勝場</span></div>

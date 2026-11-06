@@ -386,7 +386,7 @@ test('v1.7.1 手機牌組圖片完整填滿容器、不留上下黑邊',()=>{
  assert.ok(css.includes('min-height:100%;'));
  assert.ok(css.includes('object-fit:cover;'));
  assert.ok(css.includes('height:clamp(132px,38vw,170px);'));
- assert.ok(html.includes('href="./styles.css?v=1.7.1"'));
+ assert.ok(html.includes('href="./styles.css?v=1.8"'));
 });
 
 import {avatarCropGeometry,avatarSourceCrop} from './avatar-crop-core.mjs';

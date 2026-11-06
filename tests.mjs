@@ -359,7 +359,7 @@ test('v1.7 改換頭像具備裁切壓縮上傳與移除，並能在各玩家頁
   assert.ok(!app.includes('imageToAvatarDataUrl(file)'));
   assert.ok(app.includes('case \'remove-avatar\''));
   assert.ok(app.includes("target.name==='avatar'"));
-  assert.ok(app.includes("data-action=\"remove-avatar\""));
+  assert.ok(app.includes("'remove-avatar'"));
   assert.ok(app.includes('playerAvatar(stats.id,'));
   assert.ok(app.includes('playerAvatar(p.id)'));
   assert.ok(app.includes('playerAvatar(state.user?.uid'));

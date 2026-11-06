@@ -1,3 +1,25 @@
+# UA Arena v2.1 — 個人資料彈窗、計時牌組圖片、錦標賽正式戰績
+
+- **個人資料**：玩家名片設定及帳號資訊從主頁移到「個人簡介」下方兩個獨立彈窗；Email 僅放在帳號資訊彈窗。
+- **Quick Match**：計時對戰的兩位玩家皆顯示牌組封面及牌組名稱（保持手機雙欄）；勝率不顯示在計時卡片。
+- **個人牌組**：新增勝率（高至低）、出場次數（多至少）、名稱排序；零場次牌組不排在實際出賽的牌組前。
+- **錦標賽**：建立時記錄舉辦日期／時間。抽籤後，房主點選每場「詳細設定」，固定兩位參賽玩家，選擇各自啟用的牌組、勝者、實際對戰時間與備註。
+- **正式戰績**：每場錦標賽結果會以原本的 `groups/{gid}/matches` 資料結構保存，並帶有 `tournamentId`、`tournamentRound`、`tournamentMatch`、`tournamentTitle`。與晉級狀態同一個 Firestore transaction 提交，避免重複記錄。計入總覽、玩家勝率、牌組勝率及連勝；戰績頁分為一般對戰與錦標賽兩段顯示。
+- **房主刪除**：刪除賽事時，對應的正式戰績、報名申請、私人賽事與公開觀賽投影、公開投影 owner metadata 會一起在 transaction 中刪除。只有錦標賽的 `createdBy` 可執行。為避免資料遺漏，若結果數量或賽程版本不一致，刪除會拒絕並顯示錯誤。
+- **舊賽事**：原本只標記晉級結果、沒有選牌的舊對戰不會被自動變成正式牌組戰績；原本的賽事排名與獎牌仍可正常查看。
+
+## 必要：手動發布新的 Firestore Rules
+
+**GitHub Pages 部署僅更新前端，不會發布規則至 Firebase。** v2.1 新增正式錦標賽對戰欄位、賽事時間和房主刪除權限。更新前，Firebase 可能回報 `Missing or insufficient permissions`。
+
+1. 取得本 repo 的完整 [firestore.rules](https://github.com/samuel8796/ua-arena-web/blob/main/firestore.rules)。
+2. 開啟 [Firebase Console → Cloud Firestore → Rules](https://console.firebase.google.com/project/ua-arena-web/firestore/rules)。
+3. 貼上並按 **Publish**，再以房主帳號測試建立賽事、記錄一場選牌戰績與刪除測試賽事。
+
+*所有刪除均為永久刪除，請先使用測試賽事驗證。*
+
+---
+
 # UA Arena v1.7 — 放大牌組圖片與自訂玩家頭像
 
 - **戰績詳情**：兩位玩家的牌組改成上半部大幅封面圖、下半部玩家暱稱、牌組名稱、勝負狀態，手機維持雙欄且避免圖片拉伸造成跑版。

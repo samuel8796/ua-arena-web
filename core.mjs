@@ -151,6 +151,43 @@ export function sortDeckLibrary(decks=[],stats=[],sort='rate'){
  });
 }
 
+/** Known first/second turn results. Historical battles without this field
+ * remain in all-time win rate but are not included in role-specific rates. */
+export function sideRecordStats(uid,matches=[]) {
+ const known={first:{games:0,wins:0,losses:0,rate:0},second:{games:0,wins:0,losses:0,rate:0}};
+ let unknown=0;
+ for(const m of matches){
+  if(m.status!=='active'||![m.playerA,m.playerB].includes(uid))continue;
+  if(![m.playerA,m.playerB].includes(m.firstPlayer)){unknown++;continue;}
+  const position=m.firstPlayer===uid?'first':'second',t=known[position];
+  t.games++;if(m.winner===uid)t.wins++;else t.losses++;
+ }
+ for(const t of [known.first,known.second])t.rate=t.games?Math.round(100*t.wins/t.games):0;
+ return {...known,unknown,known:known.first.games+known.second.games};
+}
+/** Deck statistics across any provided group histories, including win rates
+ * by play order and the most frequently defeated/defeating opponent deck. */
+export function deckDetailStats(uid,deckId,matches=[],players=[],decks=[]) {
+ const games=matches.filter(m=>m.status==='active'&&(
+   (m.playerA===uid&&m.deckA===deckId)||(m.playerB===uid&&m.deckB===deckId)));
+ const wins=games.filter(m=>m.winner===uid).length;
+ const opponents=new Map();
+ for(const m of games){
+  const oppId=m.playerA===uid?m.playerB:m.playerA;
+  const oppDeck=m.playerA===uid?m.deckB:m.deckA;
+  const key=oppId+'|'+oppDeck;
+  if(!opponents.has(key))opponents.set(key,{playerId:oppId,deckId:oppDeck,games:0,wins:0,losses:0});
+  const item=opponents.get(key);item.games++;
+  if(m.winner===uid)item.wins++;else item.losses++;
+ }
+ const combos=[...opponents.values()];
+ const best=(key)=>combos.filter(x=>x[key]>0).sort((a,b)=>b[key]-a[key]||b.games-a.games||a.playerId.localeCompare(b.playerId))[0]||null;
+ const label=item=>item?{...item,playerName:players.find(p=>p.id===item.playerId)?.nickname||item.playerId,
+   deckName:decks.find(d=>d.id===item.deckId)?.name||
+     (item.deckId==='__ua_guest_deck__'?'訪客牌組':'已封存牌組')}:null;
+ return {games:games.length,wins,losses:games.length-wins,rate:games.length?Math.round(wins*100/games.length):0,
+   sides:sideRecordStats(uid,games),mostDefeated:label(best('wins')),mostLostTo:label(best('losses'))};
+}
 export function computeStats(players=[],decks=[],matches=[]) {
   const active=matches.filter(m=>m.status==='active');
   const decksById=Object.fromEntries(decks.map(d=>[d.id,d]));

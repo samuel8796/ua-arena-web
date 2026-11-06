@@ -152,7 +152,7 @@ function matchDetailBody(){
   ${allowed?`<div class="match-detail-settings">
     <button type="button" class="btn btn-ghost btn-sm" data-action="match-settings" aria-expanded="${!!state.draft.settingsOpen}">⚙ 設定</button>
     ${state.draft.settingsOpen?`<div class="match-setting-menu">
-       <button type="button" class="btn btn-outline btn-sm" data-action="match-edit" data-id="${e(m.id)}">✎ 編輯戰績</button>
+       ${(!!m.quickMatchId||m.recordedBy===state.user?.uid||isOwner())?`<button type="button" class="btn btn-outline btn-sm" data-action="match-edit" data-id="${e(m.id)}">✎ 編輯戰績</button>`:''}
        <button type="button" class="btn btn-danger btn-sm" data-action="void-match" data-id="${e(m.id)}">移除戰績（撤銷）</button>
      </div>`:''}
    </div>`:''}</div>
@@ -744,6 +744,7 @@ async function handleAction(action,el){
    case 'match-edit':{
      const m=state.matches.find(x=>x.id===el.dataset.id);
      if(!m||m.status!=='active'||m.tournamentId)throw new Error('此戰績無法直接編輯。');
+     if(!m.quickMatchId&&m.recordedBy!==state.user?.uid&&!isOwner())throw new Error('只有登錄者或對戰團房主可編輯一般戰績。');
      if(m.quickMatchId){openModal('match-edit-timed',{id:m.id,playerA:m.playerA,playerB:m.playerB,winner:m.winner,note:m.note||''});break;}
      openModal('match-edit',{id:m.id,isEdit:true,playerA:m.playerA,playerB:m.playerB,
        deckA:m.deckA,deckB:m.deckB,guestDeck:m.guestDeck||guestDefault(),

@@ -116,7 +116,12 @@ function matchesPage(){
    && tournamentCompletedTime(t)>=start && tournamentCompletedTime(t)<=end)
    .sort((a,b)=>tournamentCompletedTime(b)-tournamentCompletedTime(a))
    .map(t=>tournamentResultCard(t,state.groupId)).join('');
- const rows=all.map(m=>`<article class="history-item ${m.status==='void'?'is-void':''}">
+ const tournamentMatchRows=all.filter(m=>!!m.tournamentId).map(m=>`<article class="history-item tournament-battle-item">
+   <div class="history-main"><span class="history-date">🏆 ${e(m.tournamentTitle||'錦標賽')} · 第 ${(m.tournamentRound||0)+1} 輪第 ${(m.tournamentMatch||0)+1} 場 · ${e(matchDateLabel(m))}</span>
+   <strong>${e(playerName(m.playerA))} <span class="muted">vs</span> ${e(playerName(m.playerB))}</strong>
+   <small>🏆 ${e(playerName(m.winner))} 勝</small></div>
+   <button class="btn btn-outline btn-sm" data-action="match-detail" data-id="${e(m.id)}">對戰詳情</button></article>`).join('');
+ const rows=all.filter(m=>!m.tournamentId).map(m=>`<article class="history-item ${m.status==='void'?'is-void':''}">
    <div class="history-main"><span class="history-date">${e(matchDateLabel(m))}</span><strong>${e(playerName(m.playerA))} <span class="muted">vs</span> ${e(playerName(m.playerB))}</strong><small>${m.status==='void'?'已撤銷':`🏆 ${e(playerName(m.winner))} 勝`}</small></div>
    <button class="btn btn-outline btn-sm" type="button" data-action="match-detail" data-id="${e(m.id)}">查看詳情</button></article>`).join('');
  return `<div class="page-head"><div><div class="label-up">MATCH HISTORY / BATTLE LOG</div><h1>對戰紀錄</h1><p>按玩家及對戰日期篩選；詳細牌組、計時與備註集中在單場詳情。</p></div><button class="btn btn-primary" data-action="new-match">＋ 新增戰績</button></div>
@@ -129,19 +134,21 @@ function matchesPage(){
  <section class="card history-results">${rows||'<div class="empty">此篩選條件沒有一般對戰紀錄。</div>'}</section>
  <section class="card tournament-history-results">
   <div class="section-head"><h3>🏆 錦標賽結果</h3><span class="tag">已完成賽事</span></div>
-  <p class="muted sm">僅顯示符合日期及玩家條件的賽事結果，不另計入一般對戰的勝率。</p>
-  <div class="tournament-results-list">${tournamentRows||'<div class="empty">此篩選條件沒有已完成的錦標賽。</div>'}</div>
+  <p class="muted sm">錦標賽的正式對戰會計入總覽與牌組勝率，這裡只是將錦標賽紀錄分開顯示。</p>
+  <div class="tournament-results-list">${tournamentMatchRows||'<div class="empty">此篩選條件沒有錦標賽對戰紀錄。</div>'}</div>
+  ${tournamentRows?`<div class="divider"></div><h3>已完賽排名</h3><div class="tournament-results-list">${tournamentRows}</div>`:''}
  </section>`;
 }
 function matchDetailBody(){
  const m=state.matches.find(x=>x.id===state.draft.id);
  if(!m)return '<div class="empty">找不到這場紀錄。</div>';
  const q=m.quickMatchId?state.quickMatches.find(x=>x.id===m.quickMatchId):null;
- const allowed=m.status==='active'&&(m.recordedBy===state.user?.uid||m.playerA===state.user?.uid||m.playerB===state.user?.uid||isOwner());
+ const allowed=!m.tournamentId&&m.status==='active'&&(m.recordedBy===state.user?.uid||m.playerA===state.user?.uid||m.playerB===state.user?.uid||isOwner());
  const turns=q?.turns||[];
- return `<div class="match-detail-header"><span class="tag">${m.status==='void'?'已撤銷':'有效對戰'}</span><strong>🏆 ${e(playerName(m.winner))} 勝</strong></div>
+ return `<div class="match-detail-header"><span class="tag">${m.status==='void'?'已撤銷':m.tournamentId?'🏆 錦標賽對戰':'有效對戰'}</span><strong>🏆 ${e(playerName(m.winner))} 勝</strong></div>
  <div class="detail-participants"><div class="detail-side">${battleDeckArtwork(m,'A')}<div class="detail-side-info"><div class="detail-side-user">${playerAvatar(m.playerA,'avatar-match')}<strong>${e(playerName(m.playerA))}</strong></div><span class="detail-side-deck">${e(battleDeckName(m,'A'))}</span><span class="detail-side-result">${m.winner===m.playerA?'🏆 本場勝利':'本場敗北'}</span></div></div><b>VS</b><div class="detail-side">${battleDeckArtwork(m,'B')}<div class="detail-side-info"><div class="detail-side-user">${playerAvatar(m.playerB,'avatar-match')}<strong>${e(playerName(m.playerB))}</strong></div><span class="detail-side-deck">${e(battleDeckName(m,'B'))}</span><span class="detail-side-result">${m.winner===m.playerB?'🏆 本場勝利':'本場敗北'}</span></div></div></div>
- <div class="detail-facts"><div><span>實際對戰時間</span><b>${e(matchDateLabel(m))}</b></div><div><span>登錄時間</span><b>${e(formatDate(m.createdAt))}</b></div><div><span>登錄人</span><b>${e(playerName(m.recordedBy))}</b></div><div><span>備註</span><b>${e(m.note||'無')}</b></div></div>
+ ${m.tournamentId?`<button type="button" class="btn btn-outline btn-full" data-action="tournament-detail" data-group="${e(state.groupId)}" data-id="${e(m.tournamentId)}" style="margin-top:15px">🏆 ${e(m.tournamentTitle||'錦標賽')} · 查看賽事詳情</button>`:''}
+  <div class="detail-facts"><div><span>實際對戰時間</span><b>${e(matchDateLabel(m))}</b></div><div><span>登錄時間</span><b>${e(formatDate(m.createdAt))}</b></div><div><span>登錄人</span><b>${e(playerName(m.recordedBy))}</b></div><div><span>備註</span><b>${e(m.note||'無')}</b></div></div>
  ${m.timing?.enabled?`<div class="detail-timing"><h3>⏱ 30 分鐘計時紀錄</h3><div class="history-stats"><span><b>${mmss(m.timing.playerAMs)}</b> ${e(playerName(m.playerA))}</span><span><b>${mmss(m.timing.playerBMs)}</b> ${e(playerName(m.playerB))}</span><span><b>${mmss(m.timing.unattributedMs)}</b> 間隔</span></div>
  ${turns.length?`<div class="table-wrap"><table class="table"><thead><tr><th>回合</th><th>玩家</th><th>時間</th></tr></thead><tbody>${turns.map((t,i)=>`<tr><td>${i+1}</td><td>${e(playerName(t.playerId))}</td><td>${mmss(t.durationMs)}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted sm">沒有保存逐回合明細。</p>'}</div>`:''}
  ${allowed?`<button type="button" class="btn btn-danger btn-full" data-action="void-match" data-id="${e(m.id)}" style="margin-top:20px">撤銷這場戰績（雙方皆可）</button>`:''}`;
@@ -314,12 +321,12 @@ function personalTournamentEntries(){
  return Object.entries(state.personalTournaments||{}).flatMap(([groupId,ts])=>(ts||[]).map(t=>({...t,groupId})));
 }
 function tournamentNickname(t,uid){return t.participants?.find(p=>p.uid===uid)?.nickname||'未知玩家'}
-function tournamentCompletedTime(t){return dateNum(t.updatedAt)||dateNum(t.createdAt)}
+function tournamentCompletedTime(t){return dateNum(t.eventAt)||dateNum(t.createdAt)||dateNum(t.updatedAt)}
 function tournamentResultCard(t,groupId){
  const podium=tournamentPodium(t);
  const third=podium.thirdPlace.map(id=>tournamentNickname(t,id)).join('、')||'未產生';
  return `<article class="tournament-result-item">
-  <div class="tournament-result-main"><small>${e(formatDate(t.updatedAt||t.createdAt))} · ${t.participants?.length||0} 人參賽</small>
+  <div class="tournament-result-main"><small>${e(formatDate(t.eventAt||t.createdAt))} · ${t.participants?.length||0} 人參賽</small>
    <strong>🏆 ${e(t.title)}</strong>
    <span>🥇 ${e(tournamentNickname(t,podium.champion))}　🥈 ${e(tournamentNickname(t,podium.runnerUp))}　🥉 ${e(third)}</span></div>
   <button class="btn btn-outline btn-sm" type="button" data-action="tournament-detail" data-id="${e(t.id)}" data-group="${e(groupId)}">賽事詳情</button>
@@ -352,7 +359,7 @@ function tournamentDetailBody(){
  return `<div class="tournament-detail">
   <div class="label-up">TOURNAMENT RESULTS</div>
   <h3>${e(t.title)}</h3>
-  <p class="muted sm">${e(state.groupDetails[gid]||gid)} · ${e(formatDate(t.updatedAt||t.createdAt))} · ${t.participants?.length||0} 人參加 · ${e(tournamentStatus(t.status))}</p>
+  <p class="muted sm">${e(state.groupDetails[gid]||gid)} · ${e(formatDate(t.eventAt||t.createdAt))} · ${t.participants?.length||0} 人參加 · ${e(tournamentStatus(t.status))}</p>
   <p class="muted sm">${e(t.description||'單敗淘汰賽')}</p>
   <div class="tournament-podium-list">
     <div><b>🥇 冠軍</b><span>${podium.champion?e(tournamentNickname(t,podium.champion)):'尚未產生'}</span></div>

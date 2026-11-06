@@ -50,6 +50,10 @@ export const demoAdapter={
   async savePlayerCard(uid,card){data.playerCards||={};data.playerCards[uid]={...card,updatedAt:Date.now()};save();},
 
   async saveAvatar(uid,avatarData){if(uid!==demoUser.uid)throw new Error('只能修改自己的頭像。');data.profile||={};data.profile.avatarData=avatarData;data.members.filter(m=>m.uid===uid).forEach(m=>m.avatarData=avatarData);save();return {failures:[]};},
+  async saveProfileCover(uid,profileCoverData){
+    if(uid!==demoUser.uid)throw new Error('只能修改自己的資料背景。');
+    data.profile||={};data.profile.profileCoverData=profileCoverData;save();
+  },
   async saveProfile(uid,nickname,bio){data.profile={...(data.profile||{}),nickname,bio};demoUser.displayName=nickname;data.members.filter(m=>m.uid===uid).forEach(m=>m.nickname=nickname);save();return {failures:[]};},
   subscribePublicTournament(id,cb){const publish=()=>cb(data.tournaments.find(t=>t.publicId===id)?{...publicTournamentSnapshot(data.tournaments.find(t=>t.publicId===id)),id}:null);publish();const fn=()=>publish();listeners.add(fn);return ()=>listeners.delete(fn);},
   async getGroup(gid){return data.groups[gid]||data.groups.demo},
@@ -67,6 +71,21 @@ export const demoAdapter={
   async updateDeck(gid,id,d){Object.assign(data.decks.find(x=>x.id===id),d);save();},
   async archiveDeck(gid,id){data.decks.find(x=>x.id===id).active=false;save();},
   async addMatch(gid,uid,m){data.matches.unshift({...m,groupId:gid,id:`m-${Date.now().toString(36)}`,recordedBy:uid,status:'active',createdAt:Date.now(),playedAt:m.playedAt?parsePlayedAt(m.playedAt).getTime():Date.now()});save();},
+  async updateMatch(gid,id,m){
+    const before=(data.matches||[]).find(x=>x.id===id&&(!x.groupId||x.groupId===gid));
+    if(!before||before.status!=='active'||before.tournamentId||before.quickMatchId)throw new Error('不可編輯此對戰。');
+    const payload={...m,playedAt:parsePlayedAt(m.playedAt).getTime()};
+    Object.assign(before,payload);
+    if(!m.firstPlayer)delete before.firstPlayer;
+    if(!m.guestDeck)delete before.guestDeck;
+    save();
+  },
+  async updateTimedMatch(gid,id,winner,note){
+    const before=(data.matches||[]).find(x=>x.id===id&&(!x.groupId||x.groupId===gid));
+    if(!before||before.status!=='active'||!before.quickMatchId||before.tournamentId||
+        ![before.playerA,before.playerB].includes(winner))throw new Error('不可編輯此對戰。');
+    before.winner=winner;before.note=String(note||'').trim().slice(0,200);save();
+  },
   async voidMatch(gid,id){data.matches.find(x=>x.id===id).status='void';save();},
   async createQuickMatch(gid,uid,payload){const id=`q-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,7)}`;
     data.quickMatches.unshift({...createQuickMatch(payload,uid,Date.now()),id,groupId:gid});save();return id;},

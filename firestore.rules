@@ -47,6 +47,24 @@ service cloud.firestore {
         && d.guestDeck.name is string && d.guestDeck.name.size() > 0 && d.guestDeck.name.size() <= 42
         && d.guestDeck.color in ['RED','BLUE','GREEN','YELLOW','PURPLE','MULTI','OTHER'];
     }
+    // Tournament match creation requires the linked bracket slot to be
+    // updated atomically by its host, with fixed players and winner.
+    function validTournamentMatch(gid,matchId,d) {
+      return !('tournamentId' in d)
+        ? !('tournamentRound' in d) && !('tournamentMatch' in d) && !('tournamentTitle' in d)
+        : (d.tournamentId is string && d.tournamentId.size() > 0
+          && d.tournamentRound is int && d.tournamentRound >= 0 && d.tournamentRound <= 4
+          && d.tournamentMatch is int && d.tournamentMatch >= 0 && d.tournamentMatch <= 15
+          && d.tournamentTitle is string && d.tournamentTitle.size() <= 60
+          && matchId == 't_' + d.tournamentId + '_' + d.tournamentRound + '_' + d.tournamentMatch
+          && get(/databases/$(database)/documents/groups/$(gid)/tournaments/$(d.tournamentId)).data.createdBy == request.auth.uid
+          && getAfter(/databases/$(database)/documents/groups/$(gid)/tournaments/$(d.tournamentId)).data.title == d.tournamentTitle
+          && getAfter(/databases/$(database)/documents/groups/$(gid)/tournaments/$(d.tournamentId)).data.rounds[d.tournamentRound].matches[d.tournamentMatch].a == d.playerA
+          && getAfter(/databases/$(database)/documents/groups/$(gid)/tournaments/$(d.tournamentId)).data.rounds[d.tournamentRound].matches[d.tournamentMatch].b == d.playerB
+          && getAfter(/databases/$(database)/documents/groups/$(gid)/tournaments/$(d.tournamentId)).data.rounds[d.tournamentRound].matches[d.tournamentMatch].winner == d.winner
+          && getAfter(/databases/$(database)/documents/groups/$(gid)/tournaments/$(d.tournamentId)).data.rounds[d.tournamentRound].matches[d.tournamentMatch].matchId == matchId
+          && !('quickMatchId' in d));
+    }
     function validBattleSide(gid,d) {
       return (
         d.playerA != '__ua_guest__' && d.playerB != '__ua_guest__'
@@ -165,7 +183,9 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(['ownerUid','createdAt'])
         && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.createdAt == request.time;
-      allow update, delete: if false;
+      allow update: if false;
+      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid
+        && !existsAfter(/databases/$(database)/documents/publicTournaments/$(publicId));
     }
     // Public read-only tournament projection. No email, UID of entrants, group
     // invite code, or private matches/decks are written into these documents.
@@ -174,8 +194,8 @@ service cloud.firestore {
       allow get: if resource.data.public == true;
       allow list: if false;
       allow create: if signedIn()
-        && request.resource.data.keys().hasAll(['title','description','hostName','status','public','participants','rounds','champion','createdAt','updatedAt'])
-        && request.resource.data.keys().hasOnly(['title','description','hostName','status','public','participants','rounds','champion','createdAt','updatedAt'])
+        && request.resource.data.keys().hasAll(['title','description','hostName','status','public','participants','rounds','champion','eventAt','createdAt','updatedAt'])
+        && request.resource.data.keys().hasOnly(['title','description','hostName','status','public','participants','rounds','champion','eventAt','createdAt','updatedAt'])
         && getAfter(/databases/$(database)/documents/publicTournamentOwners/$(publicId)).data.ownerUid == request.auth.uid
         && request.resource.data.public == true
         && request.resource.data.title is string
@@ -189,6 +209,7 @@ service cloud.firestore {
         && request.resource.data.participants == []
         && request.resource.data.rounds == []
         && request.resource.data.champion == ''
+        && (!('eventAt' in request.resource.data) || (request.resource.data.eventAt is timestamp && request.resource.data.eventAt <= request.time + duration.value(5,'m')))
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time;
       allow update: if signedIn()
@@ -203,7 +224,9 @@ service cloud.firestore {
         && request.resource.data.champion is string
         && request.resource.data.champion.size() <= 24
         && request.resource.data.status in ['registration','running','completed','cancelled'];
-      allow delete: if false;
+      allow delete: if signedIn()
+        && get(/databases/$(database)/documents/publicTournamentOwners/$(publicId)).data.ownerUid == request.auth.uid
+        && !existsAfter(/databases/$(database)/documents/publicTournamentOwners/$(publicId));
     }
     match /groups/{gid} {
       // Knowing the random invite URL permits reading only the group name/metadata.
@@ -253,8 +276,8 @@ service cloud.firestore {
       match /tournaments/{tournamentId} {
         allow get, list: if member(gid);
         allow create: if member(gid)
-          && request.resource.data.keys().hasAll(['title','description','hostName','status','createdBy','publicId','participants','rounds','champion','createdAt','updatedAt'])
-          && request.resource.data.keys().hasOnly(['title','description','hostName','status','createdBy','publicId','participants','rounds','champion','createdAt','updatedAt'])
+          && request.resource.data.keys().hasAll(['title','description','hostName','status','createdBy','publicId','participants','rounds','champion','eventAt','createdAt','updatedAt'])
+          && request.resource.data.keys().hasOnly(['title','description','hostName','status','createdBy','publicId','participants','rounds','champion','eventAt','createdAt','updatedAt'])
           && request.resource.data.createdBy == request.auth.uid
           && request.resource.data.title is string
           && request.resource.data.title.size() >= 2
@@ -269,6 +292,7 @@ service cloud.firestore {
           && request.resource.data.participants == []
           && request.resource.data.rounds == []
           && request.resource.data.champion == ''
+          && (!('eventAt' in request.resource.data) || (request.resource.data.eventAt is timestamp && request.resource.data.eventAt <= request.time + duration.value(5,'m')))
           && request.resource.data.createdAt == request.time
           && request.resource.data.updatedAt == request.time;
         allow update: if member(gid)
@@ -286,7 +310,10 @@ service cloud.firestore {
             (resource.data.status == 'registration' && request.resource.data.status in ['registration','running','cancelled'])
             || (resource.data.status == 'running' && request.resource.data.status in ['running','completed'])
           );
-        allow delete: if false;
+        allow delete: if member(gid)
+          && resource.data.createdBy == request.auth.uid
+          && !existsAfter(/databases/$(database)/documents/publicTournaments/$(resource.data.publicId))
+          && !existsAfter(/databases/$(database)/documents/publicTournamentOwners/$(resource.data.publicId));
         match /requests/{uid} {
           allow get: if member(gid) && (uid == request.auth.uid || get(/databases/$(database)/documents/groups/$(gid)/tournaments/$(tournamentId)).data.createdBy == request.auth.uid);
           allow list: if member(gid) && get(/databases/$(database)/documents/groups/$(gid)/tournaments/$(tournamentId)).data.createdBy == request.auth.uid;
@@ -417,10 +444,11 @@ service cloud.firestore {
         allow get, list: if member(gid);
         allow create: if member(gid)
           && request.resource.data.keys().hasAll(['playerA','deckA','playerB','deckB','winner','note','recordedBy','status','createdAt'])
-          && request.resource.data.keys().hasOnly(['playerA','deckA','playerB','deckB','guestDeck','winner','note','recordedBy','status','createdAt','quickMatchId','timing','playedAt'])
+          && request.resource.data.keys().hasOnly(['playerA','deckA','playerB','deckB','guestDeck','winner','note','recordedBy','status','createdAt','quickMatchId','timing','playedAt','tournamentId','tournamentRound','tournamentMatch','tournamentTitle'])
           && request.resource.data.playerA is string && request.resource.data.playerB is string
           && request.resource.data.playerA != request.resource.data.playerB
           && validBattleSide(gid,request.resource.data)
+          && validTournamentMatch(gid,matchId,request.resource.data)
           && request.resource.data.winner in [request.resource.data.playerA,request.resource.data.playerB]
           && request.resource.data.note is string && request.resource.data.note.size() <= 200
           && request.resource.data.recordedBy == request.auth.uid
@@ -460,13 +488,19 @@ service cloud.firestore {
           ));
         // Soft void only: no stealth edits of score or participants.
         allow update: if member(gid)
+          && !('tournamentId' in resource.data)
           && resource.data.status == 'active'
           && (resource.data.recordedBy == request.auth.uid || groupOwner(gid)
               || resource.data.playerA == request.auth.uid || resource.data.playerB == request.auth.uid)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','cancelledAt'])
           && request.resource.data.status == 'void'
           && request.resource.data.cancelledAt == request.time;
-        allow delete: if false;
+        // A bracket's match is removed only as part of its host's full
+        // tournament deletion. Ordinary matches remain soft-void only.
+        allow delete: if member(gid)
+          && ('tournamentId' in resource.data)
+          && get(/databases/$(database)/documents/groups/$(gid)/tournaments/$(resource.data.tournamentId)).data.createdBy == request.auth.uid
+          && !existsAfter(/databases/$(database)/documents/groups/$(gid)/tournaments/$(resource.data.tournamentId));
       }
     }
   }

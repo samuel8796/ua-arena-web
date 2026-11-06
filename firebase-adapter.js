@@ -1,7 +1,7 @@
 import { firebaseConfig, aiSettings } from './firebase-config.js';
 import { RULE_SYSTEM_PROMPT, personalGroupId, personalGroupName, parsePlayedAt } from './core.mjs';
 import { createQuickMatch, changeQuickMatch, quickMatchResult } from './quick-core.mjs';
-import { addTournamentEntrant, removeTournamentEntrant, startTournament, recordTournamentWinner, publicTournamentSnapshot } from './tournament-core.mjs';
+import { addTournamentEntrant, removeTournamentEntrant, startTournament, recordTournamentWinner, publicTournamentSnapshot, serializeTournamentRounds } from './tournament-core.mjs';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js';
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signOut, updateProfile } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js';
 import { getFirestore, doc, collection, getDoc, getDocs, setDoc, updateDoc, addDoc, onSnapshot, serverTimestamp, arrayUnion, runTransaction, writeBatch, Timestamp } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js';
@@ -194,6 +194,14 @@ export const firebaseAdapter = {
     },onError));
     return ()=>unsubs.forEach(fn=>fn());
   },
+  subscribePersonalTournaments(groupIds,uid,onChange,onError){
+    const byGroup={};
+    const unsubs=groupIds.map(gid=>onSnapshot(colRef(gid,'tournaments'),snapshot=>{
+      byGroup[gid]=snapshot.docs.map(tidy).filter(t=>t.participants?.some(p=>p.uid===uid));
+      onChange({...byGroup});
+    },onError));
+    return ()=>unsubs.forEach(stop=>stop());
+  },
   async getPlayerCard(uid){
     const snap=await getDoc(playerCardRef(uid));
     return snap.exists()?snap.data():null;
@@ -332,7 +340,7 @@ export const firebaseAdapter = {
         if(current.status!=='registration')throw new Error('進行中的錦標賽不能取消。');
         next={...current,status:'cancelled'};
       }else throw new Error('不支援的錦標賽操作。');
-      tx.update(ref,{participants:next.participants,rounds:next.rounds,status:next.status,champion:next.champion,updatedAt:serverTimestamp()});
+      tx.update(ref,{participants:next.participants,rounds:serializeTournamentRounds(next.rounds),status:next.status,champion:next.champion,updatedAt:serverTimestamp()});
       tx.update(publicTournamentRef(current.publicId),{...publicTournamentSnapshot(next),updatedAt:serverTimestamp()});
     });
   },

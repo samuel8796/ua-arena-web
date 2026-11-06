@@ -13,7 +13,7 @@ export async function chooseWideCrop(file,kind='deck'){
   const preset=PRESETS[kind];
   if(!preset)throw new Error('未知的圖片類型。');
   const stored=typeof file==='string';
-  if(stored && !/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(file))throw new Error('已儲存的圖片格式無效。');
+  if(stored && !/^data:image\/(jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(file))throw new Error('已儲存的圖片格式無效。');
   if(!stored && (!file||!file.type.startsWith('image/')))throw new Error('請選擇圖片檔案。');
   if(!stored && file.size>12*1024*1024)throw new Error('圖片超過 12 MB，請先縮小後上傳。');
   const url=stored?file:URL.createObjectURL(file),source=new Image();

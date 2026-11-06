@@ -528,8 +528,7 @@ service cloud.firestore {
           && resource.data.status == 'active'
           && !('tournamentId' in resource.data)
           && !('quickMatchId' in resource.data)
-          && (resource.data.recordedBy == request.auth.uid || groupOwner(gid)
-              || resource.data.playerA == request.auth.uid || resource.data.playerB == request.auth.uid)
+          && (resource.data.recordedBy == request.auth.uid || groupOwner(gid))
           && request.resource.data.diff(resource.data).affectedKeys()
                .hasOnly(['playerA','playerB','deckA','deckB','guestDeck','winner','firstPlayer','note','playedAt'])
           && request.resource.data.playerA is string && request.resource.data.playerB is string

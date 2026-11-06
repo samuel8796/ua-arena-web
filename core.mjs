@@ -69,6 +69,33 @@ export function filterMatches(matches=[], {playerId='',from='',to=''}={}) {
     && matchTimeMs(m)>=start && matchTimeMs(m)<=end)
     .sort((a,b)=>matchTimeMs(b)-matchTimeMs(a));
 }
+/** An active battle counts once for each participant. Consecutive wins are
+ * calculated from real play time, not the time the result was entered.
+ * Voided matches do not count, and a loss resets the current streak. */
+export function playerWinStreak(playerId,matches=[]) {
+  if(!playerId)return {current:0,best:0,games:0};
+  const eligible=matches
+    .filter(m=>m.status==='active'
+      && (m.playerA===playerId || m.playerB===playerId)
+      && (m.winner===m.playerA || m.winner===m.playerB))
+    .slice()
+    .sort((a,b)=>matchTimeMs(a)-matchTimeMs(b)
+      || matchTimeMs({playedAt:a.createdAt})-matchTimeMs({playedAt:b.createdAt})
+      || String(a.id||'').localeCompare(String(b.id||'')));
+  let current=0,best=0;
+  for(const m of eligible) {
+    current=m.winner===playerId?current+1:0;
+    best=Math.max(best,current);
+  }
+  return {current,best,games:eligible.length};
+}
+export const streakTier=streak=>{
+  if(streak>=20)return 'prismatic';
+  if(streak>=10)return 'gold';
+  if(streak>=5)return 'silver';
+  if(streak>=2)return 'bronze';
+  return null;
+};
 export function filteredMatchStats(matches=[],playerId='') {
   const active=matches.filter(m=>m.status==='active');
   const wins=playerId?active.filter(m=>m.winner===playerId).length:0;

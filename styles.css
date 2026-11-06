@@ -629,3 +629,70 @@ input,select,textarea{max-width:100%;min-width:0}
  .tournament-result-item{flex-direction:column;align-items:stretch}
  .tournament-result-item .btn{align-self:flex-end}
 }
+
+/* v2.1 · private profile popups, deck sorting & image-forward Quick Match */
+.profile-grid-single{grid-template-columns:minmax(0,1fr);max-width:880px}
+.profile-quick-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:15px 0}
+.profile-quick-actions .btn{min-width:0;min-height:44px;white-space:normal;font-size:12px}
+.card-settings-modal .card,.account-info-modal{background:transparent;padding:0;border:0;box-shadow:none}
+.card-settings-modal .section-head{flex-wrap:wrap}
+.account-info-modal .profile-info-row{font-size:13px}
+.account-info-modal .nav{text-align:left;width:100%;overflow-wrap:anywhere}
+.deck-sort-toolbar{display:flex;align-items:center;justify-content:flex-end;gap:11px;margin:11px 0 17px}
+.deck-sort-toolbar label{font-size:12px;font-weight:750;color:var(--muted)}
+.deck-sort-toolbar select{width:min(260px,100%);min-width:0;font-size:13px}
+.quick-player{padding:0;overflow:hidden;display:flex;flex-direction:column}
+.quick-player-visual{display:flex;flex-direction:column;min-width:0;flex:1}
+.quick-player-visual .deck-art-battle{
+  display:block;position:relative;overflow:hidden;width:100%;max-width:none;
+  height:clamp(145px,18vw,190px);aspect-ratio:auto;border:0;border-radius:0;margin:0;
+  flex-shrink:0;background:#1b2b38
+}
+.quick-player-visual .deck-art-battle>img{
+  display:block;position:absolute;inset:0;width:100%;height:100%;min-width:100%;min-height:100%;
+  max-width:none;max-height:none;object-fit:cover;object-position:center
+}
+.quick-player-visual .deck-art-battle .deck-art-missing{display:flex;position:absolute;inset:0;align-items:center;justify-content:center;flex-direction:column}
+.quick-player-identity{padding:11px;min-height:64px;display:flex;flex-direction:column;gap:7px;min-width:0}
+.quick-player-identity strong{font-size:14px;color:var(--text);overflow-wrap:anywhere}
+.quick-player-identity span{font-size:12px;color:var(--muted);line-height:1.4;overflow-wrap:anywhere}
+.quick-player>.quick-player-time{margin:6px 12px 11px}
+.quick-player>.btn{margin:0 10px 12px;width:calc(100% - 20px);min-width:0}
+.tournament-head-actions{display:flex;flex-wrap:wrap;align-items:center;gap:9px;justify-content:flex-end}
+.tournament-head-actions .btn{white-space:normal}
+.tournament-deck-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:14px 0}
+.tournament-deck-choice{min-width:0;background:#132031;border:1px solid #33475a;border-radius:13px;overflow:hidden}
+.tournament-deck-choice .deck-art-tournament{position:relative;display:block;width:100%;max-width:none;height:145px;aspect-ratio:auto;margin:0;border:0;border-radius:0;overflow:hidden}
+.tournament-deck-choice .deck-art-tournament>img{display:block;position:absolute;inset:0;width:100%;height:100%;min-width:100%;max-width:none;max-height:none;object-fit:cover}
+.tournament-deck-choice .deck-art-missing{display:flex;position:absolute;inset:0;align-items:center;justify-content:center;flex-direction:column}
+.tournament-deck-choice .field{padding:10px;min-width:0}
+.tournament-deck-choice .field label{font-size:11px;overflow-wrap:anywhere}
+.tournament-deck-choice .field select{width:100%;font-size:12px}
+.tournament-fixed-players{display:grid;grid-template-columns:minmax(0,1fr) 28px minmax(0,1fr);gap:7px;align-items:center;text-align:center;padding:12px 8px;background:#15263a;border-radius:12px}
+.tournament-fixed-players strong{font-size:14px;min-width:0;overflow-wrap:anywhere}
+.tournament-fixed-players b{color:var(--mint)}
+.tournament-history-results{margin-top:20px}
+.tournament-battle-item{border-left:3px solid #d5ad59}
+@media(max-width:740px){
+ .profile-quick-actions{gap:7px}
+ .profile-quick-actions .btn{font-size:11px;padding:10px 7px}
+ .quick-player-visual .deck-art-battle{height:clamp(125px,36vw,172px)}
+ .quick-player-identity{padding:9px;min-height:69px}
+ .quick-player-identity strong{font-size:12px}
+ .quick-player-identity span{font-size:11px}
+ .quick-player>.quick-player-time{font-size:clamp(21px,6.5vw,30px)}
+ .tournament-head-actions{width:100%;justify-content:stretch}
+ .tournament-head-actions .btn{flex:1 1 130px;font-size:11px}
+ .tournament-deck-choice .deck-art-tournament{height:clamp(115px,32vw,155px)}
+ .tournament-deck-choices{gap:8px}
+ .tournament-deck-choice .field{padding:8px}
+}
+@media(max-width:380px){
+ .deck-sort-toolbar{justify-content:stretch}
+ .deck-sort-toolbar select{flex:1}
+ .quick-player-visual .deck-art-battle{height:115px}
+ .quick-player-identity{min-height:78px}
+ .quick-player>.btn{margin:0 6px 9px;width:calc(100% - 12px);padding:8px 5px;font-size:11px}
+ .tournament-deck-choices{gap:6px}
+ .tournament-fixed-players strong{font-size:12px}
+}

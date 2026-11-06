@@ -386,7 +386,7 @@ test('v1.7.1 手機牌組圖片完整填滿容器、不留上下黑邊',()=>{
  assert.ok(css.includes('min-height:100%;'));
  assert.ok(css.includes('object-fit:cover;'));
  assert.ok(css.includes('height:clamp(132px,38vw,170px);'));
- assert.ok(html.includes('href="./styles.css?v=1.9"'));
+ assert.ok(html.includes('href="./styles.css?v=2.0"'));
 });
 
 import {avatarCropGeometry,avatarSourceCrop} from './avatar-crop-core.mjs';
@@ -430,8 +430,8 @@ test('v1.8 圓形預覽需確認才保存，取消不寫入，支援手機雙指
   assert.ok(ui.includes("document.body.style.overflow=previousOverflow"));
   assert.ok(ui.includes('URL.revokeObjectURL(url)'));
   assert.ok(css.includes('touch-action:none'));
-  assert.ok(html.includes('styles.css?v=1.9'));
-  assert.ok(html.includes('app.js?v=1.9'));
+  assert.ok(html.includes('styles.css?v=2.0'));
+  assert.ok(html.includes('app.js?v=2.0'));
   assert.ok(wf.includes('avatar-crop-ui.mjs avatar-crop-core.mjs'));
 });
 

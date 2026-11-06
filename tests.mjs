@@ -774,7 +774,7 @@ test('v2.3 剪裁一次並完整顯示，個人與公開名片有獨立背景欄
  assert.ok(app.includes("chooseWideCrop(source,'deck')"));
  assert.ok(app.includes("chooseWideCrop(source,'profile')"));
  assert.ok(app.includes("chooseWideCrop(source,'card')"));
- assert.ok(css.includes("object-fit:contain !important"));
+ assert.ok(css.includes("object-fit:cover !important"));
  assert.ok(css.includes(".player-card-banner:after"));
  assert.ok(css.includes(".card-settings-modal input[type=\"checkbox\"]"));
  assert.ok(adapter.includes("async saveProfileCover"));
@@ -841,4 +841,47 @@ test('v2.4 原始照片僅擁有者可讀，公開牌組和名片只存裁切結
  assert.ok(!rules.includes("match /users/{uid}/decks/{deckId} {\n      allow get: if false"));
  assert.ok(workflow.includes("node --check image-source.mjs"));
  assert.ok(workflow.includes("image-source.mjs wide-crop-ui.mjs"));
+});
+
+test('v2.5 個人背景無內縮邊框，名片背景填滿但保留暗化漸層',()=>{
+ const app=readFileSync(new URL('./app.js',import.meta.url),'utf8');
+ const css=readFileSync(new URL('./styles.css',import.meta.url),'utf8');
+ assert.ok(app.includes('class="card profile-account-card"'));
+ assert.ok(css.includes('.profile-account-card > .profile-cover'));
+ assert.ok(css.includes('width:calc(100% + 44px)'));
+ assert.ok(css.includes('margin:-22px -22px 18px'));
+ assert.ok(css.includes('width:calc(100% + 34px)'));
+ assert.ok(css.includes('margin:-17px -17px 17px'));
+ assert.ok(css.includes('width:calc(100% + 24px)'));
+ assert.ok(css.includes('margin:-12px -12px 16px'));
+ assert.ok(css.includes('.player-card-banner > img'));
+ assert.ok(css.includes('object-fit:cover !important'));
+ assert.ok(css.includes('.player-card-banner:after'));
+ assert.ok(css.includes('rgba(6,11,20,.88)'));
+ assert.ok(css.includes('rgba(6,11,20,.50)'));
+});
+test('v2.5 圖片跨牌組收藏、對戰、計時、錦標賽、名片 TOP5 統一 16:9 滿版',()=>{
+ const css=readFileSync(new URL('./styles.css',import.meta.url),'utf8');
+ const app=readFileSync(new URL('./app.js',import.meta.url),'utf8');
+ const imageRule=css.slice(css.lastIndexOf('/* v2.5 · Keep the entire cropped 16:9 picture'));
+ for(const selector of [
+  '.deck-cover',
+  '.deck-art-frame',
+  '.deck-top-five-item .deck-art-top-five',
+  '.deck-top-five-open .deck-art-top-five',
+  '.deck-favorite-feature .deck-art-favorite',
+  '.detail-participants .detail-side .deck-art-battle',
+  '.quick-player-visual .deck-art-battle',
+  '.tournament-deck-choice .deck-art-tournament',
+  '.deck-detail-cover',
+  '.deck-image-preview'
+ ])assert.ok(imageRule.includes(selector), 'missing full-frame selector: '+selector);
+ assert.ok(imageRule.includes('aspect-ratio:16 / 9 !important'));
+ assert.ok(imageRule.includes('height:auto !important'));
+ assert.ok(imageRule.includes('object-fit:cover !important'));
+ assert.ok(imageRule.includes('overflow:hidden'));
+ assert.ok(!imageRule.includes('object-fit:contain'));
+ assert.ok(app.includes("chooseWideCrop(source,'deck')"));
+ const crop=readFileSync(new URL('./wide-crop-ui.mjs',import.meta.url),'utf8');
+ assert.ok(crop.includes("ratio:16/9,width:960,height:540"));
 });

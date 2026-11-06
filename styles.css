@@ -580,3 +580,52 @@ input,select,textarea{max-width:100%;min-width:0}
   .avatar-shell.avatar-tier-preview{width:60px;height:60px}
   .streak-tier-card strong{font-size:11px}
 }
+
+/* v2.0 · compact avatar guides, mobile tournament medals and results */
+.streak-guide-trigger{display:inline-flex;align-items:center;gap:7px;margin:0 0 13px 5px;color:#a4f3cc;border-color:#456d62}
+.modal .streak-guide{margin-top:0;padding:0;border:0;box-shadow:none;background:transparent}
+.modal .streak-guide .streak-tier-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.modal .streak-guide .streak-tier-card{padding:11px 6px}
+.modal .streak-guide .avatar-shell.avatar-tier-preview{width:65px;height:65px;margin:13px auto 16px}
+.modal .streak-guide .streak-status{padding:11px;margin-bottom:14px}
+.modal .streak-guide .streak-status strong{font-size:15px}
+.modal .streak-guide>.hint{font-size:11px;line-height:1.6}
+.tournament-medal-panel,.tournament-history-results{margin-top:20px}
+.tournament-medal-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin:16px 0}
+.tournament-medal-stats>div{min-width:0;border:1px solid #3b4c60;border-radius:13px;background:#182739;padding:11px 6px;display:flex;align-items:center;flex-direction:column;gap:5px}
+.tournament-medal-stats span{font-size:24px;line-height:1.25}
+.tournament-medal-stats b{font-size:24px;color:var(--mint);font-variant-numeric:tabular-nums}
+.tournament-medal-stats small{font-size:11px;color:var(--muted)}
+.tournament-results-list{display:grid;gap:8px;margin-top:14px}
+.tournament-result-item{min-width:0;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px;background:#122132;border:1px solid #334357;border-radius:12px}
+.tournament-result-main{min-width:0;display:flex;flex-direction:column;gap:6px;overflow-wrap:anywhere}
+.tournament-result-main>strong{font-size:14px;color:var(--text)}
+.tournament-result-main>small,.tournament-result-main>span{font-size:11px;color:var(--muted);line-height:1.55}
+.tournament-result-item .btn{flex:0 0 auto}
+.tournament-detail{min-width:0}
+.tournament-detail h3{font-size:19px;margin:9px 0}
+.tournament-detail h4{margin-top:20px;margin-bottom:10px}
+.tournament-detail .bracket-scroller{max-width:100%;overflow-x:auto}
+.tournament-detail .bracket-board{min-width:450px}
+.tournament-podium-list{display:grid;gap:8px;margin-top:18px}
+.tournament-podium-list>div{display:flex;justify-content:space-between;align-items:center;gap:12px;min-width:0;padding:12px;border-radius:10px;background:#172637;border:1px solid #31455a}
+.tournament-podium-list b{font-size:13px;flex:0 0 auto}
+.tournament-podium-list span{color:var(--mint);font-size:13px;text-align:right;min-width:0;overflow-wrap:anywhere}
+.tournament-detail-entrants{display:flex;flex-wrap:wrap;gap:7px}
+@media(max-width:740px){
+ .tournament-medal-stats{gap:6px}
+ .tournament-medal-stats>div{padding:9px 3px}
+ .tournament-medal-stats span{font-size:20px}
+ .tournament-medal-stats b{font-size:20px}
+ .tournament-medal-stats small{font-size:10px}
+ .tournament-result-item{gap:7px;padding:10px;align-items:flex-start}
+ .tournament-result-main>strong{font-size:12px}
+ .tournament-result-main>span{font-size:10px}
+ .tournament-result-item .btn{font-size:11px;padding:7px 9px;white-space:normal}
+ .modal .streak-guide .avatar-shell.avatar-tier-preview{width:57px;height:57px}
+}
+@media(max-width:380px){
+ .tournament-medal-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .tournament-result-item{flex-direction:column;align-items:stretch}
+ .tournament-result-item .btn{align-self:flex-end}
+}

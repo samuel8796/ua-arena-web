@@ -37,6 +37,7 @@ jobs:
           mkdir -p dist/assets
           cp index.html app.js core.mjs avatar-crop-ui.mjs avatar-crop-core.mjs tournament-core.mjs quick-core.mjs demo-adapter.js firebase-adapter.js firebase-config.js styles.css .nojekyll dist/
           cp assets/favicon.svg dist/assets/
+          cp assets/streak-*.svg dist/assets/
           mkdir -p dist/data
           cp data/cards.zh-Hant.json dist/data/
       - name: Upload GitHub Pages artifact

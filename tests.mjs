@@ -346,16 +346,16 @@ test('v1.7 全站頭像同步使用僅本人可寫的帳號與團員文件',()=>
   assert.ok(rules.includes("uid == request.auth.uid"));
   assert.ok(rules.includes("hasOnly(['nickname','avatarData'])"));
   assert.ok(rules.includes("data.avatarData.size() <= 40000"));
-  assert.ok(adapter.includes('async saveAvatar(uid,avatarData,groupIds)'));
+  assert.ok(adapter.includes('async saveAvatar(uid,avatarData,groupIds,avatarSourceData'));
   assert.ok(adapter.includes("updateDoc(memberRef(gid,uid),{avatarData})"));
-  assert.ok(demo.includes('async saveAvatar(uid,avatarData)'));
+  assert.ok(demo.includes('async saveAvatar(uid,avatarData,groupIds'));
   assert.ok(demo.includes('data.profile={...(data.profile||{}),nickname,bio}'));
 });
 test('v1.7 改換頭像具備裁切壓縮上傳與移除，並能在各玩家頁面顯示',()=>{
   const app=readFileSync(new URL('./app.js',import.meta.url),'utf8');
   assert.ok(app.includes('function playerAvatar(uid,extra='));
-  assert.ok(app.includes('chooseAvatarCrop(file)'));
-  assert.ok(app.includes('if(!data)return; // Cancel never sends a Firebase write.'));
+  assert.ok(app.includes('chooseAvatarCrop(source)'));
+  assert.ok(app.includes('if(!data)return;'));
   assert.ok(!app.includes('imageToAvatarDataUrl(file)'));
   assert.ok(app.includes('case \'remove-avatar\''));
   assert.ok(app.includes("target.name==='avatar'"));
@@ -390,7 +390,7 @@ test('v1.7.1 手機牌組圖片完整填滿容器、不留上下黑邊',()=>{
  assert.ok(css.includes('min-height:100%;'));
  assert.ok(css.includes('object-fit:cover;'));
  assert.ok(css.includes('height:clamp(132px,38vw,170px);'));
- assert.ok(html.includes('href="./styles.css?v=2.3"'));
+ assert.ok(html.includes('href="./styles.css?v=2.4"'));
 });
 
 import {avatarCropGeometry,avatarSourceCrop} from './avatar-crop-core.mjs';
@@ -423,7 +423,7 @@ test('v1.8 圓形預覽需確認才保存，取消不寫入，支援手機雙指
   const css=readFileSync(new URL('./styles.css',import.meta.url),'utf8');
   const html=readFileSync(new URL('./index.html',import.meta.url),'utf8');
   const wf=readFileSync(new URL('./.github/workflows/pages.yml',import.meta.url),'utf8');
-  assert.ok(app.includes('chooseAvatarCrop(file)'));
+  assert.ok(app.includes('chooseAvatarCrop(source)'));
   assert.ok(app.includes('if(!data)return;'));
   assert.ok(ui.includes('role="dialog"'));
   assert.ok(ui.includes("data-crop-action=\"cancel\""));
@@ -434,8 +434,8 @@ test('v1.8 圓形預覽需確認才保存，取消不寫入，支援手機雙指
   assert.ok(ui.includes("document.body.style.overflow=previousOverflow"));
   assert.ok(ui.includes('URL.revokeObjectURL(url)'));
   assert.ok(css.includes('touch-action:none'));
-  assert.ok(html.includes('styles.css?v=2.3'));
-  assert.ok(html.includes('app.js?v=2.3'));
+  assert.ok(html.includes('styles.css?v=2.4'));
+  assert.ok(html.includes('app.js?v=2.4'));
   assert.ok(wf.includes('avatar-crop-ui.mjs avatar-crop-core.mjs'));
 });
 
@@ -630,7 +630,7 @@ test('v2.1 個人名片、帳號資訊改為彈窗並放在個人簡介下',()=>
  assert.ok(app.includes('data-action="open-account-info"'));
  assert.ok(app.includes("case 'card-settings'"));
  assert.ok(app.includes("case 'account-info'"));
- assert.ok(app.includes('state.myCard=card;state.modal=null;render()'));
+ assert.ok(app.includes('state.myCard={...card}'));
  assert.ok(css.includes('.profile-quick-actions'));
  assert.ok(css.includes('.profile-grid-single'));
 });
@@ -771,9 +771,9 @@ test('v2.3 剪裁一次並完整顯示，個人與公開名片有獨立背景欄
  assert.ok(ui.includes("ratio:3"));
  assert.ok(ui.includes("data-wide-action=\"save\""));
  assert.ok(ui.includes("data-wide-action=\"cancel\""));
- assert.ok(app.includes("chooseWideCrop(file,'deck')"));
- assert.ok(app.includes("chooseWideCrop(file,'profile')"));
- assert.ok(app.includes("chooseWideCrop(file,'card')"));
+ assert.ok(app.includes("chooseWideCrop(source,'deck')"));
+ assert.ok(app.includes("chooseWideCrop(source,'profile')"));
+ assert.ok(app.includes("chooseWideCrop(source,'card')"));
  assert.ok(css.includes("object-fit:contain !important"));
  assert.ok(css.includes(".player-card-banner:after"));
  assert.ok(css.includes(".card-settings-modal input[type=\"checkbox\"]"));
@@ -781,7 +781,7 @@ test('v2.3 剪裁一次並完整顯示，個人與公開名片有獨立背景欄
  assert.ok(adapter.includes("coverData:typeof card.coverData"));
  assert.ok(rules.includes("validWideCover"));
  assert.ok(rules.includes("'profileCoverData'"));
- assert.ok(wf.includes("core.mjs wide-crop-ui.mjs avatar-crop-ui.mjs"));
+ assert.ok(wf.includes("core.mjs image-source.mjs wide-crop-ui.mjs avatar-crop-ui.mjs"));
 });
 test('v2.3 戰績詳情右上設定允許範圍內的編輯與撤銷',()=>{
  const app=readFileSync(new URL('./app.js',import.meta.url),'utf8');
@@ -795,4 +795,50 @@ test('v2.3 戰績詳情右上設定允許範圍內的編輯與撤銷',()=>{
  assert.ok(adapter.includes("async updateTimedMatch(gid,id,winner,note)"));
  assert.ok(rules.includes(".hasOnly(['winner','note'])"));
  assert.ok(rules.includes("!('tournamentId' in resource.data)"));
+});
+
+test('v2.4 已上傳的圖片只能編輯既有來源，移除後才能選擇新檔',()=>{
+ const app=readFileSync(new URL('./app.js',import.meta.url),'utf8');
+ const imageSource=readFileSync(new URL('./image-source.mjs',import.meta.url),'utf8');
+ const avatarUi=readFileSync(new URL('./avatar-crop-ui.mjs',import.meta.url),'utf8');
+ const wideUi=readFileSync(new URL('./wide-crop-ui.mjs',import.meta.url),'utf8');
+ const css=readFileSync(new URL('./styles.css',import.meta.url),'utf8');
+ for(const kind of ['avatar','profile-cover','deck','card-cover']){
+   assert.ok(app.includes("case 'edit-"+kind+"-image'"));
+   const removal=kind==='avatar'?"remove-avatar":kind==='profile-cover'?"remove-profile-cover":kind==='deck'?"remove-deck-image":"remove-card-cover";
+   assert.ok(app.includes("case '"+removal+"'"));
+ }
+ assert.ok(app.includes('data-action="toggle-image-settings"'));
+ assert.ok(app.includes("imageSettings('profile-cover'"));
+ assert.ok(app.includes("imageSettings('card-cover'"));
+ assert.ok(app.includes("imageSettings('deck'"));
+ assert.ok(app.includes("imageSettings('avatar'"));
+ assert.ok(app.includes("prepareImageSource(file,145000)"));
+ assert.ok(app.includes("cardCoverSourceData"));
+ assert.ok(app.includes("imageSourceData"));
+ assert.ok(avatarUi.includes("const stored=typeof file==='string'"));
+ assert.ok(wideUi.includes("const stored=typeof file==='string'"));
+ assert.ok(imageSource.includes("export async function prepareImageSource"));
+ assert.ok(css.includes(".profile-cover{"));
+ assert.ok(css.includes("border:0!important"));
+ assert.ok(css.includes("aspect-ratio:16 / 9!important"));
+ assert.ok(css.includes(".image-settings-menu[hidden]"));
+});
+test('v2.4 原始照片僅擁有者可讀，公開牌組和名片只存裁切結果',()=>{
+ const firebase=readFileSync(new URL('./firebase-adapter.js',import.meta.url),'utf8');
+ const rules=readFileSync(new URL('./firestore.rules',import.meta.url),'utf8');
+ const workflow=readFileSync(new URL('./.github/workflows/pages.yml',import.meta.url),'utf8');
+ assert.ok(firebase.includes("personalDeckImageRef"));
+ assert.ok(firebase.includes("async getDeckSource(uid,id)"));
+ assert.ok(firebase.includes("batch.set(personalDeckImageRef"));
+ assert.ok(firebase.includes("batch.set(userRef(uid),{cardCoverSourceData:sourceData"));
+ assert.ok(rules.includes("match /users/{uid}/deckImageSources/{deckId}"));
+ assert.ok(rules.includes("uid == request.auth.uid"));
+ assert.ok(rules.includes("validImageSource"));
+ assert.ok(rules.includes("'cardCoverSourceData'"));
+ assert.ok(rules.includes("'avatarSourceData'"));
+ assert.ok(rules.includes("'profileCoverSourceData'"));
+ assert.ok(!rules.includes("match /users/{uid}/decks/{deckId} {\n      allow get: if false"));
+ assert.ok(workflow.includes("node --check image-source.mjs"));
+ assert.ok(workflow.includes("image-source.mjs wide-crop-ui.mjs"));
 });

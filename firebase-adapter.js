@@ -45,7 +45,10 @@ async function ensurePersonalGroup(uid, nickname){
     if(!existing.exists())await setDoc(g,{name:personalGroupName(name),createdBy:uid,createdAt:serverTimestamp()});
     else if(existing.data().createdBy!==uid)throw new Error('個人戰團識別碼被占用，請聯繫管理員。');
     const m=memberRef(id,uid);
-    if(!(await getDoc(m)).exists())await setDoc(m,{uid,nickname:name,role:'owner',joinedAt:serverTimestamp()});
+    if(!(await getDoc(m)).exists()){
+      const own=await getDoc(userRef(uid)),avatarData=own.exists()?own.data().avatarData||'':'';
+      await setDoc(m,{uid,nickname:name,role:'owner',joinedAt:serverTimestamp(),...(avatarData?{avatarData}:{})});
+    }
     await rememberGroup(uid,id,name);
     return id;
   })();
@@ -108,6 +111,18 @@ export const firebaseAdapter = {
     return groupIds;
   },
   async getProfile(uid){const snap=await getDoc(userRef(uid));return snap.exists()?snap.data():{};},
+  async saveAvatar(uid,avatarData,groupIds){
+    if(auth.currentUser?.uid!==uid)throw new Error('只能修改自己的頭像。');
+    if(typeof avatarData!=='string'||(avatarData!==''&&!/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(avatarData))||avatarData.length>40000)
+      throw new Error('頭像格式錯誤或檔案太大，請重新選擇圖片。');
+    await setDoc(userRef(uid),{avatarData,updatedAt:serverTimestamp()},{merge:true});
+    const failures=[];
+    for(const gid of groupIds){
+      try{await updateDoc(memberRef(gid,uid),{avatarData});}
+      catch(err){console.warn('同步團員頭像失敗',gid,err);failures.push(gid);}
+    }
+    return {failures};
+  },
   async saveProfile(uid,nickname,bio,groupIds){
     const name=nickname.trim();if(name.length<2||name.length>24)throw new Error('暱稱請使用 2–24 字元。');
     if(bio.length>160)throw new Error('個人簡介不得超過 160 字。');
@@ -124,14 +139,18 @@ export const firebaseAdapter = {
   async createGroup(uid,nickname,title){
     const g=doc(collection(db,'groups'));
     await setDoc(g,{name:title.trim(),createdBy:uid,createdAt:serverTimestamp()});
-    await setDoc(memberRef(g.id,uid),{uid,nickname:nickname.trim(),role:'owner',joinedAt:serverTimestamp()});
+    const own=await getDoc(userRef(uid)),avatarData=own.exists()?own.data().avatarData||'':'';
+    await setDoc(memberRef(g.id,uid),{uid,nickname:nickname.trim(),role:'owner',joinedAt:serverTimestamp(),...(avatarData?{avatarData}:{})});
     await rememberGroup(uid,g.id,nickname.trim());
     return g.id;
   },
   async joinGroup(uid,nickname,gid){
     const g=await this.getGroup(gid);
     const existing=await getDoc(memberRef(gid,uid));
-    if(!existing.exists())await setDoc(memberRef(gid,uid),{uid,nickname:nickname.trim(),role:g.createdBy===uid?'owner':'member',joinedAt:serverTimestamp()});
+    if(!existing.exists()){
+      const own=await getDoc(userRef(uid)),avatarData=own.exists()?own.data().avatarData||'':'';
+      await setDoc(memberRef(gid,uid),{uid,nickname:nickname.trim(),role:g.createdBy===uid?'owner':'member',joinedAt:serverTimestamp(),...(avatarData?{avatarData}:{})});
+    }
     await rememberGroup(uid,gid,nickname.trim());
     return gid;
   },

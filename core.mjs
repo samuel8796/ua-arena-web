@@ -91,6 +91,23 @@ export function aggregateDeckWinRates(uid,groupMatches={},decks=[]) {
   }
   return [...byDeck.values()].sort((a,b)=>b.games-a.games || b.wins-a.wins || a.name.localeCompare(b.name));
 }
+/**
+ * Public player-card deck leaderboard: only decks with completed matches.
+ * Compare exact win ratios rather than displayed rounded percentages, then
+ * prefer larger samples and stable naming for ties.
+ */
+export function topDecksByWinRate(deckStats=[],limit=5) {
+  return (Array.isArray(deckStats)?deckStats:[])
+    .filter(d=>Number.isFinite(d?.games)&&d.games>0&&Number.isFinite(d?.wins)&&d.wins>=0&&d.wins<=d.games)
+    .slice()
+    .sort((a,b)=>(b.wins/b.games)-(a.wins/a.games)
+      || b.games-a.games
+      || b.wins-a.wins
+      || String(a.name||'').localeCompare(String(b.name||''),'zh-Hant')
+      || String(a.id||'').localeCompare(String(b.id||'')))
+    .slice(0,Math.max(0,Math.floor(limit)));
+}
+
 export function computeStats(players=[],decks=[],matches=[]) {
   const active=matches.filter(m=>m.status==='active');
   const decksById=Object.fromEntries(decks.map(d=>[d.id,d]));

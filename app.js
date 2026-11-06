@@ -1,6 +1,6 @@
 import { firebaseConfig, aiSettings } from './firebase-config.js';
 import {chooseAvatarCrop} from './avatar-crop-ui.mjs?v=1.8';
-import { COLORS, colorOf, safeText as e, shortId, formatDate, assertMatch, computeStats, aggregatePersonalStats, aggregateDeckWinRates, filterMatches, filteredMatchStats, matchTimeMs, matchDateValue, parsePlayedAt, topDecksByWinRate, sortDeckLibrary, playerWinStreak, streakTier, resolvePlayerDeckSelection, GUEST_PLAYER_ID, GUEST_DECK_ID, guestPlayer, personalGroupId, isGuestMatch, guestDeckLabel } from './core.mjs?v=2.1';
+import { COLORS, colorOf, safeText as e, shortId, formatDate, assertMatch, computeStats, aggregatePersonalStats, aggregateDeckWinRates, filterMatches, filteredMatchStats, matchTimeMs, matchDateValue, parsePlayedAt, sideRecordStats, deckDetailStats, topDecksByWinRate, sortDeckLibrary, playerWinStreak, streakTier, resolvePlayerDeckSelection, GUEST_PLAYER_ID, GUEST_DECK_ID, guestPlayer, personalGroupId, isGuestMatch, guestDeckLabel } from './core.mjs?v=2.1';
 import { demoAdapter } from './demo-adapter.js?v=2.1';
 import { QUICK_MATCH_LIMIT_MS, quickClock, mmss } from './quick-core.mjs';
 import { deserializeTournamentRounds, tournamentPodium, tournamentPlacement, tournamentMedals, publicTournamentSnapshot } from './tournament-core.mjs?v=2.1';
@@ -145,8 +145,9 @@ function matchDetailBody(){
  const q=m.quickMatchId?state.quickMatches.find(x=>x.id===m.quickMatchId):null;
  const allowed=!m.tournamentId&&m.status==='active'&&(m.recordedBy===state.user?.uid||m.playerA===state.user?.uid||m.playerB===state.user?.uid||isOwner());
  const turns=q?.turns||[];
+ const firstKnown=[m.playerA,m.playerB].includes(m.firstPlayer);
  return `<div class="match-detail-header"><span class="tag">${m.status==='void'?'已撤銷':m.tournamentId?'🏆 錦標賽對戰':'有效對戰'}</span><strong>🏆 ${e(playerName(m.winner))} 勝</strong></div>
- <div class="detail-participants"><div class="detail-side">${battleDeckArtwork(m,'A')}<div class="detail-side-info"><div class="detail-side-user">${playerAvatar(m.playerA,'avatar-match')}<strong>${e(playerName(m.playerA))}</strong></div><span class="detail-side-deck">${e(battleDeckName(m,'A'))}</span><span class="detail-side-result">${m.winner===m.playerA?'🏆 本場勝利':'本場敗北'}</span></div></div><b>VS</b><div class="detail-side">${battleDeckArtwork(m,'B')}<div class="detail-side-info"><div class="detail-side-user">${playerAvatar(m.playerB,'avatar-match')}<strong>${e(playerName(m.playerB))}</strong></div><span class="detail-side-deck">${e(battleDeckName(m,'B'))}</span><span class="detail-side-result">${m.winner===m.playerB?'🏆 本場勝利':'本場敗北'}</span></div></div></div>
+ <div class="detail-participants"><div class="detail-side">${battleDeckArtwork(m,'A')}<div class="detail-side-info"><div class="detail-side-user">${playerAvatar(m.playerA,'avatar-match')}<strong>${e(playerName(m.playerA))}</strong></div><span class="detail-side-deck">${e(battleDeckName(m,'A'))}</span>${firstKnown?`<span class="turn-position">${m.firstPlayer===m.playerA?'⚔ 先攻':'🛡 後攻'}</span>`:''}<span class="detail-side-result">${m.winner===m.playerA?'🏆 本場勝利':'本場敗北'}</span></div></div><b>VS</b><div class="detail-side">${battleDeckArtwork(m,'B')}<div class="detail-side-info"><div class="detail-side-user">${playerAvatar(m.playerB,'avatar-match')}<strong>${e(playerName(m.playerB))}</strong></div><span class="detail-side-deck">${e(battleDeckName(m,'B'))}</span>${firstKnown?`<span class="turn-position">${m.firstPlayer===m.playerB?'⚔ 先攻':'🛡 後攻'}</span>`:''}<span class="detail-side-result">${m.winner===m.playerB?'🏆 本場勝利':'本場敗北'}</span></div></div></div>
  ${m.tournamentId?`<button type="button" class="btn btn-outline btn-full" data-action="tournament-detail" data-group="${e(state.groupId)}" data-id="${e(m.tournamentId)}" style="margin-top:15px">🏆 ${e(m.tournamentTitle||'錦標賽')} · 查看賽事詳情</button>`:''}
   <div class="detail-facts"><div><span>實際對戰時間</span><b>${e(matchDateLabel(m))}</b></div><div><span>登錄時間</span><b>${e(formatDate(m.createdAt))}</b></div><div><span>登錄人</span><b>${e(playerName(m.recordedBy))}</b></div><div><span>備註</span><b>${e(m.note||'無')}</b></div></div>
  ${m.timing?.enabled?`<div class="detail-timing"><h3>⏱ 30 分鐘計時紀錄</h3><div class="history-stats"><span><b>${mmss(m.timing.playerAMs)}</b> ${e(playerName(m.playerA))}</span><span><b>${mmss(m.timing.playerBMs)}</b> ${e(playerName(m.playerB))}</span><span><b>${mmss(m.timing.unattributedMs)}</b> 間隔</span></div>
@@ -176,10 +177,61 @@ function deckInputFor(playerId,side,chosen,guestDeck,quick=false){
   return `<div class="field"><label>玩家 ${side} 使用牌組</label><select name="deck${side}" ${quick?'':'id="deck-'+side.toLowerCase()+'"'}>${deckOptions(playerId,chosen)}</select>${!deckOptions(playerId,chosen)?'<div class="hint">該玩家目前沒有牌組，請先新增牌組。</div>':''}</div>`;
 }
 function deckOptions(uid,chosen){return state.decks.filter(d=>d.ownerUid===uid&&d.active!==false).map(d=>`<option value="${e(d.id)}" ${chosen===d.id?'selected':''}>${e(d.name)} · ${e(colorOf(d.color).name)}</option>`).join('')}
+function firstPlayerSelect(a,b,value='',required=true){
+ return `<div class="field field-full"><label>誰先攻？</label>
+   <select name="firstPlayer" ${required?'required':''}>
+    ${required?'':'<option value="">不記錄先後攻</option>'}
+    <option value="${e(a)}" ${value===a?'selected':''}>${e(playerName(a))} 先攻</option>
+    <option value="${e(b)}" ${value===b?'selected':''}>${e(playerName(b))} 先攻</option>
+   </select><div class="hint">先後攻用於獨立的勝率統計。未記錄先後攻的舊戰績不列入這項計算。</div></div>`;
+}
+const ownMatchHistory=()=>Object.values(state.personalHistory||{}).flat();
+function firstTurnDetails(){
+ const sides=sideRecordStats(state.user?.uid,ownMatchHistory());
+ const renderSide=(title,s)=>`<section class="side-record-card"><h3>${title}</h3>
+  <div class="stats-detail"><div class="stats-cell"><b>${s.games}</b><span>場次</span></div>
+   <div class="stats-cell"><b>${s.wins}</b><span>勝</span></div><div class="stats-cell"><b>${s.losses}</b><span>敗</span></div>
+   <div class="stats-cell"><b>${s.rate}%</b><span>勝率</span></div></div></section>`;
+ return `<div class="side-record-details">${renderSide('⚔ 先攻',sides.first)}${renderSide('🛡 後攻',sides.second)}
+ <p class="hint">已有先後攻紀錄：${sides.known} 場。另有 ${sides.unknown} 場歷史對戰未記錄先後攻，不影響總勝場、總勝率，但不參與先後攻勝率。</p>
+ </div>`;
+}
+function deckDetailBody(){
+ const d=deck(state.draft.id);
+ if(!d)return '<div class="empty">找不到這副牌組。</div>';
+ const mine=d.ownerUid===state.user?.uid;
+ const history=mine?ownMatchHistory():state.matches;
+ const info=deckDetailStats(d.ownerUid,d.id,history,state.players,state.decks);
+ const renderRole=(name,side)=>`<div class="deck-detail-role"><strong>${name}</strong><span>${side.wins} 勝 / ${side.losses} 敗</span><b>${side.rate}%</b><small>${side.games} 場</small></div>`;
+ const renderOpponent=(title,item,type)=>`<section class="deck-opponent-card"><h4>${title}</h4>
+   ${item?`<strong>${e(item.playerName)}</strong><span>${e(item.deckName)}</span><small>${type==='win'?'擊敗':'落敗'} ${item[type==='win'?'wins':'losses']} 場</small>`:'<p class="muted sm">尚無相關對戰紀錄</p>'}</section>`;
+ return `<div class="deck-detail">
+  <div class="deck-detail-top">
+   ${deckArtwork(d.ownerUid,d.id,d.name,'deck-detail-cover')}
+   ${mine&&!d.legacy?`<div class="deck-detail-settings"><button class="btn btn-ghost btn-sm" data-action="deck-settings" aria-label="牌組設定">⚙ 設定</button>
+     ${state.draft.settingsOpen?`<div class="deck-setting-menu"><button class="btn btn-outline btn-sm" data-action="deck-edit-from-detail" data-id="${e(d.id)}">編輯牌組</button><button class="btn btn-danger btn-sm" data-action="archive-deck" data-id="${e(d.id)}">封存牌組</button></div>`:''}</div>`:''}
+  </div>
+  <h3>${e(d.name)}</h3><p class="muted sm">${e(colorOf(d.color).name)} · ${e(playerName(d.ownerUid))}</p>
+  <div class="stats-detail deck-detail-stats">
+   <div class="stats-cell"><b>${info.games}</b><span>出場次數</span></div>
+   <div class="stats-cell"><b>${info.wins}</b><span>勝場</span></div>
+   <div class="stats-cell"><b>${info.losses}</b><span>敗場</span></div>
+   <div class="stats-cell"><b>${info.rate}%</b><span>總勝率</span></div>
+  </div>
+  <p class="muted sm">建立時間：${e(formatDate(d.createdAt))}</p>
+  <h3>先後攻戰績</h3>
+  <div class="deck-detail-roles">${renderRole('⚔ 先攻',info.sides.first)}${renderRole('🛡 後攻',info.sides.second)}</div>
+  <p class="hint">未記錄先後攻：${info.sides.unknown} 場；僅列入總戰績，不納入先後攻勝率。</p>
+  <h3>對戰相性</h3>
+  <div class="deck-matchup-grid">${renderOpponent('克制最多',info.mostDefeated,'win')}${renderOpponent('被克制最多',info.mostLostTo,'loss')}</div>
+  <p class="hint">依同一玩家＋對手牌組的對戰組合累計勝場／敗場；僅顯示有實際對戰紀錄的對手。</p>
+  <p class="hint">這裡的勝負戰績是唯讀資料，編輯牌組只能修改封面、名稱與顏色。</p>
+ </div>`;
+}
 function matchModalBody(){
   const d=state.draft;
   const pa=player(d.playerA),pb=player(d.playerB);
-  return `<div class="mode-note">⚔ 每場只需要一個人填寫。${isPersonal()?'個人戰團可選「訪客玩家」，不需邀請對方註冊。訪客牌組僅保存於本場結果中。':'玩家 A 預設為你，也能代填群組內兩人的對戰。'}</div><form data-form="new-match"><div class="form-grid"><div class="field"><label>玩家 A</label><select name="playerA" id="player-a">${pickerOptions(state.players,d.playerA,'',isPersonal())}</select></div><div class="field"><label>玩家 B</label><select name="playerB" id="player-b">${pickerOptions(state.players,d.playerB,d.playerA,isPersonal())}</select></div>${deckInputFor(d.playerA,'A',d.deckA,d.guestDeck)}${deckInputFor(d.playerB,'B',d.deckB,d.guestDeck)}<div class="field field-full"><label>本場勝者</label><div class="winner-options"><button class="winner-option ${d.winner===d.playerA?'selected':''}" type="button" data-action="pick-winner" data-winner="A">🏆 ${e(pa?.nickname||'玩家 A')}</button><button class="winner-option ${d.winner===d.playerB?'selected':''}" type="button" data-action="pick-winner" data-winner="B">🏆 ${e(pb?.nickname||'玩家 B')}</button></div></div><div class="field field-full"><label>實際對戰日期與時間</label><input type="datetime-local" name="playedAt" value="${e(state.draft.playedAt||localDateTimeValue())}" required><div class="hint">預設為現在，可以補登過去的對戰；系統另保留登錄時間。</div></div><div class="field field-full"><label>備註（選填）</label><textarea name="note" maxlength="200" placeholder="例如：野場、三局兩勝…">${e(d.note||'')}</textarea></div></div><div class="modal-footer"><button type="button" class="btn btn-ghost" data-action="close-modal">取消</button><button type="submit" class="btn btn-primary" ${state.players.length<2?'disabled':''}>儲存戰績 →</button></div></form>`;
+  return `<div class="mode-note">⚔ 每場只需要一個人填寫。${isPersonal()?'個人戰團可選「訪客玩家」，不需邀請對方註冊。訪客牌組僅保存於本場結果中。':'玩家 A 預設為你，也能代填群組內兩人的對戰。'}</div><form data-form="new-match"><div class="form-grid"><div class="field"><label>玩家 A</label><select name="playerA" id="player-a">${pickerOptions(state.players,d.playerA,'',isPersonal())}</select></div><div class="field"><label>玩家 B</label><select name="playerB" id="player-b">${pickerOptions(state.players,d.playerB,d.playerA,isPersonal())}</select></div>${deckInputFor(d.playerA,'A',d.deckA,d.guestDeck)}${deckInputFor(d.playerB,'B',d.deckB,d.guestDeck)}${firstPlayerSelect(d.playerA,d.playerB,d.firstPlayer||d.playerA)}<div class="field field-full"><label>本場勝者</label><div class="winner-options"><button class="winner-option ${d.winner===d.playerA?'selected':''}" type="button" data-action="pick-winner" data-winner="A">🏆 ${e(pa?.nickname||'玩家 A')}</button><button class="winner-option ${d.winner===d.playerB?'selected':''}" type="button" data-action="pick-winner" data-winner="B">🏆 ${e(pb?.nickname||'玩家 B')}</button></div></div><div class="field field-full"><label>實際對戰日期與時間</label><input type="datetime-local" name="playedAt" value="${e(state.draft.playedAt||localDateTimeValue())}" required><div class="hint">預設為現在，可以補登過去的對戰；系統另保留登錄時間。</div></div><div class="field field-full"><label>備註（選填）</label><textarea name="note" maxlength="200" placeholder="例如：野場、三局兩勝…">${e(d.note||'')}</textarea></div></div><div class="modal-footer"><button type="button" class="btn btn-ghost" data-action="close-modal">取消</button><button type="submit" class="btn btn-primary" ${state.players.length<2?'disabled':''}>儲存戰績 →</button></div></form>`;
 }
 function deckModalBody(){const d=state.draft;return `<form data-form="save-deck"><div class="field"><label>牌組圖片</label><div class="upload" id="deck-upload">${guardedImage(d.imageData)?`<img src="${guardedImage(d.imageData)}" alt="牌組圖片預覽">`:'<div style="font-size:33px">▧</div><strong>點擊上傳牌組圖片</strong><span class="sm muted">將壓縮後儲存，建議使用自己的照片或獲授權圖片</span>'}<input name="cover" type="file" accept="image/*" aria-label="上傳牌組圖片" /></div></div><div class="field mt"><label>牌組名稱</label><input name="name" required minlength="1" maxlength="42" value="${e(d.name||'')}" placeholder="例如：紫色魯夫" /></div><div class="field mt"><label>牌組持有者</label><input name="ownerUid" type="hidden" value="${e(state.user.uid)}"><div class="mode-note">${e(userLabel())} · 個人牌組庫（所有已加入戰團共用）</div></div><div class="field mt"><label>牌組顏色</label><div class="color-choices">${COLORS.map(c=>`<button type="button" class="color-choice ${d.color===c.id?'selected':''}" data-action="pick-deck-color" data-color="${c.id}"><span class="dot" style="background:${c.hex}"></span>${c.name}</button>`).join('')}</div></div><div class="modal-footer"><button class="btn btn-ghost" type="button" data-action="close-modal">取消</button><button class="btn btn-primary" type="submit">${d.id?'儲存修改':'建立牌組'} →</button></div></form>`}
 
@@ -235,6 +287,7 @@ function tournamentMatchModalBody(){
    <form data-form="tournament-result">
     <input type="hidden" name="round" value="${r}"><input type="hidden" name="match" value="${i}">
     <div class="tournament-deck-choices">${selector(m.a,da,'A')}${selector(m.b,db,'B')}</div>
+    ${firstPlayerSelect(m.a,m.b,m.a)}
     <div class="field mt"><label>本場勝者</label><select name="winner" required>
       <option value="${e(m.a)}">${e(playerName(m.a))} 勝</option>
       <option value="${e(m.b)}">${e(playerName(m.b))} 勝</option>
@@ -246,7 +299,7 @@ function tournamentMatchModalBody(){
    </form>
  </div>`;
 }
-function renderModal(){if(!state.modal)return '';let title,body;switch(state.modal){case 'match':title='新增對戰紀錄';body=matchModalBody();break;case 'match-detail':title='對戰詳情';body=matchDetailBody();break;case 'streak-guide':title='連勝外框說明';body=streakGuide();break;case 'card-settings':title='設定個人名片';body=playerCardSettings();break;case 'account-info':title='帳號資訊';body=accountInfoBody();break;case 'tournament-detail':title='錦標賽詳情';body=tournamentDetailBody();break;case 'tournament-match':title='設定淘汰賽對戰';body=tournamentMatchModalBody();break;case 'deck':title=state.draft.id?'編輯牌組':'新增牌組';body=deckModalBody();break;case 'player':title='玩家詳細戰績';body=playerModalBody();break;case 'tournament-create':title='建立錦標賽';body=`<form data-form="create-tournament"><div class="field"><label>錦標賽名稱</label><input name="title" minlength="2" maxlength="60" required placeholder="例如：UA 週末冠軍盃"></div><div class="field mt"><label>賽事說明（選填）</label><textarea name="description" maxlength="240" rows="3" placeholder="例如：採單敗淘汰，房主確認結果"></textarea></div><div class="field mt"><label>錦標賽舉辦日期與時間</label><input type="datetime-local" name="eventAt" required value="${localDateTimeValue()}"><div class="hint">預設目前時間，可填寫實際舉辦的過去日期；每場淘汰賽還會各自記錄對戰時間。</div></div><div class="alert" style="margin-top:14px">僅房主可新增參賽者、開始賽程與登錄勝者。公開觀賽連結可免登入查看賽程，不會公開私人對戰團與牌組資料。</div><div class="modal-footer"><button type="button" class="btn btn-ghost" data-action="close-modal">取消</button><button type="submit" class="btn btn-primary">建立錦標賽</button></div></form>`;break;case 'more':title='功能選單';body=`<div class="more-links">${[['profile','◉ 個人資料'],['groups','⇄ 我的對戰團'],['players','♟ 玩家排行'],['rules','✦ 規則 AI']].map(([id,label])=>`<button class="nav" data-tab="${id}">${label}</button>`).join('')}</div>`;break;case 'invite':title='邀請朋友';body=`<p class="muted sm">將連結傳給朋友，對方註冊登入後就能加入你的對戰群組。具有連結的人可申請加入，請只傳給信任的朋友。</p><div class="divider"></div><label>對戰團名稱</label><div class="group-pill" style="display:inline-block;margin-bottom:17px">${e(state.group?.name)}</div><label>邀請連結</label><div class="invite-id"><span class="mono">${e(inviteUrl())}</span><button class="btn btn-primary btn-sm" data-action="copy-invite">複製</button></div><div class="hint">好友完成登入後即可進入群組；同一個帳號可參加多個群組。</div>`;break;default:body='';title='';}
+function renderModal(){if(!state.modal)return '';let title,body;switch(state.modal){case 'match':title='新增對戰紀錄';body=matchModalBody();break;case 'match-detail':title='對戰詳情';body=matchDetailBody();break;case 'deck-detail':title='牌組詳情';body=deckDetailBody();break;case 'turn-stats':title='先後攻戰績';body=firstTurnDetails();break;case 'streak-guide':title='連勝外框說明';body=streakGuide();break;case 'card-settings':title='設定個人名片';body=playerCardSettings();break;case 'account-info':title='帳號資訊';body=accountInfoBody();break;case 'tournament-detail':title='錦標賽詳情';body=tournamentDetailBody();break;case 'tournament-match':title='設定淘汰賽對戰';body=tournamentMatchModalBody();break;case 'deck':title=state.draft.id?'編輯牌組':'新增牌組';body=deckModalBody();break;case 'player':title='玩家詳細戰績';body=playerModalBody();break;case 'tournament-create':title='建立錦標賽';body=`<form data-form="create-tournament"><div class="field"><label>錦標賽名稱</label><input name="title" minlength="2" maxlength="60" required placeholder="例如：UA 週末冠軍盃"></div><div class="field mt"><label>賽事說明（選填）</label><textarea name="description" maxlength="240" rows="3" placeholder="例如：採單敗淘汰，房主確認結果"></textarea></div><div class="field mt"><label>錦標賽舉辦日期與時間</label><input type="datetime-local" name="eventAt" required value="${localDateTimeValue()}"><div class="hint">預設目前時間，可填寫實際舉辦的過去日期；每場淘汰賽還會各自記錄對戰時間。</div></div><div class="alert" style="margin-top:14px">僅房主可新增參賽者、開始賽程與登錄勝者。公開觀賽連結可免登入查看賽程，不會公開私人對戰團與牌組資料。</div><div class="modal-footer"><button type="button" class="btn btn-ghost" data-action="close-modal">取消</button><button type="submit" class="btn btn-primary">建立錦標賽</button></div></form>`;break;case 'more':title='功能選單';body=`<div class="more-links">${[['profile','◉ 個人資料'],['groups','⇄ 我的對戰團'],['players','♟ 玩家排行'],['rules','✦ 規則 AI']].map(([id,label])=>`<button class="nav" data-tab="${id}">${label}</button>`).join('')}</div>`;break;case 'invite':title='邀請朋友';body=`<p class="muted sm">將連結傳給朋友，對方註冊登入後就能加入你的對戰群組。具有連結的人可申請加入，請只傳給信任的朋友。</p><div class="divider"></div><label>對戰團名稱</label><div class="group-pill" style="display:inline-block;margin-bottom:17px">${e(state.group?.name)}</div><label>邀請連結</label><div class="invite-id"><span class="mono">${e(inviteUrl())}</span><button class="btn btn-primary btn-sm" data-action="copy-invite">複製</button></div><div class="hint">好友完成登入後即可進入群組；同一個帳號可參加多個群組。</div>`;break;default:body='';title='';}
   return `<div class="modal-backdrop" data-action="backdrop"><div class="modal" role="dialog" aria-modal="true" aria-label="${e(title)}"><div class="modal-header"><h2>${e(title)}</h2><button class="close" data-action="close-modal" aria-label="關閉視窗">✕</button></div>${body}</div></div>`;
 }
 
@@ -763,7 +816,7 @@ app.addEventListener('submit',event=>{
       const round=Number(fields.round),match=Number(fields.match);
       const side=deserializeTournamentRounds(t?.rounds)[round]?.[match];
       if(!t||t.createdBy!==state.user.uid||!side?.a||!side?.b||side.winner)throw new Error('這場賽程無法登錄。');
-      const data={playerA:side.a,playerB:side.b,deckA:fields.deckA,deckB:fields.deckB,winner:fields.winner,
+      const data={playerA:side.a,playerB:side.b,deckA:fields.deckA,deckB:fields.deckB,winner:fields.winner,firstPlayer:fields.firstPlayer,
         round,match,playedAt:fields.playedAt,note:fields.note||''};
       assertMatch(data,state.players,state.decks);
       parsePlayedAt(data.playedAt);
@@ -813,7 +866,7 @@ app.addEventListener('submit',event=>{
     case 'new-match':{
       const {guestDeck:_unused,...draft}=state.draft;
       parsePlayedAt(fields.playedAt);
-      const payload={...draft,playedAt:fields.playedAt,note:fields.note||'',deckA:draft.playerA===GUEST_PLAYER_ID?GUEST_DECK_ID:fields.deckA||'',deckB:draft.playerB===GUEST_PLAYER_ID?GUEST_DECK_ID:fields.deckB||'',
+      const payload={...draft,playedAt:fields.playedAt,firstPlayer:fields.firstPlayer,note:fields.note||'',deckA:draft.playerA===GUEST_PLAYER_ID?GUEST_DECK_ID:fields.deckA||'',deckB:draft.playerB===GUEST_PLAYER_ID?GUEST_DECK_ID:fields.deckB||'',
         ...(isGuestMatch(draft)?{guestDeck:{name:(fields.guestDeckName||state.draft.guestDeck?.name||'').trim(),color:fields.guestDeckColor||state.draft.guestDeck?.color||'OTHER'}}:{})};
       assertMatch(payload,state.players,state.decks,{allowGuest:isPersonal()});
       await adapter.addMatch(state.groupId,state.user.uid,payload);state.modal=null;state.tab='matches';render();toast('成功登錄一場對戰！');break;

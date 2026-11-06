@@ -284,3 +284,5 @@ input,select,textarea{max-width:100%;min-width:0}
   .deck-top-five-info strong{font-size:11px}
   .deck-top-five-info span{font-size:9px}
 }
+
+.deck-fav-tag{display:inline-block;padding:2px 5px;border-radius:5px;background:#40321b;color:#eacb8c;font-size:10px;font-weight:800;white-space:nowrap;vertical-align:middle}

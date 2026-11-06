@@ -85,6 +85,10 @@ export const demoAdapter={
       winner,note,recordedBy:uid,status:'active',createdAt:Date.now(),playedAt:before.startedAtMs||before.createdAtMs,quickMatchId:id,timing:quickMatchResult(next,next.finishedAtMs)});
     save();},
 
+  subscribePersonalTournaments(groupIds,uid,cb){
+    const emit=()=>cb(Object.fromEntries(groupIds.map(gid=>[gid,(data.tournaments||[]).filter(t=>t.participants?.some(p=>p.uid===uid))])));
+    emit();listeners.add(emit);return ()=>listeners.delete(emit);
+  },
   subscribeTournamentRequests(gid,id,cb){const fn=()=>cb((data.tournamentRequests||[]).filter(r=>r.tournamentId===id));fn();listeners.add(fn);return ()=>listeners.delete(fn);},
   async hasTournamentRequest(gid,id,uid){return (data.tournamentRequests||[]).some(r=>r.tournamentId===id&&r.uid===uid);},
   async requestTournamentJoin(gid,id,uid,nickname){data.tournamentRequests||=[];data.tournamentRequests.push({tournamentId:id,uid,nickname,status:'pending'});save();},

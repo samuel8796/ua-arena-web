@@ -1,4 +1,5 @@
 import { firebaseConfig, aiSettings } from './firebase-config.js';
+import {chooseAvatarCrop} from './avatar-crop-ui.mjs?v=1.8';
 import { COLORS, colorOf, safeText as e, shortId, formatDate, assertMatch, computeStats, aggregatePersonalStats, aggregateDeckWinRates, filterMatches, filteredMatchStats, matchTimeMs, matchDateValue, parsePlayedAt, topDecksByWinRate, resolvePlayerDeckSelection, GUEST_PLAYER_ID, GUEST_DECK_ID, guestPlayer, personalGroupId, isGuestMatch, guestDeckLabel } from './core.mjs?v=1.7';
 import { demoAdapter } from './demo-adapter.js';
 import { QUICK_MATCH_LIMIT_MS, quickClock, mmss } from './quick-core.mjs';
@@ -235,7 +236,7 @@ function personalExtras(){
 
 function profilePage(){
   const me=getStats().players.find(p=>p.id===state.user?.uid);
-  return `<div class="page-head"><div><div class="label-up">ACCOUNT / PERSONAL PROFILE</div><h1>我的個人資料</h1><p>編輯你的全站暱稱，並查看帳號所屬的對戰團。</p></div></div><div class="profile-grid"><section class="card"><div class="profile-heading">${playerAvatar(state.user?.uid,'avatar-large')}<div><h2>${e(userLabel())}</h2><p class="muted sm">${e(state.user?.email||'展示帳號')}</p></div></div><div class="avatar-editor"><label class="avatar-upload-control"><input type="file" name="avatar" accept="image/*" aria-label="上傳個人頭像"><span>📷 更換頭像</span></label><button class="btn btn-ghost btn-sm" data-action="remove-avatar" type="button" ${!guardedAvatar(state.profile?.avatarData)?'disabled':''}>移除頭像</button><p class="hint">圖片會裁切成正方形並壓縮，供已加入戰團的成員查看；選取後自動儲存。</p></div><div class="divider"></div><form data-form="save-profile"><div class="field"><label>公開玩家暱稱</label><input name="nickname" minlength="2" maxlength="24" required value="${e(userLabel())}" placeholder="你的顯示名稱"></div><div class="field mt"><label>個人簡介（只有你自己能在此頁查看）</label><textarea name="bio" maxlength="160" rows="4" placeholder="例如：喜歡紫色牌組">${e(state.profile?.bio||'')}</textarea></div><div class="hint">儲存後會同步更新你已加入對戰團的玩家暱稱；歷史勝負不會因此刪除。</div><button class="btn btn-primary" type="submit" style="margin-top:18px">儲存個人資料</button></form></section><section class="card"><h3>帳號資訊</h3><div class="profile-info-row"><span>Email</span><strong>${e(state.user?.email||'未設定')}</strong></div><div class="profile-info-row"><span>信箱驗證</span><strong>${state.user?.emailVerified?'已驗證':'尚未驗證'}</strong></div><div class="profile-info-row"><span>加入對戰團</span><strong>${state.groupIds.length} 個</strong></div><div class="profile-info-row"><span>目前團內戰績</span><strong>${me?`${me.wins} 勝 / ${me.losses} 敗`:'尚無紀錄'}</strong></div><div class="divider"></div><h3>我加入的對戰團</h3>${state.groupIds.map(id=>`<button class="nav" data-action="select-group-card" data-id="${e(id)}">⇄ ${e(state.groupDetails[id]||id)} ${id===state.groupId?'· 目前':''}</button>`).join('')}<div class="hint">Email 與密碼由 Firebase Authentication 管理；此頁先提供安全的暱稱與簡介編輯。</div></section></div>` + personalExtras();
+  return `<div class="page-head"><div><div class="label-up">ACCOUNT / PERSONAL PROFILE</div><h1>我的個人資料</h1><p>編輯你的全站暱稱，並查看帳號所屬的對戰團。</p></div></div><div class="profile-grid"><section class="card"><div class="profile-heading">${playerAvatar(state.user?.uid,'avatar-large')}<div><h2>${e(userLabel())}</h2><p class="muted sm">${e(state.user?.email||'展示帳號')}</p></div></div><div class="avatar-editor"><label class="avatar-upload-control"><input type="file" name="avatar" accept="image/*" aria-label="上傳個人頭像"><span>📷 更換頭像</span></label><button class="btn btn-ghost btn-sm" data-action="remove-avatar" type="button" ${!guardedAvatar(state.profile?.avatarData)?'disabled':''}>移除頭像</button><p class="hint">圖片會裁切成正方形並壓縮，供已加入戰團的成員查看；按「確認使用」後才會儲存。</p></div><div class="divider"></div><form data-form="save-profile"><div class="field"><label>公開玩家暱稱</label><input name="nickname" minlength="2" maxlength="24" required value="${e(userLabel())}" placeholder="你的顯示名稱"></div><div class="field mt"><label>個人簡介（只有你自己能在此頁查看）</label><textarea name="bio" maxlength="160" rows="4" placeholder="例如：喜歡紫色牌組">${e(state.profile?.bio||'')}</textarea></div><div class="hint">儲存後會同步更新你已加入對戰團的玩家暱稱；歷史勝負不會因此刪除。</div><button class="btn btn-primary" type="submit" style="margin-top:18px">儲存個人資料</button></form></section><section class="card"><h3>帳號資訊</h3><div class="profile-info-row"><span>Email</span><strong>${e(state.user?.email||'未設定')}</strong></div><div class="profile-info-row"><span>信箱驗證</span><strong>${state.user?.emailVerified?'已驗證':'尚未驗證'}</strong></div><div class="profile-info-row"><span>加入對戰團</span><strong>${state.groupIds.length} 個</strong></div><div class="profile-info-row"><span>目前團內戰績</span><strong>${me?`${me.wins} 勝 / ${me.losses} 敗`:'尚無紀錄'}</strong></div><div class="divider"></div><h3>我加入的對戰團</h3>${state.groupIds.map(id=>`<button class="nav" data-action="select-group-card" data-id="${e(id)}">⇄ ${e(state.groupDetails[id]||id)} ${id===state.groupId?'· 目前':''}</button>`).join('')}<div class="hint">Email 與密碼由 Firebase Authentication 管理；此頁先提供安全的暱稱與簡介編輯。</div></section></div>` + personalExtras();
 }
 const tournamentStatus=s=>({registration:'開放報名',running:'進行中',completed:'已完賽',cancelled:'已取消'})[s]||'未知狀態';
 function spectatorUrl(publicId){const u=new URL(location.href);u.search='';u.hash='';u.searchParams.set('watch',publicId);return u.href;}
@@ -399,27 +400,6 @@ async function imageToCompressedDataUrl(file){
   }finally{bitmap.close?.();}
   throw new Error('壓縮後圖片仍過大，請改用尺寸較小的圖片。');
 }
-async function imageToAvatarDataUrl(file){
-  if(!file.type.startsWith('image/'))throw new Error('請選擇圖片檔案。');
-  if(file.size>12*1024*1024)throw new Error('圖片超過 12 MB，請先縮小後上傳。');
-  const bitmap=await createImageBitmap(file);
-  try {
-    const side=Math.min(bitmap.width,bitmap.height);
-    for(const size of [192,160,144,128]){
-      const canvas=document.createElement('canvas');
-      canvas.width=canvas.height=size;
-      const ctx=canvas.getContext('2d');
-      if(!ctx)throw new Error('瀏覽器不支援圖片處理。');
-      ctx.fillStyle='#162030';ctx.fillRect(0,0,size,size);
-      ctx.drawImage(bitmap,(bitmap.width-side)/2,(bitmap.height-side)/2,side,side,0,0,size,size);
-      for(const quality of [.78,.66,.55]){
-        const data=canvas.toDataURL('image/jpeg',quality);
-        if(data.length<=30000)return data;
-      }
-    }
-  }finally{bitmap.close?.();}
-  throw new Error('圖片無法壓縮至頭像大小，請選擇其他圖片。');
-}
 async function handleAction(action,el){
   switch(action){
   case 'start-demo':state.preview=true;await afterAuth({uid:'demo-user',displayName:'Samuel',email:'demo@ua-arena.local'});break;
@@ -515,13 +495,17 @@ app.addEventListener('change',async event=>{
   }
   if(target.name==='avatar'&&target.files?.[0]){
     const file=target.files[0];
-    await runBusy(async()=>{
-      const data=await imageToAvatarDataUrl(file);
-      const result=await adapter.saveAvatar(state.user.uid,data,state.groupIds);
-      state.profile={...state.profile,avatarData:data};
-      state.players=state.players.map(p=>p.id===state.user.uid?{...p,avatarData:data}:p);
-      render();toast(result.failures?.length?'頭像已更新，但部分戰團同步失敗。':'個人頭像已更新！');
-    });
+    target.value=''; // Re-selecting the same file must still reopen the editor.
+    try{
+      const data=await chooseAvatarCrop(file);
+      if(!data)return; // Cancel never sends a Firebase write.
+      await runBusy(async()=>{
+        const result=await adapter.saveAvatar(state.user.uid,data,state.groupIds);
+        state.profile={...state.profile,avatarData:data};
+        state.players=state.players.map(p=>p.id===state.user.uid?{...p,avatarData:data}:p);
+        render();toast(result.failures?.length?'頭像已更新，但部分戰團同步失敗。':'個人頭像已更新！');
+      });
+    }catch(err){console.error(err);toast(readableError(err),true)}
     return;
   }
   if(target.name==='cover'&&target.files?.[0]){

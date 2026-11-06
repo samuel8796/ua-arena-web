@@ -29,7 +29,8 @@ test('AI Prompt 限定 UA 避免混用其他 TCG',()=>assert.ok(RULE_SYSTEM_PROM
 console.log(`\n${pass} tests passed.`);
 import { QUICK_MATCH_LIMIT_MS, createQuickMatch, changeQuickMatch, quickClock, quickMatchResult, mmss } from './quick-core.mjs';
 const origin = 1_750_000_000_000;
-const makeQuick=()=>createQuickMatch({playerA:'a',playerB:'b',deckA:'d1',deckB:'d2'},'c',origin);
+const makeQuick=()=>({...createQuickMatch({playerA:'a',playerB:'b',deckA:'d1',deckB:'d2'},'c',origin),
+  duelRolled:true,decider:'a',firstPlayer:'a'});
 test('Quick Match 起始固定 30 分鐘',()=>{
   const q=makeQuick();assert.equal(q.status,'ready');assert.equal(quickClock(q,origin).remainingMs,QUICK_MATCH_LIMIT_MS);
 });
@@ -40,10 +41,10 @@ test('同一時間只能一人回合進行中',()=>{
 test('記錄兩人各自回合用時',()=>{
   let q=changeQuickMatch(makeQuick(),'start',{playerId:'a',uid:'c',now:origin+1000});
   q=changeQuickMatch(q,'end',{uid:'c',now:origin+81000});
-  q=changeQuickMatch(q,'start',{playerId:'b',uid:'c',now:origin+91000});
+  assert.equal(q.activePlayer,'b');
   q=changeQuickMatch(q,'end',{uid:'c',now:origin+151000});
   const c=quickClock(q,origin+151000);
-  assert.equal(c.playerAMs,80000);assert.equal(c.playerBMs,60000);assert.equal(c.unattributedMs,10000);assert.equal(q.turns.length,2);
+  assert.equal(c.playerAMs,80000);assert.equal(c.playerBMs,70000);assert.equal(c.unattributedMs,0);assert.equal(q.turns.length,2);
 });
 test('關閉頁面後以時間戳回復倒數',()=>{
   const q=changeQuickMatch(makeQuick(),'start',{playerId:'a',uid:'c',now:origin+1000});
@@ -64,7 +65,8 @@ test('結束比賽時自動結算正在進行的回合',()=>{
   assert.equal(mmss(quickClock(finished).remainingMs),'28:00');
 });
 test('不可在已完成的對戰繼續開始回合',()=>{
-  const q=changeQuickMatch(makeQuick(),'finish',{uid:'c',matchId:'done',now:origin+1000});
+  const running=changeQuickMatch(makeQuick(),'start',{playerId:'a',uid:'c',now:origin+500});
+  const q=changeQuickMatch(running,'finish',{uid:'c',matchId:'done',now:origin+1000});
   assert.throws(()=>changeQuickMatch(q,'start',{uid:'c',playerId:'a',now:origin+2000}));
 });
 
@@ -160,6 +162,8 @@ test('訪客的當場牌組名稱與顏色可留在歷史紀錄',()=>{
 test('Quick Match 30 分鐘計時完整保存訪客當場使用的牌組',()=>{
   let q=createQuickMatch(guestPayload,'a',origin);
   assert.deepEqual(q.guestDeck,guestPayload.guestDeck);
+  q=changeQuickMatch(q,'draw',{playerId:GUEST_PLAYER_ID,uid:'a',now:origin+300});
+  q=changeQuickMatch(q,'choose',{playerId:GUEST_PLAYER_ID,uid:'a',now:origin+500});
   q=changeQuickMatch(q,'start',{playerId:GUEST_PLAYER_ID,uid:'a',now:origin+1000});
   q=changeQuickMatch(q,'end',{uid:'a',now:origin+21000});
   assert.equal(quickClock(q,origin+21000).playerBMs,20000);

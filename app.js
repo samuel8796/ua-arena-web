@@ -166,13 +166,14 @@ function deckCard(d){
  const cover=guardedImage(d.imageData);
  const mine=d.ownerUid===state.user?.uid&&!d.legacy;
  const dr=mine?personalDeckStats().find(x=>x.id===d.id)||{games:0,wins:0,rate:0}:deckRateInGroup(d.ownerUid,d.id);
+ const role=deckDetailStats(d.ownerUid,d.id,mine?ownMatchHistory():state.matches,state.players,state.decks).sides;
  return `<article class="deck-card">
   <button type="button" class="deck-cover deck-cover-detail" data-action="deck-detail" data-id="${e(d.id)}" aria-label="查看 ${e(d.name)} 牌組詳細戰績">
     ${cover?`<img src="${cover}" alt="${e(d.name)} 封面">`:'<span class="deck-placeholder">UA</span>'}
     <span class="deck-color"><span class="dot" style="background:${colorOf(d.color).hex}"></span> ${e(colorOf(d.color).name)}</span>
   </button>
   <div class="deck-info"><h3>${e(d.name)}</h3><p>持有者：${e(playerName(d.ownerUid))}</p>
-    <div class="deck-winrate"><strong>${dr.rate}% 勝率</strong><span>${dr.games} 場 · ${dr.wins} 勝</span></div>
+    <div class="deck-winrate"><strong>${dr.rate}% 勝率</strong><span>${dr.games} 場 · ${dr.wins} 勝</span></div><div class="deck-role-mini">⚔ 先攻 ${role.first.wins} 勝 · 🛡 後攻 ${role.second.wins} 勝</div>
     <button class="btn btn-ghost btn-full btn-sm" data-action="deck-detail" data-id="${e(d.id)}">查看詳細資料</button>
   </div></article>`;
 }
@@ -551,7 +552,7 @@ function quickSessionPage(s){
  </div>`).join('')}</div>
  <div class="hint">按「回合結束」會立即啟動另一位玩家的回合；整場計時不因關閉頁面而停止。</div>
  <div class="quick-summary"><span>已完成回合：<b>${c.turns}</b></span><span>未歸屬空檔：<b class="qm-gap">${mmss(c.unattributedMs)}</b></span></div>
- ${playing?`<button class="btn btn-primary btn-full" data-action="quick-result-open" style="margin-top:18px">🏆 結束對戰並登錄結果</button><button class="btn btn-ghost btn-full" style="margin-top:8px" data-action="quick-cancel">取消本場（不計勝負）</button>`:''}
+ ${playing?`${s.duelRolled===undefined||!!s.firstPlayer?`<button class="btn btn-primary btn-full" data-action="quick-result-open" style="margin-top:18px">🏆 結束對戰並登錄結果</button>`:''}<button class="btn btn-ghost btn-full" style="margin-top:8px" data-action="quick-cancel">取消本場（不計勝負）</button>`:''}
  ${(s.turns||[]).length?`<div class="divider"></div><h3 class="quick-history-title">回合用時紀錄</h3><div class="table-wrap"><table class="table"><thead><tr><th>回合</th><th>玩家</th><th>花費時間</th></tr></thead><tbody>${turnRows}</tbody></table></div>`:''}
  </section>${state.quickResultOpen&&playing?quickResultForm(s):''}`;
 }
@@ -748,7 +749,7 @@ async function handleAction(action,el){
   case 'turn-stats':openModal('turn-stats');break;
   case 'new-deck':newDeck();break;
   case 'edit-deck':{const d=deck(el.dataset.id);if(d)newDeck(d);break;}
-  case 'archive-deck':if(confirm('封存這副牌組？歷史對戰會保留，但不能用於新對戰。'))await runBusy(async()=>{await adapter.archiveDeck(state.groupId,el.dataset.id);toast('牌組已封存。')});break;
+  case 'archive-deck':if(confirm('封存這副牌組？歷史對戰會保留，但不能用於新對戰。'))await runBusy(async()=>{await adapter.archiveDeck(state.groupId,el.dataset.id);state.modal=null;render();toast('牌組已封存。')});break;
   case 'void-match':if(confirm('確定撤銷這筆紀錄？它會保留稽核痕跡，但不計入統計。'))await runBusy(async()=>{await adapter.voidMatch(state.groupId,el.dataset.id);state.modal=null;render();toast('已撤銷對戰紀錄。')});break;
   case 'player-detail':{
     state.playerCard=undefined;openModal('player',{id:el.dataset.id});

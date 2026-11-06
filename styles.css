@@ -696,3 +696,59 @@ input,select,textarea{max-width:100%;min-width:0}
  .tournament-deck-choices{gap:6px}
  .tournament-fixed-players strong{font-size:12px}
 }
+
+/* v2.2 · Start Duel / turn order / read-only deck analytics */
+.duel-stage{display:flex;flex-direction:column;gap:10px;align-items:stretch;text-align:center;background:linear-gradient(135deg,#20394a,#152a37);border:1px solid #599280;border-radius:15px;padding:19px;margin:10px 0 18px}
+.duel-stage h3{font-size:22px;color:#aff6d9;margin:0}
+.duel-stage p{font-size:12px;color:#b8c9d5;line-height:1.5;margin:0}
+.duel-stage .duel-main-button{font-weight:900;font-size:20px;min-height:68px;border-radius:14px}
+.duel-stage-ready{align-items:center;text-align:center;padding:13px}
+.duel-stage-ready strong{font-size:14px;color:var(--mint)}
+.duel-choose-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.duel-choose-row .btn{min-width:0;min-height:53px}
+.turn-position{display:inline-block;align-self:flex-start;margin-top:3px;color:#f3dc9c;background:#243548;border:1px solid #557a79;border-radius:7px;padding:3px 7px;font-size:11px;line-height:1.4}
+.role-summary-compact{display:grid;grid-template-columns:repeat(2,minmax(0,1fr)) auto;gap:9px;align-items:center;margin:13px 0 0}
+.role-summary-compact>div{display:flex;flex-direction:column;gap:4px;min-width:0;background:#142c31;border:1px solid #3a645d;padding:10px;border-radius:10px}
+.role-summary-compact strong{font-size:12px}.role-summary-compact span{font-size:13px;color:var(--mint)}
+.role-summary-compact .btn{white-space:normal}
+.side-record-details{display:flex;flex-direction:column;gap:15px}
+.side-record-card{background:#142331;padding:13px;border:1px solid #3b4e62;border-radius:12px}
+.side-record-card h3{margin:0 0 12px}
+.side-record-card .stats-detail{grid-template-columns:repeat(2,minmax(0,1fr))}
+.deck-cover-detail{width:100%;cursor:pointer;padding:0;display:block;text-align:left;font:inherit;border:0;background:inherit;overflow:hidden;position:relative}
+.deck-cover-detail:focus-visible{outline:2px solid var(--mint);outline-offset:-3px}
+.deck-detail{min-width:0}
+.deck-detail-top{position:relative;display:flex;align-items:flex-start;justify-content:center}
+.deck-detail-cover{position:relative;display:block;width:100%;max-width:350px;height:210px;overflow:hidden;flex-shrink:0;border-radius:14px;background:#172938}
+.deck-detail-cover>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.deck-detail-settings{position:absolute;right:4px;top:7px;z-index:3;display:flex;flex-direction:column;align-items:flex-end;gap:7px}
+.deck-detail-settings>.btn{background:#162435ed}
+.deck-setting-menu{display:flex;flex-direction:column;gap:7px;padding:9px;background:#142333;border:1px solid #547366;border-radius:10px;box-shadow:0 10px 25px #0007}
+.deck-detail-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:15px 0}
+.deck-detail>h3{margin:19px 0 10px}
+.deck-detail-roles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.deck-detail-role{display:flex;flex-direction:column;gap:6px;background:#152638;border:1px solid #3d5764;border-radius:10px;padding:13px}
+.deck-detail-role strong{font-size:13px}
+.deck-detail-role span{font-size:11px;color:var(--muted)}
+.deck-detail-role b{font-size:21px;color:var(--mint)}
+.deck-detail-role small{color:var(--muted);font-size:11px}
+.deck-matchup-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.deck-opponent-card{display:flex;flex-direction:column;gap:8px;background:#132635;border:1px solid #3b5661;border-radius:12px;padding:12px;min-width:0;overflow-wrap:anywhere}
+.deck-opponent-card h4{font-size:12px;color:var(--muted);margin:0}
+.deck-opponent-card strong{font-size:14px;color:var(--text)}
+.deck-opponent-card span{font-size:12px;color:var(--mint)}
+.deck-opponent-card small{font-size:11px;color:var(--muted)}
+@media(max-width:740px){
+ .role-summary-compact{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .role-summary-compact .btn{grid-column:1/-1}
+ .duel-stage .duel-main-button{min-height:65px;font-size:18px}
+ .duel-choose-row .btn{font-size:12px;padding:10px 6px}
+ .deck-detail-cover{max-width:100%;height:185px}
+ .deck-detail-roles,.deck-matchup-grid{gap:7px}
+ .deck-detail-role,.deck-opponent-card{padding:9px}
+}
+@media(max-width:380px){
+ .duel-stage{padding:12px}
+ .deck-detail-cover{height:155px}
+ .deck-detail-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+}

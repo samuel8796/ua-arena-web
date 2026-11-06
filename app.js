@@ -575,7 +575,7 @@ async function handleAction(action,el){
   case 'google-login':await runBusy(async()=>await adapter.signInGoogle());break;
   case 'logout':if(adapter.mode==='demo'){state.user=null;state.preview=false;render()}else await runBusy(async()=>adapter.signOut());break;
   case 'switch-group':tournamentRequestUnsub();tournamentRequestUnsub=()=>{};unsub();state.groupId='';state.inviteId='';render();break;
-  case 'select-group-card':if(el.dataset.id===state.groupId){state.tab='overview';render();}else await runBusy(async()=>loadGroup(el.dataset.id));break;
+  case 'select-group-card':state.modal=null;if(el.dataset.id===state.groupId){state.tab='overview';render();}else await runBusy(async()=>loadGroup(el.dataset.id));break;
   case 'my-group-matches':await runBusy(async()=>{
     if(el.dataset.id!==state.groupId)await loadGroup(el.dataset.id);
     state.tab='matches';state.playerFilter=state.user.uid;render();

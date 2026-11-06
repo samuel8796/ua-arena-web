@@ -1,6 +1,6 @@
 import { firebaseConfig, aiSettings } from './firebase-config.js';
 import {chooseAvatarCrop} from './avatar-crop-ui.mjs?v=1.8';
-import { COLORS, colorOf, safeText as e, shortId, formatDate, assertMatch, computeStats, aggregatePersonalStats, aggregateDeckWinRates, filterMatches, filteredMatchStats, matchTimeMs, matchDateValue, parsePlayedAt, topDecksByWinRate, playerWinStreak, streakTier, resolvePlayerDeckSelection, GUEST_PLAYER_ID, GUEST_DECK_ID, guestPlayer, personalGroupId, isGuestMatch, guestDeckLabel } from './core.mjs?v=1.9';
+import { COLORS, colorOf, safeText as e, shortId, formatDate, assertMatch, computeStats, aggregatePersonalStats, aggregateDeckWinRates, filterMatches, filteredMatchStats, matchTimeMs, matchDateValue, parsePlayedAt, topDecksByWinRate, sortDeckLibrary, playerWinStreak, streakTier, resolvePlayerDeckSelection, GUEST_PLAYER_ID, GUEST_DECK_ID, guestPlayer, personalGroupId, isGuestMatch, guestDeckLabel } from './core.mjs?v=1.9';
 import { demoAdapter } from './demo-adapter.js?v=2.0';
 import { QUICK_MATCH_LIMIT_MS, quickClock, mmss } from './quick-core.mjs';
 import { deserializeTournamentRounds, tournamentPodium, tournamentPlacement, tournamentMedals, publicTournamentSnapshot } from './tournament-core.mjs?v=2.0';
@@ -12,7 +12,7 @@ const app=$('#app');
 const configured=Boolean(firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId);
 const params=new URLSearchParams(location.search);
 let adapter=null, unsub=()=>{}, historyUnsub=()=>{}, personalTournamentUnsub=()=>{}, tournamentRequestUnsub=()=>{}, toastTimer;
-const state={user:null,profile:{},personalHistory:{},historyReady:false,personalTournaments:{},tournamentHistoryReady:false,myCard:null,playerCard:null,groupDetails:{},tournaments:[],tournamentRequests:[],myTournamentRequest:false,tournamentId:'',publicTournament:null,publicWatchError:'',groupId:'',groupIds:[],group:null,players:[],decks:[],matches:[],tab:'overview',modal:null,draft:{},filter:'ALL',playerFilter:'',matchFrom:'',matchTo:'',inviteId:params.get('join')||'',authMode:'login',preview:false,rulesReply:'',rulesQuestion:'',rulesEdition:'繁體中文版',busy:false,quickMatches:[],quickSessionId:'',quickCreate:true,quickDraft:{},quickPending:null,quickResultOpen:false};
+const state={user:null,profile:{},personalHistory:{},historyReady:false,personalTournaments:{},tournamentHistoryReady:false,myCard:null,playerCard:null,groupDetails:{},tournaments:[],tournamentRequests:[],myTournamentRequest:false,tournamentId:'',publicTournament:null,publicWatchError:'',groupId:'',groupIds:[],group:null,players:[],decks:[],matches:[],tab:'overview',modal:null,draft:{},filter:'ALL',deckSort:'rate',playerFilter:'',matchFrom:'',matchTo:'',inviteId:params.get('join')||'',authMode:'login',preview:false,rulesReply:'',rulesQuestion:'',rulesEdition:'繁體中文版',busy:false,quickMatches:[],quickSessionId:'',quickCreate:true,quickDraft:{},quickPending:null,quickResultOpen:false};
 const player=id=>state.players.find(x=>x.id===id);
 const playerName=id=>player(id)?.nickname||'未知玩家';
 const deck=id=>state.decks.find(x=>x.id===id);
@@ -147,8 +147,12 @@ function matchDetailBody(){
  ${allowed?`<button type="button" class="btn btn-danger btn-full" data-action="void-match" data-id="${e(m.id)}" style="margin-top:20px">撤銷這場戰績（雙方皆可）</button>`:''}`;
 }
 function decksPage(){
-  const filtered=state.decks.filter(d=>d.ownerUid===state.user?.uid&&d.active!==false&&(state.filter==='ALL'||d.color===state.filter));
-  return `<div class="page-head"><div><div class="label-up">ACCOUNT DECK LIBRARY / PERSONAL</div><h1 style="margin-top:7px">牌組收藏</h1><p>你建立的牌組跟著帳號，加入新戰團後直接共用，不必重新上傳。</p></div><button class="btn btn-primary" data-action="new-deck">＋ 新增牌組</button></div><div class="filter-row"><button class="tab-chip ${state.filter==='ALL'?'active':''}" data-color-filter="ALL">全部 · ${state.decks.filter(x=>x.active!==false&&x.ownerUid===state.user?.uid).length}</button>${COLORS.map(c=>`<button class="tab-chip ${state.filter===c.id?'active':''}" data-color-filter="${c.id}"><span class="dot" style="background:${c.hex};margin-right:5px"></span>${c.name}</button>`).join('')}</div><div class="deck-grid">${filtered.length?filtered.map(deckCard).join(''):`<div class="empty" style="grid-column:1/-1"><span class="empty-icon">▤</span><h3>還沒有牌組</h3><p>新增圖片、名稱與顏色，建立你的第一副牌組。</p><button class="btn btn-primary btn-sm" data-action="new-deck">新增牌組</button></div>`}</div>`;
+  const filtered=sortDeckLibrary(state.decks.filter(d=>d.ownerUid===state.user?.uid&&d.active!==false&&(state.filter==='ALL'||d.color===state.filter)),personalDeckStats(),state.deckSort);
+  return `<div class="page-head"><div><div class="label-up">ACCOUNT DECK LIBRARY / PERSONAL</div><h1 style="margin-top:7px">牌組收藏</h1><p>你建立的牌組跟著帳號，加入新戰團後直接共用，不必重新上傳。</p></div><button class="btn btn-primary" data-action="new-deck">＋ 新增牌組</button></div><div class="filter-row"><button class="tab-chip ${state.filter==='ALL'?'active':''}" data-color-filter="ALL">全部 · ${state.decks.filter(x=>x.active!==false&&x.ownerUid===state.user?.uid).length}</button>${COLORS.map(c=>`<button class="tab-chip ${state.filter===c.id?'active':''}" data-color-filter="${c.id}"><span class="dot" style="background:${c.hex};margin-right:5px"></span>${c.name}</button>`).join('')}</div><div class="deck-sort-toolbar"><label for="deck-sort">牌組排序</label><select id="deck-sort" aria-label="依據勝率、使用場次或名稱排序">
+  <option value="rate" ${state.deckSort==='rate'?'selected':''}>勝率（高至低）</option>
+  <option value="games" ${state.deckSort==='games'?'selected':''}>出場次數（多至少）</option>
+  <option value="name" ${state.deckSort==='name'?'selected':''}>名稱（筆畫／字母順序）</option>
+ </select></div><div class="deck-grid">${filtered.length?filtered.map(deckCard).join(''):`<div class="empty" style="grid-column:1/-1"><span class="empty-icon">▤</span><h3>還沒有牌組</h3><p>新增圖片、名稱與顏色，建立你的第一副牌組。</p><button class="btn btn-primary btn-sm" data-action="new-deck">新增牌組</button></div>`}</div>`;
 }
 function deckCard(d){const cover=guardedImage(d.imageData),canEdit=d.ownerUid===state.user?.uid&&!d.legacy;const dr=personalDeckStats().find(x=>x.id===d.id)||{games:0,wins:0,rate:0};return `<article class="deck-card"><div class="deck-cover">${cover?`<img src="${cover}" alt="${e(d.name)} 封面">`:'<span class="deck-placeholder">UA</span>'}<span class="deck-color"><span class="dot" style="background:${colorOf(d.color).hex}"></span> ${e(colorOf(d.color).name)}</span></div><div class="deck-info"><h3>${e(d.name)}</h3><p>持有者：${e(playerName(d.ownerUid))}</p><div class="deck-winrate"><strong>${dr.rate}% 勝率</strong><span>${dr.games} 場 · ${dr.wins} 勝</span></div><div class="deck-actions">${canEdit?`<button class="btn btn-ghost btn-sm" data-action="edit-deck" data-id="${e(d.id)}">編輯</button><button class="btn btn-ghost btn-sm" data-action="archive-deck" data-id="${e(d.id)}">封存</button>`:d.legacy&&d.ownerUid===state.user?.uid?'<span class="tag">舊牌組搬移中</span>':'<span class="tag">朋友的牌組</span>'}</div></div></article>`}
 function playersPage(){
@@ -415,7 +419,9 @@ function quickSessionPage(s){
  const turnRows=(s.turns||[]).slice().reverse().map((t,i)=>`<tr><td>${s.turns.length-i}</td><td>${e(playerName(t.playerId))}</td><td class="mono">${mmss(t.durationMs)}</td></tr>`).join('');
  return `<section class="card quick-session"><div class="section-head"><h3>⏱ ${e(playerName(s.playerA))} VS ${e(playerName(s.playerB))}</h3><span class="tag">${timedDone?'已完成':s.status==='cancelled'?'已取消':s.status==='ready'?'等待開始':'進行中'}</span></div>
  <div class="quick-clock ${c.expired?'expired':''}"><span>30:00 總倒數</span><strong class="qm-time-left">${total}</strong><small class="qm-time-state">${c.expired?'時間已到，請登錄結果':!s.startedAtMs?'由第一位玩家點選回合開始後啟動':s.activePlayer?`目前回合：${e(playerName(s.activePlayer))}`:'等待下一位玩家開始回合'}</small></div>
- <div class="quick-players">${[s.playerA,s.playerB].map((id,i)=>`<div class="quick-player ${s.activePlayer===id?'is-active':''}"><div class="quick-player-name">${e(playerName(id))}</div><div class="muted sm">${e(battleDeckName(s,i===0?'A':'B'))}</div><div class="quick-player-time ${i===0?'qm-player-a':'qm-player-b'}">${mmss(i===0?c.playerAMs:c.playerBMs)}</div>
+ <div class="quick-players">${[s.playerA,s.playerB].map((id,i)=>`<div class="quick-player ${s.activePlayer===id?'is-active':''}"><div class="quick-player-visual">${battleDeckArtwork(s,i===0?'A':'B')}
+ <div class="quick-player-identity"><strong>${e(playerName(id))}</strong><span>${e(battleDeckName(s,i===0?'A':'B'))}</span></div>
+ </div><div class="quick-player-time ${i===0?'qm-player-a':'qm-player-b'}">${mmss(i===0?c.playerAMs:c.playerBMs)}</div>
  ${playing?(s.activePlayer===id?`<button class="btn btn-primary btn-full" data-action="quick-turn-end">■ 回合結束</button>`:s.activePlayer?`<button class="btn btn-ghost btn-full" disabled>等待對手結束</button>`:`<button class="btn btn-primary btn-full" data-action="quick-turn-start" data-player="${e(id)}" ${c.expired?'disabled':''}>▶ 回合開始</button>`):''}</div>`).join('')}</div>
  <div class="hint">兩人累計用時不包含回合間空檔。總計時不因關閉頁面而停止；同一群組的其他裝置也會同步回合操作。這是朋友間的用時參考，並非防作弊裁判計時。</div>
  <div class="quick-summary"><span>已完成回合：<b>${c.turns}</b></span><span>未歸屬空檔：<b class="qm-gap">${mmss(c.unattributedMs)}</b></span></div>
@@ -612,6 +618,7 @@ app.addEventListener('click',event=>{
 });
 app.addEventListener('change',async event=>{
   const target=event.target;
+  if(target.id==='deck-sort'){state.deckSort=target.value;render();return;}
   if(target.id==='match-filter'||target.id==='match-from'||target.id==='match-to'){
     if(target.id==='match-filter')state.playerFilter=target.value;
     if(target.id==='match-from')state.matchFrom=target.value;

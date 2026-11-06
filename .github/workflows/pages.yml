@@ -26,6 +26,7 @@ jobs:
           node --check firebase-adapter.js
           node --check demo-adapter.js
           node tests.mjs
+          node scripts/check-card-catalog.mjs
       - name: Test match, timer and tournament logic
         run: node tests.mjs
       - name: Prepare static site
@@ -34,6 +35,8 @@ jobs:
           mkdir -p dist/assets
           cp index.html app.js core.mjs tournament-core.mjs quick-core.mjs demo-adapter.js firebase-adapter.js firebase-config.js styles.css .nojekyll dist/
           cp assets/favicon.svg dist/assets/
+          mkdir -p dist/data
+          cp data/cards.zh-Hant.json dist/data/
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:

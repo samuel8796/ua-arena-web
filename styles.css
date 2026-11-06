@@ -762,8 +762,8 @@ input,select,textarea{max-width:100%;min-width:0}
 @media(max-width:740px){.deck-top-five-open .deck-art-top-five{height:123px}}
 @media(max-width:380px){.deck-top-five-open .deck-art-top-five{height:110px}}
 
-/* v2.3 · One cropped deck image, displayed in full in every view.
- * contain is intentional: no view may silently trim a saved image. */
+/* v2.5 · Artwork is cropped once to a 16:9 frame, then fills every view.
+ * For legacy non-16:9 uploads, cover prevents letterboxing until re-cropped. */
 .deck-cover img,
 .deck-art-frame img,
 .detail-participants .detail-side .deck-art-battle > img,
@@ -774,7 +774,7 @@ input,select,textarea{max-width:100%;min-width:0}
 .tournament-deck-choice .deck-art-tournament > img,
 .deck-detail-cover > img,
 #deck-upload img {
-  object-fit:contain !important;
+  object-fit:cover !important;
   object-position:center center !important;
   background:#0d1825;
 }
@@ -962,3 +962,112 @@ input,select,textarea{max-width:100%;min-width:0}
 .card-banner-image-editor{position:relative;width:100%}
 .card-banner-image-editor>.image-settings{position:absolute;top:9px;right:9px;z-index:8}
 .card-banner-image-editor>.card-cover-preview{margin:9px 0 10px}
+
+/* v2.5 · Keep the entire cropped 16:9 picture edge-to-edge, site-wide.
+   Fixed heights previously created letterboxing, especially on iPhone Safari.
+   Cards clip their artwork at the rounded outer frame; no padding is inserted. */
+.deck-cover,
+.deck-art-frame,
+.deck-top-five-item .deck-art-top-five,
+.deck-top-five-open .deck-art-top-five,
+.deck-favorite-feature .deck-art-favorite,
+.detail-participants .detail-side .deck-art-battle,
+.quick-player-visual .deck-art-battle,
+.tournament-deck-choice .deck-art-tournament,
+.deck-detail-cover,
+.deck-image-preview {
+  position:relative;
+  display:block;
+  width:100%;
+  max-width:100%;
+  aspect-ratio:16 / 9 !important;
+  height:auto !important;
+  min-height:0 !important;
+  max-height:none !important;
+  margin:0;
+  padding:0;
+  flex-shrink:0;
+  overflow:hidden;
+  background:#101d2b;
+}
+/* Small thumbnail contexts still size the frame via their own grid column. */
+.deck-art-frame:not(.deck-art-battle):not(.deck-art-top-five):not(.deck-art-favorite):not(.deck-art-tournament) {
+  width:112px;
+}
+/* The favorite illustration spans the available width instead of retaining
+   the old 4:3 thumbnail window. */
+.deck-favorite-feature .deck-art-favorite{max-width:100%;}
+.deck-cover > img,
+.deck-art-frame > img,
+.deck-detail-cover > img,
+.deck-image-preview > img {
+  position:absolute !important;
+  inset:0;
+  display:block;
+  width:100% !important;
+  height:100% !important;
+  min-width:100%;
+  min-height:100%;
+  max-width:none;
+  max-height:none;
+  object-fit:cover !important;
+  object-position:center center !important;
+  background:transparent !important;
+}
+.deck-cover .deck-color{z-index:2;}
+/* A top-five button no longer reserves its former fixed 144/123px image height. */
+.deck-top-five-open{display:block;line-height:0;}
+/* Profile cover flush with the card's INNER border on all screen widths.
+   Only the image is rounded, keeping the small settings popup unclipped. */
+.profile-account-card{min-width:0;}
+.profile-account-card > .profile-cover{
+  position:relative;
+  width:calc(100% + 44px);
+  margin:-22px -22px 18px;
+  border:0 !important;
+  border-radius:17px 17px 0 0 !important;
+  aspect-ratio:3 / 1;
+  min-height:0 !important;
+  overflow:visible !important;
+  background:transparent;
+}
+.profile-account-card > .profile-cover > img,
+.profile-account-card > .profile-cover > .profile-cover-placeholder {
+  position:absolute;inset:0;
+  display:block;
+  width:100%;height:100%;
+  object-fit:cover !important;
+  object-position:center center;
+  border:0 !important;
+  border-radius:17px 17px 0 0 !important;
+  background-color:transparent !important;
+}
+.profile-account-card > .profile-cover > .profile-cover-placeholder{
+  display:grid;
+  place-items:center;
+  background:linear-gradient(125deg,#25443e,#192a42);
+}
+/* Match the already-selected 3:1 crop. Keep the existing dark overlay,
+   which is independent of the image and does not add black bars. */
+.player-card-banner{background:transparent;}
+.player-card-banner > img{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  object-fit:cover !important;
+  object-position:center;
+  background:transparent !important;
+}
+@media(max-width:740px){
+  .profile-account-card > .profile-cover{
+    width:calc(100% + 34px);
+    margin:-17px -17px 17px;
+  }
+}
+@media(max-width:380px){
+  .profile-account-card > .profile-cover{
+    width:calc(100% + 24px);
+    margin:-12px -12px 16px;
+  }
+}

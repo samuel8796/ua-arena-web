@@ -1087,7 +1087,7 @@ app.addEventListener('submit',event=>{
       const payload={playerA:d.playerA,playerB:d.playerB,
         deckA:d.playerA===GUEST_PLAYER_ID?GUEST_DECK_ID:(fields.deckA||''),
         deckB:d.playerB===GUEST_PLAYER_ID?GUEST_DECK_ID:(fields.deckB||''),
-        winner:d.winner,firstPlayer:fields.firstPlayer||'',isBackfill:m.isBackfill===true||archivedMatchEntry(fields.playedAt,d.playerA,d.playerB),playedAt:fields.playedAt,
+        winner:d.winner,firstPlayer:fields.firstPlayer||'',isBackfill:m.isBackfill===true||(Math.floor(parsePlayedAt(fields.playedAt).getTime()/60000)!==Math.floor(matchTimeMs(m)/60000)&&archivedMatchEntry(fields.playedAt,d.playerA,d.playerB)),playedAt:fields.playedAt,
         note:fields.note||'',...(isGuestMatch(d)?{guestDeck:{name:(fields.guestDeckName||d.guestDeck?.name||'').trim(),color:fields.guestDeckColor||d.guestDeck?.color||'OTHER'}}:{})};
       parsePlayedAt(payload.playedAt);
       assertMatch(payload,state.players,state.decks,{allowGuest:isPersonal()});

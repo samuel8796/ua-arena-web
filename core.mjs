@@ -69,13 +69,19 @@ export function filterMatches(matches=[], {playerId='',from='',to=''}={}) {
     && matchTimeMs(m)>=start && matchTimeMs(m)<=end)
     .sort((a,b)=>matchTimeMs(b)-matchTimeMs(a));
 }
-/** An active battle counts once for each participant. Consecutive wins are
- * calculated from real play time, not the time the result was entered.
- * Voided matches do not count, and a loss resets the current streak. */
+/** A retroactively entered match must not change the live win streak.
+ * Such matches still contribute to total matches, deck rates and history. */
+export function isHistoricalBackfill(playedAtMs,nowMs=Date.now(),latestRecordedPlayMs=0){
+ return Number.isFinite(playedAtMs)&&playedAtMs>0
+   && (playedAtMs<nowMs-30*60*1000 || (latestRecordedPlayMs>0&&playedAtMs<latestRecordedPlayMs));
+}
+/** The current streak follows active non-backfill matches in play order.
+ * Voided matches and historical backfills are excluded from the streak only. */
 export function playerWinStreak(playerId,matches=[]) {
   if(!playerId)return {current:0,best:0,games:0};
   const eligible=matches
     .filter(m=>m.status==='active'
+      && m.isBackfill!==true
       && (m.playerA===playerId || m.playerB===playerId)
       && (m.winner===m.playerA || m.winner===m.playerB))
     .slice()

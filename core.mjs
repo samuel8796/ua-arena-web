@@ -75,13 +75,13 @@ export function isHistoricalBackfill(playedAtMs,nowMs=Date.now(),latestRecordedP
  return Number.isFinite(playedAtMs)&&playedAtMs>0
    && (playedAtMs<nowMs-30*60*1000 || (latestRecordedPlayMs>0&&playedAtMs<latestRecordedPlayMs));
 }
-/** The current streak follows active non-backfill matches in play order.
- * Voided matches and historical backfills are excluded from the streak only. */
+/** All valid matches count toward streaks in actual play-time order, regardless
+ * of when they were recorded. An older loss cannot reset a newer run of wins.
+ * Past "isBackfill" flags are intentionally ignored for backward compatibility. */
 export function playerWinStreak(playerId,matches=[]) {
   if(!playerId)return {current:0,best:0,games:0};
   const eligible=matches
     .filter(m=>m.status==='active'
-      && m.isBackfill!==true
       && (m.playerA===playerId || m.playerB===playerId)
       && (m.winner===m.playerA || m.winner===m.playerB))
     .slice()

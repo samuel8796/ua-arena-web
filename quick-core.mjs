@@ -5,6 +5,7 @@ export function createQuickMatch({playerA, playerB, deckA, deckB, guestDeck}, ui
   if (!playerA || !playerB || playerA === playerB || !deckA || !deckB) throw new Error('請選擇兩位不同玩家及各自牌組。');
   return {playerA, playerB, deckA, deckB, ...(guestDeck?{guestDeck:{name:guestDeck.name.trim(),color:guestDeck.color}}:{}), timerEnabled:true, status:'ready',
     createdBy:uid, createdAtMs:now, startedAtMs:0, activePlayer:'', activeSinceMs:0,
+    pausedAtMs:0, totalPausedMs:0,
     turns:[], finishedAtMs:0, resultMatchId:'', revision:0, lastActionAtMs:now, updatedBy:uid,
      duelRolled:false,decider:'',firstPlayer:''};
 }
@@ -13,7 +14,8 @@ export function changeQuickMatch(s, action, {playerId='', now=Date.now(), uid=''
   if (!['ready','running'].includes(s.status)) throw new Error('這場對戰已結束，無法再修改計時。');
   if (now < (s.lastActionAtMs||0)) throw new Error('時間資料不一致，請同步最新對戰資訊後重試。');
   if(action==='finish' && s.duelRolled!==undefined&&!s.startedAtMs)throw new Error('先攻者尚未按下回合開始，不能登錄計時對戰結果。');
-  const next={...s,turns:[...(s.turns||[])],lastActionAtMs:now,updatedBy:uid,revision:(s.revision||0)+1};
+  if(s.pausedAtMs && ['start','end','finish'].includes(action))throw new Error('請先繼續計時，再操作回合或登錄結果。');
+  const next={...s,turns:[...(s.turns||[])],pausedAtMs:Number(s.pausedAtMs)||0,totalPausedMs:Number(s.totalPausedMs)||0,lastActionAtMs:now,updatedBy:uid,revision:(s.revision||0)+1};
   if(action==='draw') {
     if(s.status!=='ready'||s.startedAtMs||s.duelRolled!==false)throw new Error('本場已抽選過決定先後攻的人。');
     if(![s.playerA,s.playerB].includes(playerId))throw new Error('抽選玩家無效。');
@@ -22,6 +24,15 @@ export function changeQuickMatch(s, action, {playerId='', now=Date.now(), uid=''
     if(s.status!=='ready'||!s.duelRolled||!s.decider||s.firstPlayer)throw new Error('請先按「開始決鬥」抽出決定先後攻的玩家。');
     if(![s.playerA,s.playerB].includes(playerId))throw new Error('無效的先攻玩家。');
     next.firstPlayer=playerId;
+  } else if(action==='pause') {
+    if(s.status!=='running'||!s.startedAtMs||s.pausedAtMs)throw new Error('目前沒有正在計時的對戰，或已暫停。');
+    next.pausedAtMs=now;
+  } else if(action==='resume') {
+    if(s.status!=='running'||!s.startedAtMs||!s.pausedAtMs)throw new Error('此場計時尚未暫停。');
+    const pauseMs=now-s.pausedAtMs;
+    next.pausedAtMs=0;
+    next.totalPausedMs+=pauseMs;
+    if(s.activePlayer)next.activeSinceMs=s.activeSinceMs+pauseMs;
   } else if(action==='start') {
     // Legacy running timers without a firstPlayer keep their original behavior.
     if(s.duelRolled===false&&!s.firstPlayer)throw new Error('請先抽籤並決定先後攻。');
@@ -29,7 +40,7 @@ export function changeQuickMatch(s, action, {playerId='', now=Date.now(), uid=''
     if(s.activePlayer)throw new Error('上一個回合尚未結束，請先點選「回合結束」。');
     if (![s.playerA,s.playerB].includes(playerId)) throw new Error('無效的玩家。');
     if ((s.turns||[]).length>=QUICK_MAX_TURNS) throw new Error('回合紀錄已達上限，請結束比賽。');
-    if(s.startedAtMs && now - s.startedAtMs >= QUICK_MATCH_LIMIT_MS) throw new Error('30 分鐘已到，請登錄勝負。');
+    if(s.startedAtMs && quickClock(s,now).expired) throw new Error('30 分鐘已到，請登錄勝負。');
     next.status='running';next.startedAtMs=s.startedAtMs||now;next.activePlayer=playerId;next.activeSinceMs=now;
   } else if (action==='end' || action==='finish') {
     if (action==='end' && !s.activePlayer) throw new Error('目前沒有進行中的回合。');
@@ -49,6 +60,7 @@ export function changeQuickMatch(s, action, {playerId='', now=Date.now(), uid=''
       next.status='finished';next.finishedAtMs=now;next.resultMatchId=matchId;
     }
   } else if(action==='cancel') {
+    if(s.pausedAtMs){next.totalPausedMs+=now-s.pausedAtMs;next.pausedAtMs=0;}
     next.status='cancelled';next.finishedAtMs=now;next.activePlayer='';next.activeSinceMs=0;
   } else throw new Error('無效的計時操作。');
   return next;
@@ -56,16 +68,17 @@ export function changeQuickMatch(s, action, {playerId='', now=Date.now(), uid=''
 export function quickClock(s, now=Date.now()) {
   const started=Number(s?.startedAtMs)||0;
   const ended=s?.finishedAtMs ? Number(s.finishedAtMs) : now;
-  const elapsedMs=started?Math.max(0,ended-started):0;
+  const effectiveEnd=s?.pausedAtMs?Math.min(ended,Number(s.pausedAtMs)):ended;
+  const elapsedMs=started?Math.max(0,effectiveEnd-started-(Number(s?.totalPausedMs)||0)):0;
   const remainingMs=Math.max(0,QUICK_MATCH_LIMIT_MS-elapsedMs);
   const a=Number(s?.turns?.filter(t=>t.playerId===s.playerA).reduce((n,t)=>n+Math.max(0,t.durationMs||0),0))||0;
   const b=Number(s?.turns?.filter(t=>t.playerId===s.playerB).reduce((n,t)=>n+Math.max(0,t.durationMs||0),0))||0;
-  const live=s?.activePlayer&&s?.activeSinceMs?Math.max(0,ended-s.activeSinceMs):0;
+  const live=s?.activePlayer&&s?.activeSinceMs?Math.max(0,effectiveEnd-s.activeSinceMs):0;
   const aMs=a+(s?.activePlayer===s?.playerA?live:0);
   const bMs=b+(s?.activePlayer===s?.playerB?live:0);
   return {elapsedMs,remainingMs,expired:started>0 && remainingMs===0,
     playerAMs:aMs,playerBMs:bMs,unattributedMs:Math.max(0,elapsedMs-aMs-bMs),
-    turns:s?.turns?.length||0,activePlayer:s?.activePlayer||''};
+    turns:s?.turns?.length||0,activePlayer:s?.activePlayer||'',paused:Boolean(s?.pausedAtMs)};
 }
 export function mmss(ms){const seconds=Math.max(0,Math.floor(ms/1000));return `${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`}
 export function quickMatchResult(s,now=Date.now()) {

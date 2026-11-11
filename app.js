@@ -222,9 +222,9 @@ function deckInputFor(playerId,side,chosen,guestDeck,quick=false){
   return `<div class="field"><label>玩家 ${side} 使用牌組</label><select name="deck${side}" ${quick?'':'id="deck-'+side.toLowerCase()+'"'}>${deckOptions(playerId,chosen)}</select>${!deckOptions(playerId,chosen)?'<div class="hint">該玩家目前沒有牌組，請先新增牌組。</div>':''}</div>`;
 }
 function deckOptions(uid,chosen){return state.decks.filter(d=>d.ownerUid===uid&&d.active!==false).map(d=>`<option value="${e(d.id)}" ${chosen===d.id?'selected':''}>${e(d.name)} · ${e(colorOf(d.color).name)}</option>`).join('')}
-function firstPlayerSelect(a,b,value='',required=true){
+function firstPlayerSelect(a,b,value='',required=false){
  return `<div class="field field-full"><label>誰先攻？</label>
-   <select name="firstPlayer" ${required?'required':''}>
+   <select name="firstPlayer">
     <option value="" ${!value?'selected':''}>不紀錄先後攻</option>
     <option value="${e(a)}" ${value===a?'selected':''}>${e(playerName(a))} 先攻</option>
     <option value="${e(b)}" ${value===b?'selected':''}>${e(playerName(b))} 先攻</option>

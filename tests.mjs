@@ -435,7 +435,7 @@ test('v1.8 圓形預覽需確認才保存，取消不寫入，支援手機雙指
   assert.ok(ui.includes('URL.revokeObjectURL(url)'));
   assert.ok(css.includes('touch-action:none'));
   assert.ok(html.includes('styles.css?v=2.6'));
-  assert.ok(html.includes('app.js?v=2.6'));
+  assert.ok(html.includes('app.js?v=2.6.1'));
   assert.ok(wf.includes('avatar-crop-ui.mjs avatar-crop-core.mjs'));
 });
 

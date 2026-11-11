@@ -390,7 +390,7 @@ test('v1.7.1 手機牌組圖片完整填滿容器、不留上下黑邊',()=>{
  assert.ok(css.includes('min-height:100%;'));
  assert.ok(css.includes('object-fit:cover;'));
  assert.ok(css.includes('height:clamp(132px,38vw,170px);'));
- assert.ok(html.includes('href="./styles.css?v=2.6"'));
+ assert.ok(html.includes('href="./styles.css?v=2.6.2"'));
 });
 
 import {avatarCropGeometry,avatarSourceCrop} from './avatar-crop-core.mjs';
@@ -434,8 +434,8 @@ test('v1.8 圓形預覽需確認才保存，取消不寫入，支援手機雙指
   assert.ok(ui.includes("document.body.style.overflow=previousOverflow"));
   assert.ok(ui.includes('URL.revokeObjectURL(url)'));
   assert.ok(css.includes('touch-action:none'));
-  assert.ok(html.includes('styles.css?v=2.6'));
-  assert.ok(html.includes('app.js?v=2.6.1'));
+  assert.ok(html.includes('styles.css?v=2.6.2'));
+  assert.ok(html.includes('app.js?v=2.6.2'));
   assert.ok(wf.includes('avatar-crop-ui.mjs avatar-crop-core.mjs'));
 });
 
@@ -913,8 +913,8 @@ test('v2.6 補登舊戰績不會改變當前連勝，但仍計入勝負統計',(
 test('v2.6 手動對戰可選擇不紀錄先後攻，仍保留既有勝負統計',()=>{
  const app=readFileSync(new URL('./app.js',import.meta.url),'utf8');
  const adapter=readFileSync(new URL('./firebase-adapter.js',import.meta.url),'utf8');
- assert.ok(app.includes('>不紀錄先後攻</option>'));
- assert.ok(app.includes('<select name="firstPlayer">'));
+ assert.ok(app.includes('<span>不紀錄先後攻</span>'));
+ assert.ok(app.includes('type="radio" name="firstPlayer" value=""'));
  assert.ok(app.includes('isBackfill:archivedMatchEntry('));
  assert.ok(adapter.includes('...(m.firstPlayer?{firstPlayer:m.firstPlayer}:{})'));
 });
@@ -976,4 +976,18 @@ test('v2.6 原有未開始計時的場次仍可抽籤、決定先攻與取消',(
  assert.equal(q.firstPlayer,'a');
  const rules=readFileSync(new URL('./firestore.rules',import.meta.url),'utf8');
  assert.ok(rules.includes("'lastActionAtMs','pausedAtMs','totalPausedMs'"));
+});
+
+test('v2.6.2 先後攻直接顯示三個選項且空值正常登錄',()=>{
+ const app=readFileSync(new URL('./app.js',import.meta.url),'utf8');
+ const css=readFileSync(new URL('./styles.css',import.meta.url),'utf8');
+ const firebase=readFileSync(new URL('./firebase-adapter.js',import.meta.url),'utf8');
+ const rules=readFileSync(new URL('./firestore.rules',import.meta.url),'utf8');
+ assert.ok(app.includes('class="first-turn-options"'));
+ assert.ok(app.includes('type="radio" name="firstPlayer" value=""'));
+ assert.ok(app.includes('<span>不紀錄先後攻</span>'));
+ assert.ok(app.includes('state.draft.firstPlayer=target.value'));
+ assert.ok(css.includes('.first-turn-choice:has(input:checked)'));
+ assert.ok(firebase.includes('...(m.firstPlayer?{firstPlayer:m.firstPlayer}:{})'));
+ assert.ok(rules.includes("(!('firstPlayer' in request.resource.data) || request.resource.data.firstPlayer in"));
 });

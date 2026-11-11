@@ -597,13 +597,14 @@ function quickSessionPage(s){
  return `<section class="card quick-session"><div class="section-head"><h3>⏱ ${e(playerName(s.playerA))} VS ${e(playerName(s.playerB))}</h3><span class="tag">${timedDone?'已完成':s.status==='cancelled'?'已取消':s.status==='ready'?'等待開始':paused?'已暫停':'進行中'}</span></div>
  ${duelStage}
  <div class="quick-clock ${paused?'is-paused':''} ${c.expired?'expired':''}"><span>30:00 總倒數</span><strong class="qm-time-left">${total}</strong><small class="qm-time-state">${clockLabel}</small></div>
+ ${playing&&s.status==='running'&&s.startedAtMs?`<div class="quick-pause-controls"><button class="btn ${paused?'btn-primary':'btn-outline'} btn-full" data-action="${paused?'quick-resume':'quick-pause'}">${paused?'▶ 繼續計時':'⏸ 暫停計時'}</button></div>`:''}
  <div class="quick-players">${[s.playerA,s.playerB].map((id,i)=>`<div class="quick-player ${s.activePlayer===id?'is-active':''}">
   <div class="quick-player-visual">${battleDeckArtwork(s,i===0?'A':'B')}<div class="quick-player-identity"><strong>${e(playerName(id))}</strong><span>${e(battleDeckName(s,i===0?'A':'B'))}</span>
   ${s.firstPlayer?`<small class="turn-position">${id===s.firstPlayer?'⚔ 先攻':'🛡 後攻'}</small>`:''}</div></div>
   <div class="quick-player-time ${i===0?'qm-player-a':'qm-player-b'}">${mmss(i===0?c.playerAMs:c.playerBMs)}</div>
   ${playing?(paused?`<button class="btn btn-ghost btn-full" disabled>⏸ 計時暫停中</button>`:s.activePlayer===id?`<button class="btn btn-primary btn-full" data-action="quick-turn-end">■ 回合結束 · 自動交棒</button>`:s.activePlayer?`<button class="btn btn-ghost btn-full" disabled>對手計時中</button>`:s.duelRolled===false||(s.duelRolled===true&&!s.firstPlayer)?'':!s.startedAtMs&&s.firstPlayer&&s.firstPlayer!==id?`<button class="btn btn-ghost btn-full" disabled>等待先攻者啟動</button>`:`<button class="btn btn-primary btn-full" data-action="quick-turn-start" data-player="${e(id)}" ${c.expired?'disabled':''}>▶ 回合開始</button>`):''}
  </div>`).join('')}</div>
- ${playing&&s.status==='running'&&s.startedAtMs?`<div class="quick-pause-controls"><button class="btn ${paused?'btn-primary':'btn-outline'} btn-full" data-action="${paused?'quick-resume':'quick-pause'}">${paused?'▶ 繼續計時':'⏸ 暫停計時'}</button></div>`:''}
+ 
  <div class="hint">按「回合結束」會立即啟動對方回合；只有按下暫停，才會停止整場倒數與玩家時間。關閉頁面不會自動暫停。</div>
  <div class="quick-summary"><span>已完成回合：<b>${c.turns}</b></span><span>未歸屬空檔：<b class="qm-gap">${mmss(c.unattributedMs)}</b></span></div>
  ${playing?`${!paused&&(s.duelRolled===undefined||!!s.startedAtMs)?`<button class="btn btn-primary btn-full" data-action="quick-result-open" style="margin-top:18px">🏆 結束對戰並登錄結果</button>`:''}<button class="btn btn-ghost btn-full" style="margin-top:8px" data-action="quick-cancel">取消本場（不計勝負）</button>`:''}

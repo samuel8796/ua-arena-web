@@ -14,7 +14,7 @@ const app=$('#app');
 const configured=Boolean(firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId);
 const params=new URLSearchParams(location.search);
 let adapter=null, unsub=()=>{}, historyUnsub=()=>{}, personalTournamentUnsub=()=>{}, tournamentRequestUnsub=()=>{}, toastTimer;
-const state={user:null,profile:{},personalHistory:{},historyReady:false,personalTournaments:{},tournamentHistoryReady:false,myCard:null,playerCard:null,groupDetails:{},tournaments:[],tournamentRequests:[],myTournamentRequest:false,tournamentId:'',publicTournament:null,publicWatchError:'',groupId:'',groupIds:[],group:null,players:[],decks:[],matches:[],tab:'overview',modal:null,draft:{},filter:'ALL',deckSort:'rate',playerFilter:'',matchFrom:'',matchTo:'',inviteId:params.get('join')||'',authMode:'login',preview:false,rulesReply:'',rulesQuestion:'',rulesEdition:'繁體中文版',busy:false,quickMatches:[],quickSessionId:'',quickCreate:true,quickDraft:{},quickPending:null,quickResultOpen:false};
+const state={user:null,profile:{},personalHistory:{},historyReady:false,personalTournaments:{},tournamentHistoryReady:false,myCard:null,playerCard:null,groupDetails:{},tournaments:[],tournamentRequests:[],myTournamentRequest:false,tournamentId:'',publicTournament:null,publicWatchError:'',groupId:'',groupIds:[],group:null,players:[],decks:[],matches:[],tab:'overview',modal:null,draft:{},filter:'ALL',deckSort:'rate',playerFilter:'',matchFrom:'',matchTo:'',inviteId:params.get('join')||'',authMode:'login',preview:false,rulesReply:'',rulesQuestion:'',rulesEdition:'繁體中文版',busy:false,quickMatches:[],quickSessionId:'',quickCreate:true,quickDraft:{},quickPending:null,quickResultOpen:false,quickHistorySearch:'',quickHistoryFrom:'',quickHistoryTo:'',quickHistoryLimit:5};
 const player=id=>state.players.find(x=>x.id===id);
 const playerName=id=>player(id)?.nickname||'未知玩家';
 const deck=id=>state.decks.find(x=>x.id===id);
@@ -607,24 +607,58 @@ function quickSessionPage(s){
  ${(s.turns||[]).length?`<div class="divider"></div><h3 class="quick-history-title">回合用時紀錄</h3><div class="table-wrap"><table class="table"><thead><tr><th>回合</th><th>玩家</th><th>花費時間</th></tr></thead><tbody>${turnRows}</tbody></table></div>`:''}
  </section>${state.quickResultOpen&&playing?quickResultForm(s):''}`;
 }
+function quickHistoryMatches(){
+ const search=state.quickHistorySearch.trim().toLocaleLowerCase();
+ const from=state.quickHistoryFrom?new Date(state.quickHistoryFrom).getTime():-Infinity;
+ const to=state.quickHistoryTo?new Date(state.quickHistoryTo).getTime()+59999:Infinity;
+ return state.quickMatches.filter(q=>!q.hiddenAt).filter(q=>{
+   const when=Number(q.startedAtMs||q.createdAtMs||0);
+   const text=[playerName(q.playerA),playerName(q.playerB),
+     new Date(when||Date.now()).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'})].join(' ').toLocaleLowerCase();
+   return when>=from&&when<=to&&(!search||text.includes(search));
+ }).sort((a,b)=>(b.startedAtMs||b.createdAtMs||0)-(a.startedAtMs||a.createdAtMs||0));
+}
+function quickHistoryRows(items){
+ const shown=items.slice(0,state.quickHistoryLimit);
+ return `<div class="quick-list">${shown.map(q=>`<div class="quick-list-entry">
+   <button type="button" class="quick-list-row ${state.quickSessionId===q.id&&!state.quickCreate?'selected':''}" data-action="quick-select" data-id="${e(q.id)}">
+    <span class="quick-list-meta"><strong>${e(playerName(q.playerA))} vs ${e(playerName(q.playerB))}</strong>
+     <small>${e(new Date(q.startedAtMs||q.createdAtMs||Date.now()).toLocaleString('zh-TW',{timeZone:'Asia/Taipei',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}))}</small></span>
+    <span class="tag">${q.status==='finished'?'已完成':q.status==='ready'?'待開始':q.status==='running'?(q.pausedAtMs?'已暫停':quickClock(q).expired?'已超時':'進行中'):'已取消'}</span>
+   </button>
+   ${canRemoveQuick(q)?`<div class="quick-history-settings">
+     <button type="button" class="quick-history-gear" data-action="quick-history-settings" aria-label="場次設定" aria-expanded="false" title="場次設定">⚙</button>
+     <div class="quick-history-menu" hidden><button type="button" data-action="quick-remove" data-id="${e(q.id)}">移除這筆速配場次</button></div>
+   </div>`:''}
+ </div>`).join('')||'<div class="empty">查無符合的歷史場次。</div>'}</div>
+ ${items.length>state.quickHistoryLimit?`<button type="button" class="btn btn-ghost btn-full quick-history-more" data-action="quick-history-more">顯示更多（已顯示 ${shown.length} / ${items.length} 場）</button>`:''}`;
+}
+function refreshQuickHistoryResults(){
+ const results=document.getElementById('quick-history-results');
+ if(!results)return;
+ const items=quickHistoryMatches();
+ results.innerHTML=quickHistoryRows(items);
+ const counter=document.getElementById('quick-history-count');
+ if(counter)counter.textContent=`${items.length} / ${state.quickMatches.filter(q=>!q.hiddenAt).length} 場`;
+}
 function quickPage(){
  const visible=state.quickMatches.filter(x=>!x.hiddenAt);
  const active=visible.filter(x=>x.status==='ready'||x.status==='running').sort((a,b)=>(b.createdAtMs||0)-(a.createdAtMs||0));
  const selected=visible.find(x=>x.id===state.quickSessionId)||(!state.quickCreate?active[0]:null);
- if(selected && !state.quickSessionId)state.quickSessionId=selected.id;
- const rows=visible.slice().sort((a,b)=>b.createdAtMs-a.createdAtMs).slice(0,30).map(q=>`<div class="quick-list-entry">
-   <button type="button" class="quick-list-row ${selected?.id===q.id?'selected':''}" data-action="quick-select" data-id="${e(q.id)}">
-    <span class="quick-list-meta"><strong>${e(playerName(q.playerA))} vs ${e(playerName(q.playerB))}</strong>
-      <small>${e(new Date(q.startedAtMs||q.createdAtMs||Date.now()).toLocaleString('zh-TW',{timeZone:'Asia/Taipei',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}))}</small></span>
-    <span class="tag">${q.status==='finished'?'已完成':q.status==='ready'?'待開始':q.status==='running'?(q.pausedAtMs?'已暫停':quickClock(q).expired?'已超時':'進行中'):'已取消'}</span>
-   </button>
-   ${canRemoveQuick(q)?`<button type="button" class="btn btn-danger btn-sm quick-remove" data-action="quick-remove" data-id="${e(q.id)}">刪除</button>`:''}
- </div>`).join('');
+ if(selected&&!state.quickSessionId)state.quickSessionId=selected.id;
+ const items=quickHistoryMatches();
  return `<div class="page-head"><div><div class="label-up">QUICK MATCH / 30-MINUTE CLOCK</div><h1>Quick Match</h1><p>30 分鐘計時與直接記錄兩種模式，對戰結果會保存在目前戰團。</p></div><button class="btn btn-primary" data-action="quick-new">＋ 新對戰</button></div>
  ${state.players.length<2?`<section class="card"><div class="empty">請先建立個人牌組或邀請其他玩家加入對戰團。</div></section>`:state.quickPending?quickResultForm(null):state.quickCreate?quickSetupPage():selected?quickSessionPage(selected):quickSetupPage()}
- ${visible.length?`<section class="card quick-session-list"><div class="section-head"><h3>歷史對戰及計時場次</h3><span class="tag">${visible.length} 場</span></div>
- <p class="muted sm" style="margin-bottom:13px">雙方玩家都能刪除這份速配清單。已完成的正式戰績仍會保留，可從「戰績紀錄」查看或撤銷。</p>
- <div class="quick-list">${rows}</div></section>`:''}`;
+ <section class="card quick-session-list"><div class="section-head"><h3>歷史對戰及計時場次</h3><span class="tag" id="quick-history-count">${items.length} / ${visible.length} 場</span></div>
+ <p class="muted sm quick-history-hint">預設只顯示最新五場，可依玩家名稱或對戰日期時間搜尋。場次操作收在右側「⚙ 設定」，移除速配場次不會刪除已登錄的正式戰績。</p>
+ <div class="quick-history-filters">
+   <label>搜尋玩家或時間<input type="search" id="quick-history-search" value="${e(state.quickHistorySearch)}" placeholder="輸入玩家名稱、日期或時間" autocomplete="off" aria-label="搜尋歷史計時場次"></label>
+   <label>開始時間<input type="datetime-local" id="quick-history-from" value="${e(state.quickHistoryFrom)}"></label>
+   <label>結束時間<input type="datetime-local" id="quick-history-to" value="${e(state.quickHistoryTo)}"></label>
+   <button type="button" class="btn btn-ghost btn-sm" data-action="quick-history-clear">清除篩選</button>
+ </div>
+ <div id="quick-history-results">${quickHistoryRows(items)}</div>
+ </section>`;
 }
 function refreshQuickClock(){
  if(state.tab!=='quick'||state.quickCreate)return;
@@ -849,7 +883,14 @@ async function handleAction(action,el){
    }case 'clear-match-filters':state.playerFilter='';state.matchFrom='';state.matchTo='';render();break;
   case 'open-quick':state.tab='quick';state.modal=null;state.quickCreate=true;state.quickPending=null;state.quickResultOpen=false;ensureQuickDraft();render();break;
   case 'quick-new':state.quickCreate=true;state.quickSessionId='';state.quickPending=null;state.quickResultOpen=false;ensureQuickDraft(true);render();break;
-  case 'quick-select':state.tab='quick';state.quickSessionId=el.dataset.id;state.quickCreate=false;state.quickPending=null;state.quickResultOpen=false;render();break;
+  case 'quick-history-settings':{
+    const container=el.closest('.quick-history-settings'),menu=container?.querySelector('.quick-history-menu');
+    if(menu){const opening=menu.hidden;document.querySelectorAll('.quick-history-menu').forEach(x=>x.hidden=true);menu.hidden=!opening;el.setAttribute('aria-expanded',String(opening));}
+    break;
+   }
+   case 'quick-history-more':state.quickHistoryLimit+=5;refreshQuickHistoryResults();break;
+   case 'quick-history-clear':state.quickHistorySearch='';state.quickHistoryFrom='';state.quickHistoryTo='';state.quickHistoryLimit=5;render();break;
+   case 'quick-select':state.tab='quick';state.quickSessionId=el.dataset.id;state.quickCreate=false;state.quickPending=null;state.quickResultOpen=false;render();break;
    case 'quick-remove':{
     const session=state.quickMatches.find(x=>x.id===el.dataset.id);
     if(!session||!canRemoveQuick(session))throw new Error('只有玩家、建立者或房主可以移除場次。');
@@ -923,6 +964,10 @@ app.addEventListener('change',async event=>{
     }
     return;
   }
+  if(['quick-history-from','quick-history-to'].includes(target.id)){
+    state[target.id==='quick-history-from'?'quickHistoryFrom':'quickHistoryTo']=target.value;
+    state.quickHistoryLimit=5;refreshQuickHistoryResults();return;
+  }
   if(target.id==='deck-sort'){state.deckSort=target.value;render();return;}
   if(target.id==='match-filter'||target.id==='match-from'||target.id==='match-to'){
     if(target.id==='match-filter')state.playerFilter=target.value;
@@ -989,7 +1034,9 @@ app.addEventListener('change',async event=>{
   else if(target.name==='deckB'){d.deckB=target.value}
   else if(target.name==='guestDeckColor'){d.guestDeck||=guestDefault();d.guestDeck.color=target.value}
 });
-app.addEventListener('input',event=>{if(['match','match-edit','match-edit-timed'].includes(state.modal)&&event.target.name==='note')state.draft.note=event.target.value;if(state.modal==='deck'&&event.target.name==='name')state.draft.name=event.target.value;if(event.target.name==='guestDeckName'){const d=state.modal==='match'?state.draft:state.quickDraft;d.guestDeck||=guestDefault();d.guestDeck.name=event.target.value;}});
+app.addEventListener('input',event=>{
+  if(event.target.id==='quick-history-search'){state.quickHistorySearch=event.target.value;state.quickHistoryLimit=5;refreshQuickHistoryResults();return;}
+  if(['match','match-edit','match-edit-timed'].includes(state.modal)&&event.target.name==='note')state.draft.note=event.target.value;if(state.modal==='deck'&&event.target.name==='name')state.draft.name=event.target.value;if(event.target.name==='guestDeckName'){const d=state.modal==='match'?state.draft:state.quickDraft;d.guestDeck||=guestDefault();d.guestDeck.name=event.target.value;}});
 app.addEventListener('submit',event=>{
   const form=event.target.closest('form[data-form]');if(!form)return;event.preventDefault();
   const fields=Object.fromEntries(new FormData(form));

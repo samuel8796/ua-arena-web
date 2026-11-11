@@ -274,7 +274,7 @@ export const firebaseAdapter = {
     const playedAt=m.playedAt?parsePlayedAt(m.playedAt):new Date();
     await addDoc(colRef(gid,'matches'),{playerA:m.playerA,deckA:m.deckA,playerB:m.playerB,deckB:m.deckB,winner:m.winner,
       ...(m.guestDeck?{guestDeck:{name:m.guestDeck.name.trim(),color:m.guestDeck.color}}:{}),
-      ...(m.firstPlayer?{firstPlayer:m.firstPlayer}:{}),playedAt:Timestamp.fromDate(playedAt),
+      ...(m.firstPlayer?{firstPlayer:m.firstPlayer}:{}),isBackfill:m.isBackfill===true,playedAt:Timestamp.fromDate(playedAt),
       note:(m.note||'').trim(),recordedBy:uid,status:'active',createdAt:serverTimestamp()});
   },
   async updateTimedMatch(gid,id,winner,note){
@@ -296,6 +296,7 @@ export const firebaseAdapter = {
     await updateDoc(ref,{
       playerA:m.playerA,playerB:m.playerB,deckA:m.deckA,deckB:m.deckB,
       winner:m.winner,note:(m.note||'').trim().slice(0,200),
+      isBackfill:before.isBackfill===true||m.isBackfill===true,
       firstPlayer:m.firstPlayer||deleteField(),
       playedAt:Timestamp.fromDate(parsePlayedAt(m.playedAt)),
       guestDeck:m.guestDeck?{name:m.guestDeck.name.trim(),color:m.guestDeck.color}:deleteField()
@@ -313,7 +314,10 @@ export const firebaseAdapter = {
     const snap=await getDoc(ref);
     if(!snap.exists())throw new Error('找不到此速配場次。');
     const q=snap.data();
-    if(![q.playerA,q.playerB].includes(uid))throw new Error('只有本場兩位玩家能移除速配清單紀錄。');
+    if(![q.playerA,q.playerB,q.createdBy].includes(uid)){
+      const g=await getDoc(groupRef(gid));
+      if(!g.exists()||g.data().createdBy!==uid)throw new Error('只有玩家、建立者或房主可以移除速配場次。');
+    }
     if(!['finished','cancelled'].includes(q.status))throw new Error('請先結束或取消計時，再移除清單紀錄。');
     if(q.hiddenAt)return;
     await updateDoc(ref,{hiddenAt:serverTimestamp()});
@@ -423,7 +427,7 @@ export const firebaseAdapter = {
       if(![side.a,side.b].includes(payload.winner))throw new Error('勝者必須是本場參賽玩家。');
       const next=recordTournamentWinner(current,round,index,payload.winner,matchRef.id);
       tx.set(matchRef,{playerA:side.a,playerB:side.b,deckA:payload.deckA,deckB:payload.deckB,
-        winner:payload.winner,...(payload.firstPlayer?{firstPlayer:payload.firstPlayer}:{}),note:String(payload.note||'').trim().slice(0,200),playedAt,recordedBy:uid,status:'active',
+        winner:payload.winner,...(payload.firstPlayer?{firstPlayer:payload.firstPlayer}:{}),isBackfill:payload.isBackfill===true,note:String(payload.note||'').trim().slice(0,200),playedAt,recordedBy:uid,status:'active',
         tournamentId:id,tournamentRound:round,tournamentMatch:index,tournamentTitle:current.title,
         createdAt:serverTimestamp()});
       tx.update(tRef,{participants:next.participants,rounds:serializeTournamentRounds(next.rounds),

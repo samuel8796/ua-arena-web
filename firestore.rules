@@ -365,8 +365,8 @@ service cloud.firestore {
       match /quickMatches/{quickId} {
         allow get, list: if member(gid);
         allow create: if member(gid)
-          && request.resource.data.keys().hasAll(['playerA','playerB','deckA','deckB','duelRolled','decider','firstPlayer','timerEnabled','status','createdBy','createdAt','createdAtMs','updatedAt','updatedBy','startedAtMs','activePlayer','activeSinceMs','turns','finishedAtMs','resultMatchId','revision','lastActionAtMs','duelRolled','decider','firstPlayer'])
-          && request.resource.data.keys().hasOnly(['playerA','playerB','deckA','deckB','guestDeck','timerEnabled','status','createdBy','createdAt','createdAtMs','updatedAt','updatedBy','startedAtMs','activePlayer','activeSinceMs','turns','finishedAtMs','resultMatchId','revision','lastActionAtMs','duelRolled','decider','firstPlayer'])
+          && request.resource.data.keys().hasAll(['playerA','playerB','deckA','deckB','duelRolled','decider','firstPlayer','timerEnabled','status','createdBy','createdAt','createdAtMs','updatedAt','updatedBy','startedAtMs','activePlayer','activeSinceMs','pausedAtMs','totalPausedMs','turns','finishedAtMs','resultMatchId','revision','lastActionAtMs','duelRolled','decider','firstPlayer'])
+          && request.resource.data.keys().hasOnly(['playerA','playerB','deckA','deckB','guestDeck','timerEnabled','status','createdBy','createdAt','createdAtMs','updatedAt','updatedBy','startedAtMs','activePlayer','activeSinceMs','pausedAtMs','totalPausedMs','turns','finishedAtMs','resultMatchId','revision','lastActionAtMs','duelRolled','decider','firstPlayer'])
           && request.resource.data.timerEnabled == true
           && request.resource.data.playerA != request.resource.data.playerB
           && validBattleSide(gid,request.resource.data)
@@ -383,6 +383,8 @@ service cloud.firestore {
           && request.resource.data.firstPlayer == ''
           && request.resource.data.startedAtMs == 0
           && request.resource.data.activeSinceMs == 0
+          && request.resource.data.pausedAtMs == 0
+          && request.resource.data.totalPausedMs == 0
           && request.resource.data.activePlayer == ''
           && request.resource.data.turns == []
           && request.resource.data.finishedAtMs == 0
@@ -391,8 +393,8 @@ service cloud.firestore {
           && request.resource.data.lastActionAtMs == request.resource.data.createdAtMs;
         allow update: if member(gid)
           && resource.data.status in ['ready','running']
-          && request.resource.data.keys().hasOnly(['playerA','playerB','deckA','deckB','guestDeck','timerEnabled','status','createdBy','createdAt','createdAtMs','updatedAt','updatedBy','startedAtMs','activePlayer','activeSinceMs','turns','finishedAtMs','resultMatchId','revision','lastActionAtMs','duelRolled','decider','firstPlayer'])
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','startedAtMs','activePlayer','activeSinceMs','turns','finishedAtMs','resultMatchId','revision','lastActionAtMs','updatedAt','updatedBy','duelRolled','decider','firstPlayer'])
+          && request.resource.data.keys().hasOnly(['playerA','playerB','deckA','deckB','guestDeck','timerEnabled','status','createdBy','createdAt','createdAtMs','updatedAt','updatedBy','startedAtMs','activePlayer','activeSinceMs','pausedAtMs','totalPausedMs','turns','finishedAtMs','resultMatchId','revision','lastActionAtMs','duelRolled','decider','firstPlayer'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','startedAtMs','activePlayer','activeSinceMs','pausedAtMs','totalPausedMs','turns','finishedAtMs','resultMatchId','revision','lastActionAtMs','updatedAt','updatedBy','duelRolled','decider','firstPlayer'])
           && request.resource.data.updatedBy == request.auth.uid
           && request.resource.data.updatedAt == request.time
           && request.resource.data.revision == resource.data.revision + 1
@@ -402,6 +404,10 @@ service cloud.firestore {
           && request.resource.data.lastActionAtMs <= request.time.toMillis() + 60000
           && request.resource.data.startedAtMs is int
           && request.resource.data.activeSinceMs is int
+          && request.resource.data.pausedAtMs is int
+          && request.resource.data.pausedAtMs >= 0
+          && request.resource.data.totalPausedMs is int
+          && request.resource.data.totalPausedMs >= 0
           && request.resource.data.turns is list
           && request.resource.data.turns.size() <= 200
           && request.resource.data.finishedAtMs is int
@@ -431,8 +437,40 @@ service cloud.firestore {
               && request.resource.data.firstPlayer in [resource.data.playerA,resource.data.playerB]
               && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['firstPlayer','updatedAt','updatedBy','revision','lastActionAtMs']))
             ||
+            // Pause: preserve the active player and all previously closed turns.
+            (resource.data.status == 'running'
+              && resource.data.startedAtMs > 0
+              && (!('pausedAtMs' in resource.data) || resource.data.pausedAtMs == 0)
+              && request.resource.data.status == 'running'
+              && request.resource.data.pausedAtMs == request.resource.data.lastActionAtMs
+              && request.resource.data.totalPausedMs == (('totalPausedMs' in resource.data) ? resource.data.totalPausedMs : 0)
+              && request.resource.data.activePlayer == resource.data.activePlayer
+              && request.resource.data.activeSinceMs == resource.data.activeSinceMs
+              && request.resource.data.startedAtMs == resource.data.startedAtMs
+              && request.resource.data.turns == resource.data.turns
+              && request.resource.data.finishedAtMs == 0
+              && request.resource.data.resultMatchId == ''
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pausedAtMs','totalPausedMs','revision','lastActionAtMs','updatedBy','updatedAt']))
+            ||
+            // Resume: shift the active turn's start past the pause interval.
+            (resource.data.status == 'running'
+              && ('pausedAtMs' in resource.data) && resource.data.pausedAtMs > 0
+              && request.resource.data.status == 'running'
+              && request.resource.data.pausedAtMs == 0
+              && request.resource.data.totalPausedMs == resource.data.totalPausedMs + request.resource.data.lastActionAtMs - resource.data.pausedAtMs
+              && request.resource.data.activePlayer == resource.data.activePlayer
+              && request.resource.data.activeSinceMs == (resource.data.activePlayer == '' ? resource.data.activeSinceMs : resource.data.activeSinceMs + request.resource.data.lastActionAtMs - resource.data.pausedAtMs)
+              && request.resource.data.startedAtMs == resource.data.startedAtMs
+              && request.resource.data.turns == resource.data.turns
+              && request.resource.data.finishedAtMs == 0
+              && request.resource.data.resultMatchId == ''
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pausedAtMs','totalPausedMs','activeSinceMs','revision','lastActionAtMs','updatedBy','updatedAt']))
+            ||
             // Start turn: no active turn yet, cannot alter closed turn history.
             (request.resource.data.status == 'running'
+              && (!('pausedAtMs' in resource.data) || resource.data.pausedAtMs == 0)
+              && request.resource.data.pausedAtMs == 0
+              && request.resource.data.totalPausedMs == (('totalPausedMs' in resource.data) ? resource.data.totalPausedMs : 0)
               && resource.data.activePlayer == ''
               && request.resource.data.activePlayer in [resource.data.playerA,resource.data.playerB]
               && (!('duelRolled' in resource.data) || (resource.data.firstPlayer != '' && request.resource.data.duelRolled == resource.data.duelRolled && request.resource.data.decider == resource.data.decider && request.resource.data.firstPlayer == resource.data.firstPlayer))
@@ -445,6 +483,9 @@ service cloud.firestore {
             ||
             // End turn: close the currently running player's turn.
             (request.resource.data.status == 'running'
+              && (!('pausedAtMs' in resource.data) || resource.data.pausedAtMs == 0)
+              && request.resource.data.pausedAtMs == 0
+              && request.resource.data.totalPausedMs == (('totalPausedMs' in resource.data) ? resource.data.totalPausedMs : 0)
               && resource.data.activePlayer != ''
               && request.resource.data.activePlayer == (resource.data.activePlayer == resource.data.playerA ? resource.data.playerB : resource.data.playerA)
               && request.resource.data.activeSinceMs == request.resource.data.lastActionAtMs
@@ -460,6 +501,9 @@ service cloud.firestore {
             ||
             // Finish: match and timer result must commit atomically.
             (request.resource.data.status == 'finished'
+              && (!('pausedAtMs' in resource.data) || resource.data.pausedAtMs == 0)
+              && request.resource.data.pausedAtMs == 0
+              && request.resource.data.totalPausedMs == (('totalPausedMs' in resource.data) ? resource.data.totalPausedMs : 0)
               && request.resource.data.activePlayer == ''
               && request.resource.data.activeSinceMs == 0
               && request.resource.data.startedAtMs == resource.data.startedAtMs
@@ -476,6 +520,8 @@ service cloud.firestore {
               && getAfter(/databases/$(database)/documents/groups/$(gid)/matches/$(request.resource.data.resultMatchId)).data.quickMatchId == quickId)
             ||
             (request.resource.data.status == 'cancelled'
+              && request.resource.data.pausedAtMs == 0
+              && request.resource.data.totalPausedMs == (('totalPausedMs' in resource.data) ? resource.data.totalPausedMs : 0) + ((('pausedAtMs' in resource.data) && resource.data.pausedAtMs > 0) ? request.resource.data.lastActionAtMs - resource.data.pausedAtMs : 0)
               && request.resource.data.activePlayer == ''
               && request.resource.data.activeSinceMs == 0
               && request.resource.data.startedAtMs == resource.data.startedAtMs
@@ -487,7 +533,7 @@ service cloud.firestore {
         // Either participant can remove a completed/cancelled timer from the
         // quick list without destroying its audit trail or recorded match.
         allow update: if member(gid)
-          && request.auth.uid in [resource.data.playerA,resource.data.playerB]
+          && (request.auth.uid in [resource.data.playerA,resource.data.playerB,resource.data.createdBy] || groupOwner(gid))
           && resource.data.status in ['finished','cancelled']
           && !('hiddenAt' in resource.data)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hiddenAt'])
@@ -498,13 +544,14 @@ service cloud.firestore {
         allow get, list: if member(gid);
         allow create: if member(gid)
           && request.resource.data.keys().hasAll(['playerA','deckA','playerB','deckB','winner','note','recordedBy','status','createdAt'])
-          && request.resource.data.keys().hasOnly(['playerA','deckA','playerB','deckB','guestDeck','winner','note','recordedBy','status','createdAt','quickMatchId','timing','playedAt','firstPlayer','tournamentId','tournamentRound','tournamentMatch','tournamentTitle'])
+          && request.resource.data.keys().hasOnly(['playerA','deckA','playerB','deckB','guestDeck','winner','note','recordedBy','status','createdAt','quickMatchId','timing','playedAt','firstPlayer','isBackfill','tournamentId','tournamentRound','tournamentMatch','tournamentTitle'])
           && request.resource.data.playerA is string && request.resource.data.playerB is string
           && request.resource.data.playerA != request.resource.data.playerB
           && validBattleSide(gid,request.resource.data)
           && validTournamentMatch(gid,matchId,request.resource.data)
           && request.resource.data.winner in [request.resource.data.playerA,request.resource.data.playerB]
           && (!('firstPlayer' in request.resource.data) || request.resource.data.firstPlayer in [request.resource.data.playerA,request.resource.data.playerB])
+          && (!('isBackfill' in request.resource.data) || request.resource.data.isBackfill is bool)
           && request.resource.data.note is string && request.resource.data.note.size() <= 200
           && request.resource.data.recordedBy == request.auth.uid
           && request.resource.data.status == 'active'
@@ -548,11 +595,13 @@ service cloud.firestore {
           && !('quickMatchId' in resource.data)
           && (resource.data.recordedBy == request.auth.uid || groupOwner(gid))
           && request.resource.data.diff(resource.data).affectedKeys()
-               .hasOnly(['playerA','playerB','deckA','deckB','guestDeck','winner','firstPlayer','note','playedAt'])
+               .hasOnly(['playerA','playerB','deckA','deckB','guestDeck','winner','firstPlayer','isBackfill','note','playedAt'])
           && request.resource.data.playerA is string && request.resource.data.playerB is string
           && request.resource.data.playerA != request.resource.data.playerB
           && request.resource.data.winner in [request.resource.data.playerA,request.resource.data.playerB]
           && request.resource.data.note is string && request.resource.data.note.size() <= 200
+          && (!('isBackfill' in request.resource.data) || request.resource.data.isBackfill is bool)
+          && (!('isBackfill' in resource.data) || resource.data.isBackfill != true || request.resource.data.isBackfill == true)
           && (!('firstPlayer' in request.resource.data)
               || request.resource.data.firstPlayer in [request.resource.data.playerA,request.resource.data.playerB])
           && (!('guestDeck' in request.resource.data) || validGuestDeck(request.resource.data))

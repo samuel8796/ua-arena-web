@@ -390,7 +390,7 @@ test('v1.7.1 手機牌組圖片完整填滿容器、不留上下黑邊',()=>{
  assert.ok(css.includes('min-height:100%;'));
  assert.ok(css.includes('object-fit:cover;'));
  assert.ok(css.includes('height:clamp(132px,38vw,170px);'));
- assert.ok(html.includes('href="./styles.css?v=2.6.2"'));
+ assert.ok(html.includes('href="./styles.css?v=2.7"'));
 });
 
 import {avatarCropGeometry,avatarSourceCrop} from './avatar-crop-core.mjs';
@@ -434,8 +434,8 @@ test('v1.8 圓形預覽需確認才保存，取消不寫入，支援手機雙指
   assert.ok(ui.includes("document.body.style.overflow=previousOverflow"));
   assert.ok(ui.includes('URL.revokeObjectURL(url)'));
   assert.ok(css.includes('touch-action:none'));
-  assert.ok(html.includes('styles.css?v=2.6.2'));
-  assert.ok(html.includes('app.js?v=2.6.2'));
+  assert.ok(html.includes('styles.css?v=2.7'));
+  assert.ok(html.includes('app.js?v=2.7'));
   assert.ok(wf.includes('avatar-crop-ui.mjs avatar-crop-core.mjs'));
 });
 
@@ -892,30 +892,29 @@ test('v2.5 圖片跨牌組收藏、對戰、計時、錦標賽、名片 TOP5 統
  assert.ok(crop.includes("ratio:16/9,width:960,height:540"));
 });
 
-import { isHistoricalBackfill } from './core.mjs';
-
-test('v2.6 補登舊戰績不會改變當前連勝，但仍計入勝負統計',()=>{
+test('v2.7 連勝依實際對戰時間排序，十月補敗不影響十一月連勝',()=>{
  const base=[
-   {id:'live1',status:'active',playerA:'a',playerB:'b',deckA:'d1',deckB:'d2',winner:'a',playedAt:'2026-11-09T19:00:00'},
-   {id:'live2',status:'active',playerA:'a',playerB:'b',deckA:'d1',deckB:'d2',winner:'a',playedAt:'2026-11-10T20:00:00'}
+   {id:'nov1',status:'active',playerA:'a',playerB:'b',deckA:'d1',deckB:'d2',winner:'a',playedAt:'2026-11-09T19:00:00'},
+   {id:'nov2',status:'active',playerA:'a',playerB:'b',deckA:'d1',deckB:'d2',winner:'a',playedAt:'2026-11-11T20:00:00'}
  ];
- const historic={id:'backfill',status:'active',playerA:'a',playerB:'b',deckA:'d1',deckB:'d2',winner:'b',playedAt:'2026-11-10T19:50:00',isBackfill:true};
+ const octoberLoss={id:'oct',status:'active',playerA:'a',playerB:'b',deckA:'d1',deckB:'d2',winner:'b',playedAt:'2026-10-10T19:00:00',isBackfill:true,createdAt:'2026-11-11T23:00:00'};
  assert.deepEqual(playerWinStreak('a',base),{current:2,best:2,games:2});
- assert.deepEqual(playerWinStreak('a',[...base,historic]),{current:2,best:2,games:2});
+ assert.deepEqual(playerWinStreak('a',[...base,octoberLoss]),{current:2,best:2,games:3});
  const before=computeStats(people,decks,base).players.find(p=>p.id==='a');
- const after=computeStats(people,decks,[...base,historic]).players.find(p=>p.id==='a');
+ const after=computeStats(people,decks,[...base,octoberLoss]).players.find(p=>p.id==='a');
  assert.equal(after.games,before.games+1);
  assert.equal(after.losses,before.losses+1);
- assert.equal(isHistoricalBackfill(Date.now()-31*60000,Date.now()),true);
- assert.equal(isHistoricalBackfill(2000,6000,3000),true);
- assert.equal(isHistoricalBackfill(4000,6000,3000),false);
+ const yesterdayLoss={id:'yesterday',status:'active',playerA:'a',playerB:'b',winner:'b',playedAt:'2026-11-10T20:00:00'};
+ assert.deepEqual(playerWinStreak('a',[...base,octoberLoss,yesterdayLoss]),{current:1,best:1,games:4});
+ assert.deepEqual(playerWinStreak('a',[yesterdayLoss,...base,octoberLoss]),{current:1,best:1,games:4});
 });
-test('v2.6 手動對戰可選擇不紀錄先後攻，仍保留既有勝負統計',()=>{
+test('v2.7 先後攻為下拉選單且不需歷史補登勾選',()=>{
  const app=readFileSync(new URL('./app.js',import.meta.url),'utf8');
  const adapter=readFileSync(new URL('./firebase-adapter.js',import.meta.url),'utf8');
- assert.ok(app.includes('<span>不紀錄先後攻</span>'));
- assert.ok(app.includes('type="radio" name="firstPlayer" value=""'));
- assert.ok(app.includes('isBackfill:archivedMatchEntry('));
+ assert.ok(app.includes('<select id="first-player-select" name="firstPlayer"'));
+ assert.ok(app.includes('>不紀錄先後攻</option>'));
+ assert.ok(!app.includes('name="isBackfill"'));
+ assert.ok(!app.includes('archivedMatchEntry'));
  assert.ok(adapter.includes('...(m.firstPlayer?{firstPlayer:m.firstPlayer}:{})'));
 });
 test('v2.6 計時暫停不計入倒數或玩家用時，重新啟動後回合連續',()=>{
@@ -978,16 +977,41 @@ test('v2.6 原有未開始計時的場次仍可抽籤、決定先攻與取消',(
  assert.ok(rules.includes("'lastActionAtMs','pausedAtMs','totalPausedMs'"));
 });
 
-test('v2.6.2 先後攻直接顯示三個選項且空值正常登錄',()=>{
+test('v2.7 舊版先後攻選單相容空值與 Firebase 欄位',()=>{
+ const app=readFileSync(new URL('./app.js',import.meta.url),'utf8');
+ const rules=readFileSync(new URL('./firestore.rules',import.meta.url),'utf8');
+ assert.ok(app.includes('<select id="first-player-select" name="firstPlayer"'));
+ assert.ok(app.includes('value="" ${![a,b].includes(value)'));
+ assert.ok(rules.includes("(!('firstPlayer' in request.resource.data) || request.resource.data.firstPlayer in"));
+});
+
+test('v2.7 速配歷史預設五筆、可搜尋玩家與時間，移除選項藏在齒輪',()=>{
  const app=readFileSync(new URL('./app.js',import.meta.url),'utf8');
  const css=readFileSync(new URL('./styles.css',import.meta.url),'utf8');
- const firebase=readFileSync(new URL('./firebase-adapter.js',import.meta.url),'utf8');
- const rules=readFileSync(new URL('./firestore.rules',import.meta.url),'utf8');
- assert.ok(app.includes('class="first-turn-options"'));
- assert.ok(app.includes('type="radio" name="firstPlayer" value=""'));
- assert.ok(app.includes('<span>不紀錄先後攻</span>'));
- assert.ok(app.includes('state.draft.firstPlayer=target.value'));
- assert.ok(css.includes('.first-turn-choice:has(input:checked)'));
- assert.ok(firebase.includes('...(m.firstPlayer?{firstPlayer:m.firstPlayer}:{})'));
- assert.ok(rules.includes("(!('firstPlayer' in request.resource.data) || request.resource.data.firstPlayer in"));
+ assert.ok(app.includes('quickHistoryLimit:5'));
+ assert.ok(app.includes("items.slice(0,state.quickHistoryLimit)"));
+ assert.ok(app.includes('id="quick-history-search"'));
+ assert.ok(app.includes('id="quick-history-from"'));
+ assert.ok(app.includes('id="quick-history-to"'));
+ assert.ok(app.includes('class="quick-history-gear"'));
+ assert.ok(app.includes('class="quick-history-menu" hidden'));
+ assert.ok(app.includes('data-action="quick-remove"'));
+ assert.ok(app.includes("case 'quick-history-settings'"));
+ assert.ok(app.includes("case 'quick-history-more'"));
+ assert.ok(app.includes("case 'quick-history-clear'"));
+ assert.ok(css.includes('.quick-history-menu[hidden]'));
+});
+test('v2.7 玩家牌組可在同一欄位搜尋與展開，儲存仍使用牌組 ID',()=>{
+ const app=readFileSync(new URL('./app.js',import.meta.url),'utf8');
+ const css=readFileSync(new URL('./styles.css',import.meta.url),'utf8');
+ assert.ok(app.includes('class="deck-combo-input"'));
+ assert.ok(app.includes('role="combobox"'));
+ assert.ok(app.includes('data-action="deck-combo-toggle"'));
+ assert.ok(app.includes('name="deck${side}"'));
+ assert.ok(app.includes('name="deckQuery${side}"'));
+ assert.ok(app.includes('data-deck-choice='));
+ assert.ok(app.includes('function filterDeckCombo('));
+ assert.ok(app.includes('hidden.value=id;search.value='));
+ assert.ok(app.includes('if(event.target.matches(\'.deck-combo-input\'))'));
+ assert.ok(css.includes('.deck-combo-options[hidden]'));
 });

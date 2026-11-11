@@ -1072,3 +1072,14 @@ input,select,textarea{max-width:100%;min-width:0}
     margin:-12px -12px 16px;
   }
 }
+
+/* v2.6 · Clock pause is an explicit, reversible state synced to Firestore. */
+.quick-pause-controls{display:flex;margin:15px 0 10px;gap:9px}
+.quick-pause-controls .btn{min-height:49px;font-size:14px}
+.quick-clock.is-paused{border-color:#bca06d;background:linear-gradient(145deg,#40372780,#172033)}
+.quick-clock.is-paused strong{color:#ffd59a}
+.quick-clock.is-paused .qm-time-state{color:#ffdea7}
+@media(max-width:740px){
+ .quick-pause-controls{margin:12px 0 8px}
+ .quick-pause-controls .btn{min-height:48px}
+}

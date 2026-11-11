@@ -885,3 +885,76 @@ test('v2.5 圖片跨牌組收藏、對戰、計時、錦標賽、名片 TOP5 統
  const crop=readFileSync(new URL('./wide-crop-ui.mjs',import.meta.url),'utf8');
  assert.ok(crop.includes("ratio:16/9,width:960,height:540"));
 });
+
+import { isHistoricalBackfill } from './core.mjs';
+
+test('v2.6 補登舊戰績不會改變當前連勝，但仍計入勝負統計',()=>{
+ const base=[
+   {id:'live1',status:'active',playerA:'a',playerB:'b',deckA:'d1',deckB:'d2',winner:'a',playedAt:'2026-11-09T19:00:00'},
+   {id:'live2',status:'active',playerA:'a',playerB:'b',deckA:'d1',deckB:'d2',winner:'a',playedAt:'2026-11-10T20:00:00'}
+ ];
+ const historic={id:'backfill',status:'active',playerA:'a',playerB:'b',deckA:'d1',deckB:'d2',winner:'b',playedAt:'2026-11-10T19:50:00',isBackfill:true};
+ assert.deepEqual(playerWinStreak('a',base),{current:2,best:2,games:2});
+ assert.deepEqual(playerWinStreak('a',[...base,historic]),{current:2,best:2,games:2});
+ const before=computeStats(people,decks,base).players.find(p=>p.id==='a');
+ const after=computeStats(people,decks,[...base,historic]).players.find(p=>p.id==='a');
+ assert.equal(after.games,before.games+1);
+ assert.equal(after.losses,before.losses+1);
+ assert.equal(isHistoricalBackfill(Date.now()-31*60000,Date.now()),true);
+ assert.equal(isHistoricalBackfill(2000,6000,3000),true);
+ assert.equal(isHistoricalBackfill(4000,6000,3000),false);
+});
+test('v2.6 手動對戰可選擇不紀錄先後攻，仍保留既有勝負統計',()=>{
+ const app=readFileSync(new URL('./app.js',import.meta.url),'utf8');
+ const adapter=readFileSync(new URL('./firebase-adapter.js',import.meta.url),'utf8');
+ assert.ok(app.includes('>不紀錄先後攻</option>'));
+ assert.ok(app.includes('<select name="firstPlayer">'));
+ assert.ok(app.includes('isBackfill:archivedMatchEntry('));
+ assert.ok(adapter.includes('...(m.firstPlayer?{firstPlayer:m.firstPlayer}:{})'));
+});
+test('v2.6 計時暫停不計入倒數或玩家用時，重新啟動後回合連續',()=>{
+ let q=changeQuickMatch(makeQuick(),'start',{playerId:'a',uid:'c',now:origin+1000});
+ q=changeQuickMatch(q,'pause',{uid:'c',now:origin+61000});
+ assert.equal(q.pausedAtMs,origin+61000);
+ assert.equal(quickClock(q,origin+61000).elapsedMs,60000);
+ assert.equal(quickClock(q,origin+400000).elapsedMs,60000);
+ assert.equal(quickClock(q,origin+400000).playerAMs,60000);
+ assert.throws(()=>changeQuickMatch(q,'end',{uid:'c',now:origin+410000}));
+ assert.throws(()=>changeQuickMatch(q,'finish',{uid:'c',matchId:'forbidden',now:origin+410000}));
+ const stored=JSON.parse(JSON.stringify(q));
+ assert.equal(quickClock(stored,origin+400000).remainingMs,QUICK_MATCH_LIMIT_MS-60000);
+ q=changeQuickMatch(stored,'resume',{uid:'c',now:origin+241000});
+ assert.equal(q.totalPausedMs,180000);
+ assert.equal(q.pausedAtMs,0);
+ q=changeQuickMatch(q,'end',{uid:'c',now:origin+260000});
+ assert.equal(q.turns[0].durationMs,79000);
+ assert.equal(quickClock(q,origin+260000).elapsedMs,79000);
+ assert.equal(quickClock(q,origin+260000).unattributedMs,0);
+ q=changeQuickMatch(q,'finish',{uid:'c',matchId:'finished',now:origin+290000});
+ assert.equal(quickMatchResult(q,origin+290000).elapsedMs,109000);
+});
+test('v2.6 超時計時仍可取消，暫停中的場次也能取消再從清單移除',()=>{
+ let q=changeQuickMatch(makeQuick(),'start',{playerId:'a',uid:'c',now:origin+1000});
+ assert.equal(quickClock(q,origin+QUICK_MATCH_LIMIT_MS+1001).expired,true);
+ q=changeQuickMatch(q,'cancel',{uid:'c',now:origin+QUICK_MATCH_LIMIT_MS+2000});
+ assert.equal(q.status,'cancelled');
+ let paused=changeQuickMatch(makeQuick(),'start',{playerId:'a',uid:'c',now:origin+1000});
+ paused=changeQuickMatch(paused,'pause',{uid:'c',now:origin+61000});
+ paused=changeQuickMatch(paused,'cancel',{uid:'c',now:origin+361000});
+ assert.equal(paused.status,'cancelled');
+ assert.equal(paused.totalPausedMs,300000);
+ assert.equal(quickClock(paused,origin+999999).elapsedMs,60000);
+ const app=readFileSync(new URL('./app.js',import.meta.url),'utf8');
+ const rules=readFileSync(new URL('./firestore.rules',import.meta.url),'utf8');
+ const adapter=readFileSync(new URL('./firebase-adapter.js',import.meta.url),'utf8');
+ assert.ok(app.includes("case 'quick-pause'"));
+ assert.ok(app.includes("case 'quick-resume'"));
+ assert.ok(app.includes("case 'quick-remove'"));
+ assert.ok(app.includes("if(['ready','running'].includes(session.status))await adapter.changeQuickMatch"));
+ assert.ok(app.includes("const selected=visible.find("));
+ assert.ok(rules.includes("request.resource.data.pausedAtMs is int"));
+ assert.ok(rules.includes("request.resource.data.totalPausedMs is int"));
+ assert.ok(rules.includes("resource.data.createdBy] || groupOwner(gid)"));
+ assert.ok(adapter.includes("async hideQuickMatch(gid,id,uid)"));
+ assert.ok(adapter.includes("await updateDoc(ref,{hiddenAt:serverTimestamp()})"));
+});

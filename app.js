@@ -212,10 +212,46 @@ function rulesPage(){
 function pickerOptions(players,selected,exclude='',allowGuest=false){return players.filter(p=>p.id!==exclude && (allowGuest||p.id!==GUEST_PLAYER_ID)).map(p=>`<option value="${e(p.id)}" ${selected===p.id?'selected':''}>${e(p.nickname)}</option>`).join('')}
 function guestDefault(){return {name:'',color:'OTHER'}};
 function deckInputFor(playerId,side,chosen,guestDeck,quick=false){
-  if(playerId===GUEST_PLAYER_ID)return `<div class="field"><label>訪客玩家使用牌組</label><input name="guestDeckName" maxlength="42" required value="${e(guestDeck?.name||'')}" placeholder="例如：紫色魯夫（本場限定）"/><div class="hint">此牌組僅記錄在這場比賽，不會建立到「我的牌組」。</div><select name="guestDeckColor" style="margin-top:8px">${COLORS.map(c=>`<option value="${c.id}" ${(guestDeck?.color||'OTHER')===c.id?'selected':''}>${e(c.name)}</option>`).join('')}</select></div>`;
-  return `<div class="field"><label>玩家 ${side} 使用牌組</label><select name="deck${side}" ${quick?'':'id="deck-'+side.toLowerCase()+'"'}>${deckOptions(playerId,chosen)}</select>${!deckOptions(playerId,chosen)?'<div class="hint">該玩家目前沒有牌組，請先新增牌組。</div>':''}</div>`;
+ if(playerId===GUEST_PLAYER_ID)return `<div class="field"><label>訪客玩家使用牌組</label><input name="guestDeckName" maxlength="42" required value="${e(guestDeck?.name||'')}" placeholder="例如：紫色魯夫（本場限定）"/><div class="hint">此牌組僅記錄在這場比賽，不會建立到「我的牌組」。</div><select name="guestDeckColor" style="margin-top:8px">${COLORS.map(c=>`<option value="${c.id}" ${(guestDeck?.color||'OTHER')===c.id?'selected':''}>${e(c.name)}</option>`).join('')}</select></div>`;
+ const list=state.decks.filter(d=>d.ownerUid===playerId&&d.active!==false);
+ const active=list.find(d=>d.id===chosen);
+ const label=active?`${active.name} · ${colorOf(active.color).name}`:'';
+ return `<div class="field"><label for="deck-combo-${side}">玩家 ${side} 使用牌組</label>
+   <div class="deck-combo" data-deck-combo="${side}">
+     <input type="hidden" name="deck${side}" value="${e(active?.id||'')}">
+     <div class="deck-combo-control">
+       <input class="deck-combo-input" id="deck-combo-${side}" name="deckQuery${side}" value="${e(label)}"
+        type="search" placeholder="輸入關鍵字，或展開選擇牌組" autocomplete="off" role="combobox"
+        aria-autocomplete="list" aria-expanded="false" aria-controls="deck-combo-options-${side}" data-deck-side="${side}">
+       <button type="button" class="deck-combo-toggle" data-action="deck-combo-toggle" aria-label="展開牌組列表" data-side="${side}">⌄</button>
+     </div>
+     <div class="deck-combo-options" id="deck-combo-options-${side}" role="listbox" hidden>
+       ${list.map(d=>`<button type="button" class="deck-combo-option ${chosen===d.id?'selected':''}" role="option" aria-selected="${chosen===d.id?'true':'false'}"
+          data-deck-choice="${e(d.id)}" data-side="${side}" data-search="${e(`${d.name} ${colorOf(d.color).name}`.toLocaleLowerCase())}">${e(d.name)} <small>${e(colorOf(d.color).name)}</small></button>`).join('')}
+       <div class="deck-combo-empty" hidden>找不到符合的牌組</div>
+     </div>
+   </div>
+   ${!list.length?'<div class="hint">該玩家目前沒有牌組，請先新增牌組。</div>':'<div class="hint">點擊欄位搜尋牌組名稱或顏色，也可以按右側箭頭展開全部。</div>'}
+ </div>`;
 }
 function deckOptions(uid,chosen){return state.decks.filter(d=>d.ownerUid===uid&&d.active!==false).map(d=>`<option value="${e(d.id)}" ${chosen===d.id?'selected':''}>${e(d.name)} · ${e(colorOf(d.color).name)}</option>`).join('')}
+function filterDeckCombo(combo,query=''){
+ if(!combo)return;
+ const needle=query.trim().toLocaleLowerCase();
+ const options=[...combo.querySelectorAll('[data-deck-choice]')];
+ let found=0;
+ for(const item of options){const visible=!needle||item.dataset.search?.includes(needle);item.hidden=!visible;if(visible)found++;}
+ const empty=combo.querySelector('.deck-combo-empty');if(empty)empty.hidden=found>0;
+ const list=combo.querySelector('.deck-combo-options');if(list)list.hidden=false;
+ combo.querySelector('.deck-combo-input')?.setAttribute('aria-expanded','true');
+}
+function closeDeckCombos(except=null){
+ document.querySelectorAll('.deck-combo').forEach(combo=>{
+   if(combo===except)return;
+   const list=combo.querySelector('.deck-combo-options');if(list)list.hidden=true;
+   combo.querySelector('.deck-combo-input')?.setAttribute('aria-expanded','false');
+ });
+}
 function firstPlayerSelect(a,b,value=''){
  return `<div class="field field-full first-turn-field"><label for="first-player-select">誰先攻？</label>
    <select id="first-player-select" name="firstPlayer" aria-label="誰先攻？">
@@ -883,7 +919,13 @@ async function handleAction(action,el){
    }case 'clear-match-filters':state.playerFilter='';state.matchFrom='';state.matchTo='';render();break;
   case 'open-quick':state.tab='quick';state.modal=null;state.quickCreate=true;state.quickPending=null;state.quickResultOpen=false;ensureQuickDraft();render();break;
   case 'quick-new':state.quickCreate=true;state.quickSessionId='';state.quickPending=null;state.quickResultOpen=false;ensureQuickDraft(true);render();break;
-  case 'quick-history-settings':{
+  case 'deck-combo-toggle':{
+    const combo=el.closest('.deck-combo'),list=combo?.querySelector('.deck-combo-options');
+    const input=combo?.querySelector('.deck-combo-input');
+    if(list&&!list.hidden){closeDeckCombos();break;}
+    closeDeckCombos(combo);filterDeckCombo(combo,'');input?.focus();break;
+   }
+   case 'quick-history-settings':{
     const container=el.closest('.quick-history-settings'),menu=container?.querySelector('.quick-history-menu');
     if(menu){const opening=menu.hidden;document.querySelectorAll('.quick-history-menu').forEach(x=>x.hidden=true);menu.hidden=!opening;el.setAttribute('aria-expanded',String(opening));}
     break;
@@ -945,12 +987,39 @@ async function handleAction(action,el){
   }
 }
 app.addEventListener('click',event=>{
+  const choice=event.target.closest('[data-deck-choice]');
+  if(choice){
+    const combo=choice.closest('.deck-combo'),side=choice.dataset.side,id=choice.dataset.deckChoice;
+    const selected=state.decks.find(d=>d.id===id&&d.active!==false);
+    const hidden=combo?.querySelector('input[type="hidden"]'),search=combo?.querySelector('.deck-combo-input');
+    if(selected&&hidden&&search){
+      hidden.value=id;search.value=`${selected.name} · ${colorOf(selected.color).name}`;
+      const draft=state.modal==='match'||state.modal==='match-edit'?state.draft:state.quickDraft;
+      draft['deck'+side]=id;closeDeckCombos();
+      if(state.tab==='quick'&&state.quickCreate&&!state.modal)render();
+    }
+    return;
+  }
+  if(!event.target.closest('.deck-combo'))closeDeckCombos();
   const tab=event.target.closest('[data-tab]');if(tab){state.tab=tab.dataset.tab;state.modal=null;if(state.tab==='quick' && !state.quickPending){const live=state.quickMatches.find(q=>q.status==='running'||q.status==='ready');if(live){state.quickSessionId=live.id;state.quickCreate=false;}else{state.quickCreate=true;ensureQuickDraft();}}render();return}
   const colorFilter=event.target.closest('[data-color-filter]');if(colorFilter){state.filter=colorFilter.dataset.colorFilter;render();return}
   const act=event.target.closest('[data-action]');if(!act)return;
   if(act.dataset.action==='backdrop'&&event.target!==act)return;
   if(event.target.closest('.modal')&&act.dataset.action==='backdrop')return;
   handleAction(act.dataset.action,act).catch(err=>toast(readableError(err),true));
+});
+app.addEventListener('focusin',event=>{
+  const input=event.target.closest('.deck-combo-input');if(!input)return;
+  const combo=input.closest('.deck-combo');closeDeckCombos(combo);filterDeckCombo(combo,'');
+});
+app.addEventListener('keydown',event=>{
+  if(!event.target.matches('.deck-combo-input'))return;
+  if(event.key==='Escape'){closeDeckCombos();event.target.blur();}
+  if(event.key==='ArrowDown'||event.key==='Enter'){
+    const combo=event.target.closest('.deck-combo');
+    const first=combo?.querySelector('.deck-combo-option:not([hidden])');
+    if(first){event.preventDefault();filterDeckCombo(combo,event.target.value);first.focus();}
+  }
 });
 app.addEventListener('change',async event=>{
   const target=event.target;
@@ -1036,6 +1105,15 @@ app.addEventListener('change',async event=>{
 });
 app.addEventListener('input',event=>{
   if(event.target.id==='quick-history-search'){state.quickHistorySearch=event.target.value;state.quickHistoryLimit=5;refreshQuickHistoryResults();return;}
+  if(event.target.matches('.deck-combo-input')){
+    const combo=event.target.closest('.deck-combo'),side=event.target.dataset.deckSide;
+    const hidden=combo?.querySelector('input[type="hidden"]');if(hidden)hidden.value='';
+    const draft=['match','match-edit'].includes(state.modal)?state.draft:state.quickDraft;
+    draft['deck'+side]='';filterDeckCombo(combo,event.target.value);
+    const submit=combo?.closest('form')?.querySelector('button[type="submit"]');
+    if(submit&&state.tab==='quick'&&state.quickCreate)submit.disabled=true;
+    return;
+  }
   if(['match','match-edit','match-edit-timed'].includes(state.modal)&&event.target.name==='note')state.draft.note=event.target.value;if(state.modal==='deck'&&event.target.name==='name')state.draft.name=event.target.value;if(event.target.name==='guestDeckName'){const d=state.modal==='match'?state.draft:state.quickDraft;d.guestDeck||=guestDefault();d.guestDeck.name=event.target.value;}});
 app.addEventListener('submit',event=>{
   const form=event.target.closest('form[data-form]');if(!form)return;event.preventDefault();

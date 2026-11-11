@@ -424,7 +424,9 @@ service cloud.firestore {
               && request.resource.data.duelRolled == true
               && request.resource.data.decider in [resource.data.playerA,resource.data.playerB]
               && request.resource.data.firstPlayer == ''
-              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['duelRolled','decider','updatedAt','updatedBy','revision','lastActionAtMs']))
+              && request.resource.data.pausedAtMs == 0
+              && request.resource.data.totalPausedMs == 0
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['duelRolled','decider','updatedAt','updatedBy','revision','lastActionAtMs','pausedAtMs','totalPausedMs']))
             ||
             // Winner of the draw chooses the first player; clock is still idle.
             (resource.data.status == 'ready'
@@ -435,7 +437,9 @@ service cloud.firestore {
               && request.resource.data.decider == resource.data.decider
               && request.resource.data.duelRolled == true
               && request.resource.data.firstPlayer in [resource.data.playerA,resource.data.playerB]
-              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['firstPlayer','updatedAt','updatedBy','revision','lastActionAtMs']))
+              && request.resource.data.pausedAtMs == 0
+              && request.resource.data.totalPausedMs == 0
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['firstPlayer','updatedAt','updatedBy','revision','lastActionAtMs','pausedAtMs','totalPausedMs']))
             ||
             // Pause: preserve the active player and all previously closed turns.
             (resource.data.status == 'running'

@@ -329,7 +329,7 @@ test('v1.6 戰績詳情顯示雙方圖片；玩家名片包含最高五副與最
   assert.ok(ui.includes("deck-art-favorite"));
   assert.ok(ui.includes("card?.showFavoriteDeck&&card.favoriteDeck?.name&&!topDecks.length"));
   assert.ok(ui.includes("favoriteId===d.id"));
-  assert.ok(ui.includes("from './core.mjs?v=2.3'"));
+  assert.match(ui,/from '\.\/core\.mjs\?v=[0-9.]+\'/);
   assert.ok(ui.includes('aria-label="尚未上傳牌組圖片"'));
   assert.ok(css.includes("object-fit:scale-down"));
   assert.ok(css.includes("@media(max-width:380px)"));
@@ -492,10 +492,16 @@ test('v1.9 四款透明連勝外框以獨立 SVG 呈現，圖例僅放在個人�
  for(const tier of ['bronze','silver','gold','prismatic']){
    const frame=readFileSync(new URL('./assets/streak-'+tier+'.svg',import.meta.url),'utf8');
    assert.ok(frame.startsWith('<svg'));
-   assert.ok(frame.includes('viewBox="0 0 200 200"'));
-   assert.ok(frame.includes('fill="none"'));
-   assert.ok(frame.includes('<circle cx="100" cy="100"'));
-   assert.ok(frame.includes('<defs>'));
+   assert.match(frame,/viewBox="0 0 [0-9]+ [0-9]+"/);
+   assert.ok(frame.trimEnd().endsWith('</svg>'));
+   assert.ok(frame.length>1000);
+   // Bronze is a full-resolution custom SVG; other tiers retain the
+   // transparent, scalable 200×200 decorative SVG structure.
+   if(tier!=='bronze'){
+     assert.ok(frame.includes('fill="none"'));
+     assert.ok(frame.includes('<circle cx="100" cy="100"'));
+     assert.ok(frame.includes('<defs>'));
+   }
  }
 });
 

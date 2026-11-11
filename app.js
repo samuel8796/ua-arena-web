@@ -222,13 +222,16 @@ function deckInputFor(playerId,side,chosen,guestDeck,quick=false){
   return `<div class="field"><label>玩家 ${side} 使用牌組</label><select name="deck${side}" ${quick?'':'id="deck-'+side.toLowerCase()+'"'}>${deckOptions(playerId,chosen)}</select>${!deckOptions(playerId,chosen)?'<div class="hint">該玩家目前沒有牌組，請先新增牌組。</div>':''}</div>`;
 }
 function deckOptions(uid,chosen){return state.decks.filter(d=>d.ownerUid===uid&&d.active!==false).map(d=>`<option value="${e(d.id)}" ${chosen===d.id?'selected':''}>${e(d.name)} · ${e(colorOf(d.color).name)}</option>`).join('')}
-function firstPlayerSelect(a,b,value='',required=false){
- return `<div class="field field-full"><label>誰先攻？</label>
-   <select name="firstPlayer">
-    <option value="" ${!value?'selected':''}>不紀錄先後攻</option>
-    <option value="${e(a)}" ${value===a?'selected':''}>${e(playerName(a))} 先攻</option>
-    <option value="${e(b)}" ${value===b?'selected':''}>${e(playerName(b))} 先攻</option>
-   </select><div class="hint">先後攻用於獨立的勝率統計。未記錄先後攻的舊戰績不列入這項計算。</div></div>`;
+function firstPlayerSelect(a,b,value=''){
+ return `<fieldset class="field field-full first-turn-field">
+   <legend>誰先攻？</legend>
+   <div class="first-turn-options" role="radiogroup" aria-label="先後攻紀錄">
+     <label class="first-turn-choice"><input type="radio" name="firstPlayer" value="${e(a)}" ${value===a?'checked':''}><span>${e(playerName(a))} 先攻</span></label>
+     <label class="first-turn-choice"><input type="radio" name="firstPlayer" value="${e(b)}" ${value===b?'checked':''}><span>${e(playerName(b))} 先攻</span></label>
+     <label class="first-turn-choice"><input type="radio" name="firstPlayer" value="" ${![a,b].includes(value)?'checked':''}><span>不紀錄先後攻</span></label>
+   </div>
+   <p class="hint">三種選擇都會直接顯示；不紀錄時不計入先後攻勝率，但仍正常計算整體勝負。</p>
+ </fieldset>`;
 }
 const ownMatchHistory=()=>Object.values(state.personalHistory||{}).flat();
 function firstTurnDetails(){
@@ -276,7 +279,7 @@ function deckDetailBody(){
 function matchModalBody(){
   const d=state.draft;
   const pa=player(d.playerA),pb=player(d.playerB);
-  return `<div class="mode-note">⚔ 每場只需要一個人填寫。${isPersonal()?'個人戰團可選「訪客玩家」，不需邀請對方註冊。訪客牌組僅保存於本場結果中。':'玩家 A 預設為你，也能代填群組內兩人的對戰。'}</div><form data-form="${d.isEdit?'edit-match':'new-match'}"><div class="form-grid"><div class="field"><label>玩家 A</label><select name="playerA" id="player-a">${pickerOptions(state.players,d.playerA,'',isPersonal())}</select></div><div class="field"><label>玩家 B</label><select name="playerB" id="player-b">${pickerOptions(state.players,d.playerB,d.playerA,isPersonal())}</select></div>${deckInputFor(d.playerA,'A',d.deckA,d.guestDeck)}${deckInputFor(d.playerB,'B',d.deckB,d.guestDeck)}${firstPlayerSelect(d.playerA,d.playerB,d.isEdit?(d.firstPlayer||''):(d.firstPlayer||d.playerA),!d.isEdit)}<div class="field field-full"><label>本場勝者</label><div class="winner-options"><button class="winner-option ${d.winner===d.playerA?'selected':''}" type="button" data-action="pick-winner" data-winner="A">🏆 ${e(pa?.nickname||'玩家 A')}</button><button class="winner-option ${d.winner===d.playerB?'selected':''}" type="button" data-action="pick-winner" data-winner="B">🏆 ${e(pb?.nickname||'玩家 B')}</button></div></div><div class="field field-full"><label>實際對戰日期與時間</label><input type="datetime-local" name="playedAt" value="${e(state.draft.playedAt||localDateTimeValue())}" required><div class="hint">預設為現在；比既有戰績更早或距今超過 30 分鐘的補登，仍計入勝負與勝率，但不影響連勝；登錄時間另行保存。</div></div><div class="field field-full"><label class="quick-switch"><input type="checkbox" name="isBackfill" value="1" ${d.isBackfill?'checked disabled':''}><span><strong>歷史補登（不計入連勝）</strong><small>可手動標記；若系統判定是較早或超過 30 分鐘的補登，也會自動排除連勝，但仍計入總勝負。</small></span></label></div><div class="field field-full"><label>備註（選填）</label><textarea name="note" maxlength="200" placeholder="例如：野場、三局兩勝…">${e(d.note||'')}</textarea></div></div><div class="modal-footer"><button type="button" class="btn btn-ghost" data-action="close-modal">取消</button><button type="submit" class="btn btn-primary" ${state.players.length<2?'disabled':''}>${d.isEdit?'儲存修改':'儲存戰績'} →</button></div></form>`;
+  return `<div class="mode-note">⚔ 每場只需要一個人填寫。${isPersonal()?'個人戰團可選「訪客玩家」，不需邀請對方註冊。訪客牌組僅保存於本場結果中。':'玩家 A 預設為你，也能代填群組內兩人的對戰。'}</div><form data-form="${d.isEdit?'edit-match':'new-match'}"><div class="form-grid"><div class="field"><label>玩家 A</label><select name="playerA" id="player-a">${pickerOptions(state.players,d.playerA,'',isPersonal())}</select></div><div class="field"><label>玩家 B</label><select name="playerB" id="player-b">${pickerOptions(state.players,d.playerB,d.playerA,isPersonal())}</select></div>${deckInputFor(d.playerA,'A',d.deckA,d.guestDeck)}${deckInputFor(d.playerB,'B',d.deckB,d.guestDeck)}${firstPlayerSelect(d.playerA,d.playerB,d.firstPlayer===undefined?d.playerA:d.firstPlayer)}<div class="field field-full"><label>本場勝者</label><div class="winner-options"><button class="winner-option ${d.winner===d.playerA?'selected':''}" type="button" data-action="pick-winner" data-winner="A">🏆 ${e(pa?.nickname||'玩家 A')}</button><button class="winner-option ${d.winner===d.playerB?'selected':''}" type="button" data-action="pick-winner" data-winner="B">🏆 ${e(pb?.nickname||'玩家 B')}</button></div></div><div class="field field-full"><label>實際對戰日期與時間</label><input type="datetime-local" name="playedAt" value="${e(state.draft.playedAt||localDateTimeValue())}" required><div class="hint">預設為現在；比既有戰績更早或距今超過 30 分鐘的補登，仍計入勝負與勝率，但不影響連勝；登錄時間另行保存。</div></div><div class="field field-full"><label class="quick-switch"><input type="checkbox" name="isBackfill" value="1" ${d.isBackfill?'checked disabled':''}><span><strong>歷史補登（不計入連勝）</strong><small>可手動標記；若系統判定是較早或超過 30 分鐘的補登，也會自動排除連勝，但仍計入總勝負。</small></span></label></div><div class="field field-full"><label>備註（選填）</label><textarea name="note" maxlength="200" placeholder="例如：野場、三局兩勝…">${e(d.note||'')}</textarea></div></div><div class="modal-footer"><button type="button" class="btn btn-ghost" data-action="close-modal">取消</button><button type="submit" class="btn btn-primary" ${state.players.length<2?'disabled':''}>${d.isEdit?'儲存修改':'儲存戰績'} →</button></div></form>`;
 }
 function timedMatchEditBody(){
  const d=state.draft;
@@ -645,7 +648,7 @@ function inviteUrl(){let url=new URL(location.href);url.search='';url.hash='';ur
 function render(){if(!state.user){authPage();return}if(!state.groupId){setupPage();return}const pages={overview:overviewPage,quick:quickPage,matches:matchesPage,decks:decksPage,players:playersPage,rules:rulesPage,tournaments:tournamentPage,profile:profilePage,groups:groupHubPage};shell((pages[state.tab]||overviewPage)())}
 function openModal(kind,draft={}){state.modal=kind;state.draft=draft;render()}
 function pickDeck(uid,selectedId=''){return resolvePlayerDeckSelection(uid,selectedId,state.decks)}
-function newMatch(){if(state.players.length<2){toast('請先加入群組或使用個人戰團的訪客模式。',true);return}const pa=state.players.find(p=>p.id===state.user.uid)?.id||state.players[0].id;const pb=isPersonal()?GUEST_PLAYER_ID:state.players.find(p=>p.id!==pa)?.id||'';openModal('match',{playerA:pa,playerB:pb,deckA:pickDeck(pa),deckB:pickDeck(pb),guestDeck:guestDefault(),winner:pa,note:'',playedAt:localDateTimeValue()});}
+function newMatch(){if(state.players.length<2){toast('請先加入群組或使用個人戰團的訪客模式。',true);return}const pa=state.players.find(p=>p.id===state.user.uid)?.id||state.players[0].id;const pb=isPersonal()?GUEST_PLAYER_ID:state.players.find(p=>p.id!==pa)?.id||'';openModal('match',{playerA:pa,playerB:pb,deckA:pickDeck(pa),deckB:pickDeck(pb),guestDeck:guestDefault(),firstPlayer:pa,winner:pa,note:'',playedAt:localDateTimeValue()});}
 async function newDeck(d={}){
   if(d.ownerUid&&d.ownerUid!==state.user?.uid){toast('只能編輯自己的牌組。',true);return;}
   let source='';
@@ -981,14 +984,15 @@ app.addEventListener('change',async event=>{
     render();return;
   }
   if(['match','match-edit'].includes(state.modal)&&target.name==='isBackfill'){state.draft.isBackfill=target.checked;return;}
+  if(['match','match-edit'].includes(state.modal)&&target.name==='firstPlayer'){state.draft.firstPlayer=target.value;return;}
   if(!['match','match-edit'].includes(state.modal))return;
   const d=state.draft;
   if(target.name==='playerA'){
     d.playerA=target.value;
     if(d.playerB===d.playerA)d.playerB=state.players.find(p=>p.id!==d.playerA)?.id||'';
-    d.deckA=pickDeck(d.playerA);d.deckB=pickDeck(d.playerB);d.winner=d.playerA;render();
+    d.deckA=pickDeck(d.playerA);d.deckB=pickDeck(d.playerB);d.winner=d.playerA;if(d.firstPlayer&&![d.playerA,d.playerB].includes(d.firstPlayer))d.firstPlayer=d.playerA;render();
   }else if(target.name==='playerB'){
-    d.playerB=target.value;d.deckB=pickDeck(d.playerB);if(![d.playerA,d.playerB].includes(d.winner))d.winner=d.playerA;render();
+    d.playerB=target.value;d.deckB=pickDeck(d.playerB);if(![d.playerA,d.playerB].includes(d.winner))d.winner=d.playerA;if(d.firstPlayer&&![d.playerA,d.playerB].includes(d.firstPlayer))d.firstPlayer=d.playerA;render();
   }else if(target.name==='deckA'){d.deckA=target.value}
   else if(target.name==='deckB'){d.deckB=target.value}
   else if(target.name==='guestDeckColor'){d.guestDeck||=guestDefault();d.guestDeck.color=target.value}

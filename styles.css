@@ -1083,3 +1083,15 @@ input,select,textarea{max-width:100%;min-width:0}
  .quick-pause-controls{margin:12px 0 8px}
  .quick-pause-controls .btn{min-height:48px}
 }
+
+/* v2.6.2: make all three first/second-turn choices visible on mobile. */
+.first-turn-field{border:0;padding:0;margin:0;min-width:0}
+.first-turn-field legend{display:block;font-size:12px;font-weight:800;color:var(--text);margin-bottom:9px}
+.first-turn-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.first-turn-choice{display:flex;align-items:center;gap:7px;min-width:0;min-height:54px;padding:10px;
+  border-radius:11px;border:1px solid #3a4c5f;background:#101923;color:#bcc9d9;font-size:12px;font-weight:750;cursor:pointer}
+.first-turn-choice:has(input:checked){border-color:var(--mint);background:#1b3f35;color:var(--mint)}
+.first-turn-choice:focus-within{outline:2px solid var(--mint);outline-offset:2px}
+.first-turn-choice input{width:16px;height:16px;min-width:16px;margin:0;accent-color:var(--mint);flex:0 0 16px}
+.first-turn-choice span{overflow-wrap:anywhere;line-height:1.4}
+@media(max-width:500px){.first-turn-options{grid-template-columns:1fr}.first-turn-choice{min-height:44px}}

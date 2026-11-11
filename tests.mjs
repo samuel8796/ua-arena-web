@@ -958,3 +958,16 @@ test('v2.6 超時計時仍可取消，暫停中的場次也能取消再從清單
  assert.ok(adapter.includes("async hideQuickMatch(gid,id,uid)"));
  assert.ok(adapter.includes("await updateDoc(ref,{hiddenAt:serverTimestamp()})"));
 });
+
+test('v2.6 原有未開始計時的場次仍可抽籤、決定先攻與取消',()=>{
+ const old=makeQuick();
+ delete old.pausedAtMs;
+ delete old.totalPausedMs;
+ let q=changeQuickMatch({...old,duelRolled:false,decider:'',firstPlayer:''},'draw',{uid:'c',playerId:'a',now:origin+100});
+ assert.equal(q.pausedAtMs,0);
+ assert.equal(q.totalPausedMs,0);
+ q=changeQuickMatch(q,'choose',{uid:'c',playerId:'a',now:origin+200});
+ assert.equal(q.firstPlayer,'a');
+ const rules=readFileSync(new URL('./firestore.rules',import.meta.url),'utf8');
+ assert.ok(rules.includes("'lastActionAtMs','pausedAtMs','totalPausedMs'"));
+});

@@ -71,12 +71,12 @@ export const demoAdapter={
   async addDeck(gid,uid,d){if(d.ownerUid!==uid)throw new Error('只能建立自己的牌組');const {imageSourceData,...publicDeck}=d;const id=`d-${Date.now().toString(36)}`;data.decks.push({...publicDeck,id,createdBy:uid,active:true,createdAt:Date.now()});data.deckImageSources||={};data.deckImageSources[id]=imageSourceData||'';save();},
   async updateDeck(gid,id,d){const {imageSourceData,...publicDeck}=d;Object.assign(data.decks.find(x=>x.id===id),publicDeck);data.deckImageSources||={};data.deckImageSources[id]=imageSourceData||'';save();},
   async archiveDeck(gid,id){data.decks.find(x=>x.id===id).active=false;save();},
-  async addMatch(gid,uid,m){data.matches.unshift({...m,groupId:gid,id:`m-${Date.now().toString(36)}`,recordedBy:uid,status:'active',createdAt:Date.now(),playedAt:m.playedAt?parsePlayedAt(m.playedAt).getTime():Date.now()});save();},
+  async addMatch(gid,uid,m){data.matches.unshift({...m,isBackfill:m.isBackfill===true,groupId:gid,id:`m-${Date.now().toString(36)}`,recordedBy:uid,status:'active',createdAt:Date.now(),playedAt:m.playedAt?parsePlayedAt(m.playedAt).getTime():Date.now()});save();},
   async updateMatch(gid,id,m){
     const before=(data.matches||[]).find(x=>x.id===id&&(!x.groupId||x.groupId===gid));
     if(!before||before.status!=='active'||before.tournamentId||before.quickMatchId)throw new Error('不可編輯此對戰。');
     const payload={...m,playedAt:parsePlayedAt(m.playedAt).getTime()};
-    Object.assign(before,payload);
+    Object.assign(before,payload,{isBackfill:before.isBackfill===true||m.isBackfill===true});
     if(!m.firstPlayer)delete before.firstPlayer;
     if(!m.guestDeck)delete before.guestDeck;
     save();
@@ -90,7 +90,7 @@ export const demoAdapter={
   async voidMatch(gid,id){data.matches.find(x=>x.id===id).status='void';save();},
   async createQuickMatch(gid,uid,payload){const id=`q-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,7)}`;
     data.quickMatches.unshift({...createQuickMatch(payload,uid,Date.now()),id,groupId:gid});save();return id;},
-  async hideQuickMatch(gid,id,uid){const q=data.quickMatches.find(x=>x.id===id);if(!q||![q.playerA,q.playerB].includes(uid))throw new Error('沒有權限移除。');if(!['finished','cancelled'].includes(q.status))throw new Error('請先結束計時。');q.hiddenAt=Date.now();save();},
+  async hideQuickMatch(gid,id,uid){const q=data.quickMatches.find(x=>x.id===id);if(!q||![q.playerA,q.playerB,q.createdBy,data.groups[gid]?.createdBy].includes(uid))throw new Error('沒有權限移除。');if(!['finished','cancelled'].includes(q.status))throw new Error('請先結束計時。');q.hiddenAt=Date.now();save();},
   async changeQuickMatch(gid,id,uid,action,playerId=''){
     const idx=data.quickMatches.findIndex(x=>x.id===id);if(idx<0)throw new Error('找不到對戰。');
     data.quickMatches[idx]=changeQuickMatch(data.quickMatches[idx],action,{uid,playerId,now:Date.now()});save();},

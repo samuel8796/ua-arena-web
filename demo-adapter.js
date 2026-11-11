@@ -140,7 +140,7 @@ export const demoAdapter={
     const next=recordTournamentWinner(t,payload.round,payload.match,payload.winner,idMatch);
     const playedAt=parsePlayedAt(payload.playedAt).getTime();
     data.matches.unshift({id:idMatch,groupId:gid,playerA:side.a,playerB:side.b,
-      deckA:payload.deckA,deckB:payload.deckB,winner:payload.winner,note:String(payload.note||''),
+      deckA:payload.deckA,deckB:payload.deckB,winner:payload.winner,isBackfill:payload.isBackfill===true,note:String(payload.note||''),
       playedAt,createdAt:Date.now(),recordedBy:uid,status:'active',
       tournamentId:id,tournamentRound:payload.round,tournamentMatch:payload.match,tournamentTitle:t.title});
     data.tournaments[idx]={...next,id};save();

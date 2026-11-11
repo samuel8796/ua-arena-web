@@ -2,7 +2,7 @@ import { firebaseConfig, aiSettings } from './firebase-config.js';
 import {chooseAvatarCrop} from './avatar-crop-ui.mjs?v=2.4';
 import {chooseWideCrop} from './wide-crop-ui.mjs?v=2.4';
 import {prepareImageSource} from './image-source.mjs?v=2.4';
-import { COLORS, colorOf, safeText as e, shortId, formatDate, assertMatch, computeStats, aggregatePersonalStats, aggregateDeckWinRates, filterMatches, filteredMatchStats, matchTimeMs, matchDateValue, parsePlayedAt, sideRecordStats, deckDetailStats, topDecksByWinRate, sortDeckLibrary, playerWinStreak, streakTier, resolvePlayerDeckSelection, GUEST_PLAYER_ID, GUEST_DECK_ID, guestPlayer, personalGroupId, isGuestMatch, guestDeckLabel } from './core.mjs?v=2.3';
+import { COLORS, colorOf, safeText as e, shortId, formatDate, assertMatch, computeStats, aggregatePersonalStats, aggregateDeckWinRates, filterMatches, filteredMatchStats, matchTimeMs, matchDateValue, parsePlayedAt, sideRecordStats, deckDetailStats, topDecksByWinRate, sortDeckLibrary, playerWinStreak, streakTier, isHistoricalBackfill, resolvePlayerDeckSelection, GUEST_PLAYER_ID, GUEST_DECK_ID, guestPlayer, personalGroupId, isGuestMatch, guestDeckLabel } from './core.mjs?v=2.3';
 import { demoAdapter } from './demo-adapter.js?v=2.4';
 import { QUICK_MATCH_LIMIT_MS, quickClock, mmss } from './quick-core.mjs?v=2.2.1';
 import { deserializeTournamentRounds, tournamentPodium, tournamentPlacement, tournamentMedals, publicTournamentSnapshot } from './tournament-core.mjs?v=2.1';
@@ -23,6 +23,13 @@ const battleDeckName=(m,side)=>guestDeckLabel(m,side)||deckName(m[side==='A'?'de
 const icon={overview:'◈',matches:'⚔',decks:'▤',players:'♟',rules:'✦',quick:'⏱',tournaments:'🏆',groups:'⇄',profile:'◉',more:'☰'};
 const pathIcon=(i)=>icon[i]||'◈';
 const getStats=()=>computeStats(state.players,state.decks,state.matches);
+const canRemoveQuick=q=>Boolean(q&&([q.playerA,q.playerB,q.createdBy].includes(state.user?.uid)||isOwner()));
+function archivedMatchEntry(playedAt,playerA,playerB){
+ const playedMs=parsePlayedAt(playedAt).getTime();
+ const latest=Math.max(0,...state.matches.filter(m=>m.status==='active'
+   && [playerA,playerB].some(id=>id===m.playerA||id===m.playerB)).map(matchTimeMs));
+ return isHistoricalBackfill(playedMs,Date.now(),latest);
+}
 const ownStats=()=>aggregatePersonalStats(state.user?.uid||'',state.personalHistory);
 const isOwner=()=>state.group?.createdBy===state.user?.uid;
 const isPersonal=()=>state.groupId===personalGroupId(state.user?.uid||'');
@@ -218,7 +225,7 @@ function deckOptions(uid,chosen){return state.decks.filter(d=>d.ownerUid===uid&&
 function firstPlayerSelect(a,b,value='',required=true){
  return `<div class="field field-full"><label>誰先攻？</label>
    <select name="firstPlayer" ${required?'required':''}>
-    ${required?'':'<option value="">不記錄先後攻</option>'}
+    <option value="" ${!value?'selected':''}>不紀錄先後攻</option>
     <option value="${e(a)}" ${value===a?'selected':''}>${e(playerName(a))} 先攻</option>
     <option value="${e(b)}" ${value===b?'selected':''}>${e(playerName(b))} 先攻</option>
    </select><div class="hint">先後攻用於獨立的勝率統計。未記錄先後攻的舊戰績不列入這項計算。</div></div>`;
@@ -269,7 +276,7 @@ function deckDetailBody(){
 function matchModalBody(){
   const d=state.draft;
   const pa=player(d.playerA),pb=player(d.playerB);
-  return `<div class="mode-note">⚔ 每場只需要一個人填寫。${isPersonal()?'個人戰團可選「訪客玩家」，不需邀請對方註冊。訪客牌組僅保存於本場結果中。':'玩家 A 預設為你，也能代填群組內兩人的對戰。'}</div><form data-form="${d.isEdit?'edit-match':'new-match'}"><div class="form-grid"><div class="field"><label>玩家 A</label><select name="playerA" id="player-a">${pickerOptions(state.players,d.playerA,'',isPersonal())}</select></div><div class="field"><label>玩家 B</label><select name="playerB" id="player-b">${pickerOptions(state.players,d.playerB,d.playerA,isPersonal())}</select></div>${deckInputFor(d.playerA,'A',d.deckA,d.guestDeck)}${deckInputFor(d.playerB,'B',d.deckB,d.guestDeck)}${firstPlayerSelect(d.playerA,d.playerB,d.isEdit?(d.firstPlayer||''):(d.firstPlayer||d.playerA),!d.isEdit)}<div class="field field-full"><label>本場勝者</label><div class="winner-options"><button class="winner-option ${d.winner===d.playerA?'selected':''}" type="button" data-action="pick-winner" data-winner="A">🏆 ${e(pa?.nickname||'玩家 A')}</button><button class="winner-option ${d.winner===d.playerB?'selected':''}" type="button" data-action="pick-winner" data-winner="B">🏆 ${e(pb?.nickname||'玩家 B')}</button></div></div><div class="field field-full"><label>實際對戰日期與時間</label><input type="datetime-local" name="playedAt" value="${e(state.draft.playedAt||localDateTimeValue())}" required><div class="hint">預設為現在，可以補登過去的對戰；系統另保留登錄時間。</div></div><div class="field field-full"><label>備註（選填）</label><textarea name="note" maxlength="200" placeholder="例如：野場、三局兩勝…">${e(d.note||'')}</textarea></div></div><div class="modal-footer"><button type="button" class="btn btn-ghost" data-action="close-modal">取消</button><button type="submit" class="btn btn-primary" ${state.players.length<2?'disabled':''}>${d.isEdit?'儲存修改':'儲存戰績'} →</button></div></form>`;
+  return `<div class="mode-note">⚔ 每場只需要一個人填寫。${isPersonal()?'個人戰團可選「訪客玩家」，不需邀請對方註冊。訪客牌組僅保存於本場結果中。':'玩家 A 預設為你，也能代填群組內兩人的對戰。'}</div><form data-form="${d.isEdit?'edit-match':'new-match'}"><div class="form-grid"><div class="field"><label>玩家 A</label><select name="playerA" id="player-a">${pickerOptions(state.players,d.playerA,'',isPersonal())}</select></div><div class="field"><label>玩家 B</label><select name="playerB" id="player-b">${pickerOptions(state.players,d.playerB,d.playerA,isPersonal())}</select></div>${deckInputFor(d.playerA,'A',d.deckA,d.guestDeck)}${deckInputFor(d.playerB,'B',d.deckB,d.guestDeck)}${firstPlayerSelect(d.playerA,d.playerB,d.isEdit?(d.firstPlayer||''):(d.firstPlayer||d.playerA),!d.isEdit)}<div class="field field-full"><label>本場勝者</label><div class="winner-options"><button class="winner-option ${d.winner===d.playerA?'selected':''}" type="button" data-action="pick-winner" data-winner="A">🏆 ${e(pa?.nickname||'玩家 A')}</button><button class="winner-option ${d.winner===d.playerB?'selected':''}" type="button" data-action="pick-winner" data-winner="B">🏆 ${e(pb?.nickname||'玩家 B')}</button></div></div><div class="field field-full"><label>實際對戰日期與時間</label><input type="datetime-local" name="playedAt" value="${e(state.draft.playedAt||localDateTimeValue())}" required><div class="hint">預設為現在；補登舊戰績會計入勝負與勝率，但不會改變目前連勝。系統另保留登錄時間。</div></div><div class="field field-full"><label>備註（選填）</label><textarea name="note" maxlength="200" placeholder="例如：野場、三局兩勝…">${e(d.note||'')}</textarea></div></div><div class="modal-footer"><button type="button" class="btn btn-ghost" data-action="close-modal">取消</button><button type="submit" class="btn btn-primary" ${state.players.length<2?'disabled':''}>${d.isEdit?'儲存修改':'儲存戰績'} →</button></div></form>`;
 }
 function timedMatchEditBody(){
  const d=state.draft;
@@ -574,7 +581,7 @@ function quickResultForm(s){
     <button class="btn btn-primary" type="submit" style="margin-top:15px">確認儲存結果 →</button></form></section>`;
 }
 function quickSessionPage(s){
- const c=quickClock(s),playing=['ready','running'].includes(s.status),timedDone=s.status==='finished';
+ const c=quickClock(s),playing=['ready','running'].includes(s.status),timedDone=s.status==='finished',paused=!!s.pausedAtMs;
  const total=mmss(c.remainingMs);
  const turnRows=(s.turns||[]).slice().reverse().map((t,i)=>`<tr><td>${s.turns.length-i}</td><td>${e(playerName(t.playerId))}</td><td class="mono">${mmss(t.durationMs)}</td></tr>`).join('');
  const duelStage=s.status==='ready'&&s.duelRolled===false
@@ -586,34 +593,35 @@ function quickSessionPage(s){
     </div></div>`
    :s.firstPlayer?`<div class="duel-stage duel-stage-ready"><strong>⚔ ${e(playerName(s.firstPlayer))} 先攻 · 🛡 ${e(playerName(s.firstPlayer===s.playerA?s.playerB:s.playerA))} 後攻</strong>
      ${!s.startedAtMs?'<p>先後攻已確認，請由先攻者按「回合開始」啟動計時。</p>':''}</div>`:'';
- const clockLabel=c.expired?'時間已到，請登錄結果':s.duelRolled===false?'請先按「開始決鬥」':s.duelRolled===true&&!s.firstPlayer?'等待決定先後攻':!s.startedAtMs?'先攻者按回合開始才啟動計時':s.activePlayer?`目前回合：${e(playerName(s.activePlayer))}`:'等待回合開始';
- return `<section class="card quick-session"><div class="section-head"><h3>⏱ ${e(playerName(s.playerA))} VS ${e(playerName(s.playerB))}</h3><span class="tag">${timedDone?'已完成':s.status==='cancelled'?'已取消':s.status==='ready'?'等待開始':'進行中'}</span></div>
+ const clockLabel=paused?'⏸ 已暫停 · 點「繼續計時」恢復':c.expired?'時間已到，請登錄結果':s.duelRolled===false?'請先按「開始決鬥」':s.duelRolled===true&&!s.firstPlayer?'等待決定先後攻':!s.startedAtMs?'先攻者按回合開始才啟動計時':s.activePlayer?`目前回合：${e(playerName(s.activePlayer))}`:'等待回合開始';
+ return `<section class="card quick-session"><div class="section-head"><h3>⏱ ${e(playerName(s.playerA))} VS ${e(playerName(s.playerB))}</h3><span class="tag">${timedDone?'已完成':s.status==='cancelled'?'已取消':s.status==='ready'?'等待開始':paused?'已暫停':'進行中'}</span></div>
  ${duelStage}
- <div class="quick-clock ${c.expired?'expired':''}"><span>30:00 總倒數</span><strong class="qm-time-left">${total}</strong><small class="qm-time-state">${clockLabel}</small></div>
+ <div class="quick-clock ${paused?'is-paused':''} ${c.expired?'expired':''}"><span>30:00 總倒數</span><strong class="qm-time-left">${total}</strong><small class="qm-time-state">${clockLabel}</small></div>
  <div class="quick-players">${[s.playerA,s.playerB].map((id,i)=>`<div class="quick-player ${s.activePlayer===id?'is-active':''}">
   <div class="quick-player-visual">${battleDeckArtwork(s,i===0?'A':'B')}<div class="quick-player-identity"><strong>${e(playerName(id))}</strong><span>${e(battleDeckName(s,i===0?'A':'B'))}</span>
   ${s.firstPlayer?`<small class="turn-position">${id===s.firstPlayer?'⚔ 先攻':'🛡 後攻'}</small>`:''}</div></div>
   <div class="quick-player-time ${i===0?'qm-player-a':'qm-player-b'}">${mmss(i===0?c.playerAMs:c.playerBMs)}</div>
-  ${playing?(s.activePlayer===id?`<button class="btn btn-primary btn-full" data-action="quick-turn-end">■ 回合結束 · 自動交棒</button>`:s.activePlayer?`<button class="btn btn-ghost btn-full" disabled>對手計時中</button>`:s.duelRolled===false||(s.duelRolled===true&&!s.firstPlayer)?'':!s.startedAtMs&&s.firstPlayer&&s.firstPlayer!==id?`<button class="btn btn-ghost btn-full" disabled>等待先攻者啟動</button>`:`<button class="btn btn-primary btn-full" data-action="quick-turn-start" data-player="${e(id)}" ${c.expired?'disabled':''}>▶ 回合開始</button>`):''}
+  ${playing?(paused?`<button class="btn btn-ghost btn-full" disabled>⏸ 計時暫停中</button>`:s.activePlayer===id?`<button class="btn btn-primary btn-full" data-action="quick-turn-end">■ 回合結束 · 自動交棒</button>`:s.activePlayer?`<button class="btn btn-ghost btn-full" disabled>對手計時中</button>`:s.duelRolled===false||(s.duelRolled===true&&!s.firstPlayer)?'':!s.startedAtMs&&s.firstPlayer&&s.firstPlayer!==id?`<button class="btn btn-ghost btn-full" disabled>等待先攻者啟動</button>`:`<button class="btn btn-primary btn-full" data-action="quick-turn-start" data-player="${e(id)}" ${c.expired?'disabled':''}>▶ 回合開始</button>`):''}
  </div>`).join('')}</div>
- <div class="hint">按「回合結束」會立即啟動另一位玩家的回合；整場計時不因關閉頁面而停止。</div>
+ ${playing&&s.status==='running'&&s.startedAtMs?`<div class="quick-pause-controls"><button class="btn ${paused?'btn-primary':'btn-outline'} btn-full" data-action="${paused?'quick-resume':'quick-pause'}">${paused?'▶ 繼續計時':'⏸ 暫停計時'}</button></div>`:''}
+ <div class="hint">按「回合結束」會立即啟動對方回合；只有按下暫停，才會停止整場倒數與玩家時間。關閉頁面不會自動暫停。</div>
  <div class="quick-summary"><span>已完成回合：<b>${c.turns}</b></span><span>未歸屬空檔：<b class="qm-gap">${mmss(c.unattributedMs)}</b></span></div>
- ${playing?`${s.duelRolled===undefined||!!s.startedAtMs?`<button class="btn btn-primary btn-full" data-action="quick-result-open" style="margin-top:18px">🏆 結束對戰並登錄結果</button>`:''}<button class="btn btn-ghost btn-full" style="margin-top:8px" data-action="quick-cancel">取消本場（不計勝負）</button>`:''}
+ ${playing?`${!paused&&(s.duelRolled===undefined||!!s.startedAtMs)?`<button class="btn btn-primary btn-full" data-action="quick-result-open" style="margin-top:18px">🏆 結束對戰並登錄結果</button>`:''}<button class="btn btn-ghost btn-full" style="margin-top:8px" data-action="quick-cancel">取消本場（不計勝負）</button>`:''}
  ${(s.turns||[]).length?`<div class="divider"></div><h3 class="quick-history-title">回合用時紀錄</h3><div class="table-wrap"><table class="table"><thead><tr><th>回合</th><th>玩家</th><th>花費時間</th></tr></thead><tbody>${turnRows}</tbody></table></div>`:''}
  </section>${state.quickResultOpen&&playing?quickResultForm(s):''}`;
 }
 function quickPage(){
  const visible=state.quickMatches.filter(x=>!x.hiddenAt);
  const active=visible.filter(x=>x.status==='ready'||x.status==='running').sort((a,b)=>(b.createdAtMs||0)-(a.createdAtMs||0));
- const selected=state.quickMatches.find(x=>x.id===state.quickSessionId)||(!state.quickCreate?active[0]:null);
+ const selected=visible.find(x=>x.id===state.quickSessionId)||(!state.quickCreate?active[0]:null);
  if(selected && !state.quickSessionId)state.quickSessionId=selected.id;
  const rows=visible.slice().sort((a,b)=>b.createdAtMs-a.createdAtMs).slice(0,30).map(q=>`<div class="quick-list-entry">
    <button type="button" class="quick-list-row ${selected?.id===q.id?'selected':''}" data-action="quick-select" data-id="${e(q.id)}">
     <span class="quick-list-meta"><strong>${e(playerName(q.playerA))} vs ${e(playerName(q.playerB))}</strong>
       <small>${e(new Date(q.startedAtMs||q.createdAtMs||Date.now()).toLocaleString('zh-TW',{timeZone:'Asia/Taipei',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}))}</small></span>
-    <span class="tag">${q.status==='finished'?'已完成':q.status==='ready'?'待開始':q.status==='running'?'進行中':'已取消'}</span>
+    <span class="tag">${q.status==='finished'?'已完成':q.status==='ready'?'待開始':q.status==='running'?(q.pausedAtMs?'已暫停':quickClock(q).expired?'已超時':'進行中'):'已取消'}</span>
    </button>
-   ${[q.playerA,q.playerB].includes(state.user?.uid)?`<button type="button" class="btn btn-danger btn-sm quick-remove" data-action="quick-remove" data-id="${e(q.id)}">刪除</button>`:''}
+   ${canRemoveQuick(q)?`<button type="button" class="btn btn-danger btn-sm quick-remove" data-action="quick-remove" data-id="${e(q.id)}">刪除</button>`:''}
  </div>`).join('');
  return `<div class="page-head"><div><div class="label-up">QUICK MATCH / 30-MINUTE CLOCK</div><h1>Quick Match</h1><p>30 分鐘計時與直接記錄兩種模式，對戰結果會保存在目前戰團。</p></div><button class="btn btn-primary" data-action="quick-new">＋ 新對戰</button></div>
  ${state.players.length<2?`<section class="card"><div class="empty">請先建立個人牌組或邀請其他玩家加入對戰團。</div></section>`:state.quickPending?quickResultForm(null):state.quickCreate?quickSetupPage():selected?quickSessionPage(selected):quickSetupPage()}
@@ -627,7 +635,7 @@ function refreshQuickClock(){
  const c=quickClock(s);const container=$('.quick-session');if(!container)return;
  const text=(sel,value)=>{const el=container.querySelector(sel);if(el)el.textContent=value};
  text('.qm-time-left',mmss(c.remainingMs));text('.qm-player-a',mmss(c.playerAMs));text('.qm-player-b',mmss(c.playerBMs));text('.qm-gap',mmss(c.unattributedMs));
- text('.qm-time-state',c.expired?'時間已到，請登錄結果':s.duelRolled===false?'請先按「開始決鬥」':s.duelRolled===true&&!s.firstPlayer?'等待選擇先後攻':!s.startedAtMs?'先攻者按回合開始才啟動計時':s.activePlayer?`目前回合：${playerName(s.activePlayer)}`:'等待回合開始');
+ text('.qm-time-state',s.pausedAtMs?'⏸ 已暫停 · 點「繼續計時」恢復':c.expired?'時間已到，請登錄結果':s.duelRolled===false?'請先按「開始決鬥」':s.duelRolled===true&&!s.firstPlayer?'等待選擇先後攻':!s.startedAtMs?'先攻者按回合開始才啟動計時':s.activePlayer?`目前回合：${playerName(s.activePlayer)}`:'等待回合開始');
  container.querySelector('.quick-clock')?.classList.toggle('expired',c.expired);
  if(c.expired)container.querySelectorAll('[data-action="quick-turn-start"]').forEach(b=>b.disabled=true);
 }
@@ -847,7 +855,7 @@ async function handleAction(action,el){
   case 'quick-select':state.tab='quick';state.quickSessionId=el.dataset.id;state.quickCreate=false;state.quickPending=null;state.quickResultOpen=false;render();break;
    case 'quick-remove':{
     const session=state.quickMatches.find(x=>x.id===el.dataset.id);
-    if(!session||![session.playerA,session.playerB].includes(state.user?.uid))throw new Error('只有本場的兩位玩家可以刪除。');
+    if(!session||!canRemoveQuick(session))throw new Error('只有玩家、建立者或房主可以移除場次。');
     if(!confirm('確定從快速對戰清單刪除此場？未結束的計時會先取消；已保存的正式戰績仍會保留，可在戰績詳情撤銷。'))break;
     await runBusy(async()=>{
       if(['ready','running'].includes(session.status))await adapter.changeQuickMatch(state.groupId,session.id,state.user.uid,'cancel');
@@ -875,6 +883,8 @@ async function handleAction(action,el){
   });break;
   case 'quick-turn-start':await runBusy(async()=>{await adapter.changeQuickMatch(state.groupId,state.quickSessionId,state.user.uid,'start',el.dataset.player);toast('回合已開始計時。')});break;
   case 'quick-turn-end':await runBusy(async()=>{await adapter.changeQuickMatch(state.groupId,state.quickSessionId,state.user.uid,'end');toast('已自動切換到另一位玩家的回合。')});break;
+  case 'quick-pause':await runBusy(async()=>{await adapter.changeQuickMatch(state.groupId,state.quickSessionId,state.user.uid,'pause');toast('計時已暫停，不會累計倒數及回合時間。')});break;
+  case 'quick-resume':await runBusy(async()=>{await adapter.changeQuickMatch(state.groupId,state.quickSessionId,state.user.uid,'resume');toast('已恢復計時。')});break;
   case 'deck-detail':openModal('deck-detail',{id:el.dataset.id,settingsOpen:false});break;
   case 'deck-settings':state.draft.settingsOpen=!state.draft.settingsOpen;render();break;
   case 'deck-edit-from-detail':{const d=deck(el.dataset.id);if(d&&d.ownerUid===state.user.uid)await newDeck(d);break;}
@@ -1018,7 +1028,7 @@ app.addEventListener('submit',event=>{
       const side=deserializeTournamentRounds(t?.rounds)[round]?.[match];
       if(!t||t.createdBy!==state.user.uid||!side?.a||!side?.b||side.winner)throw new Error('這場賽程無法登錄。');
       const data={playerA:side.a,playerB:side.b,deckA:fields.deckA,deckB:fields.deckB,winner:fields.winner,firstPlayer:fields.firstPlayer,
-        round,match,playedAt:fields.playedAt,note:fields.note||''};
+        round,match,playedAt:fields.playedAt,isBackfill:archivedMatchEntry(fields.playedAt,side.a,side.b),note:fields.note||''};
       assertMatch(data,state.players,state.decks);
       parsePlayedAt(data.playedAt);
       await adapter.saveTournamentMatch(state.groupId,t.id,state.user.uid,data);
@@ -1053,7 +1063,7 @@ app.addEventListener('submit',event=>{
       if(state.quickPending){
         assertMatch({...state.quickPending,winner},state.players,state.decks,{allowGuest:isPersonal()});
         parsePlayedAt(fields.playedAt);
-        await adapter.addMatch(state.groupId,state.user.uid,{...state.quickPending,winner,firstPlayer:fields.firstPlayer,note,playedAt:fields.playedAt});
+        await adapter.addMatch(state.groupId,state.user.uid,{...state.quickPending,winner,firstPlayer:fields.firstPlayer,isBackfill:archivedMatchEntry(fields.playedAt,state.quickPending.playerA,state.quickPending.playerB),note,playedAt:fields.playedAt});
       } else {
         const selected=state.quickMatches.find(x=>x.id===state.quickSessionId);
         if(!selected)throw new Error('找不到計時中的對戰，請重整頁面。');
@@ -1087,7 +1097,7 @@ app.addEventListener('submit',event=>{
     case 'new-match':{
       const {guestDeck:_unused,...draft}=state.draft;
       parsePlayedAt(fields.playedAt);
-      const payload={...draft,playedAt:fields.playedAt,firstPlayer:fields.firstPlayer,note:fields.note||'',deckA:draft.playerA===GUEST_PLAYER_ID?GUEST_DECK_ID:fields.deckA||'',deckB:draft.playerB===GUEST_PLAYER_ID?GUEST_DECK_ID:fields.deckB||'',
+      const payload={...draft,isBackfill:archivedMatchEntry(fields.playedAt,draft.playerA,draft.playerB),playedAt:fields.playedAt,firstPlayer:fields.firstPlayer,note:fields.note||'',deckA:draft.playerA===GUEST_PLAYER_ID?GUEST_DECK_ID:fields.deckA||'',deckB:draft.playerB===GUEST_PLAYER_ID?GUEST_DECK_ID:fields.deckB||'',
         ...(isGuestMatch(draft)?{guestDeck:{name:(fields.guestDeckName||state.draft.guestDeck?.name||'').trim(),color:fields.guestDeckColor||state.draft.guestDeck?.color||'OTHER'}}:{})};
       assertMatch(payload,state.players,state.decks,{allowGuest:isPersonal()});
       await adapter.addMatch(state.groupId,state.user.uid,payload);state.modal=null;state.tab='matches';render();toast('成功登錄一場對戰！');break;

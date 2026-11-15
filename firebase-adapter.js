@@ -50,7 +50,8 @@ async function ensurePersonalGroup(uid, nickname){
     if(!(await getDoc(m)).exists()){
       const own=await getDoc(userRef(uid)),ownData=own.exists()?own.data():{};
       const avatarData=ownData.avatarData||'',level=Number(ownData.level)||1,frameChoice=ownData.frameChoice||'none';
-      await setDoc(m,{uid,nickname:name,role:'owner',joinedAt:serverTimestamp(),...(avatarData?{avatarData}:{}),level,frameChoice});
+      await setDoc(m,{uid,nickname:name,role:'owner',joinedAt:serverTimestamp(),...(avatarData?{avatarData}:{})});
+      await optionallySyncMemberProgress(m,level,frameChoice);
     }
     await rememberGroup(uid,id,name);
     return id;
@@ -58,6 +59,15 @@ async function ensurePersonalGroup(uid, nickname){
   personalGroupTasks.set(uid,task);
   try{return await task;}
   finally{if(personalGroupTasks.get(uid)===task)personalGroupTasks.delete(uid);}
+}
+
+async function optionallySyncMemberProgress(ref,level,frameChoice){
+  try{await updateDoc(ref,{level,frameChoice});}
+  catch(error){
+    // Old published Firestore rules may not yet accept the new cosmetic fields.
+    // A membership must still be creatable while rules are being upgraded.
+    console.warn('玩家等級顯示欄位尚未同步，請確認已發布最新版 Firestore 規則',error);
+  }
 }
 
 // Existing matches keep referencing original IDs. Copy owned group decks to
@@ -170,7 +180,8 @@ export const firebaseAdapter = {
     await setDoc(g,{name:title.trim(),createdBy:uid,createdAt:serverTimestamp()});
     const own=await getDoc(userRef(uid)),ownData=own.exists()?own.data():{};
       const avatarData=ownData.avatarData||'',level=Number(ownData.level)||1,frameChoice=ownData.frameChoice||'none';
-    await setDoc(memberRef(g.id,uid),{uid,nickname:nickname.trim(),role:'owner',joinedAt:serverTimestamp(),...(avatarData?{avatarData}:{}),level,frameChoice});
+    await setDoc(memberRef(g.id,uid),{uid,nickname:nickname.trim(),role:'owner',joinedAt:serverTimestamp(),...(avatarData?{avatarData}:{})});
+    await optionallySyncMemberProgress(memberRef(g.id,uid),level,frameChoice);
     await rememberGroup(uid,g.id,nickname.trim());
     return g.id;
   },
@@ -180,7 +191,8 @@ export const firebaseAdapter = {
     if(!existing.exists()){
       const own=await getDoc(userRef(uid)),ownData=own.exists()?own.data():{};
       const avatarData=ownData.avatarData||'',level=Number(ownData.level)||1,frameChoice=ownData.frameChoice||'none';
-      await setDoc(memberRef(gid,uid),{uid,nickname:nickname.trim(),role:g.createdBy===uid?'owner':'member',joinedAt:serverTimestamp(),...(avatarData?{avatarData}:{}),level,frameChoice});
+      await setDoc(memberRef(gid,uid),{uid,nickname:nickname.trim(),role:g.createdBy===uid?'owner':'member',joinedAt:serverTimestamp(),...(avatarData?{avatarData}:{})});
+      await optionallySyncMemberProgress(memberRef(gid,uid),level,frameChoice);
     }
     await rememberGroup(uid,gid,nickname.trim());
     return gid;

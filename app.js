@@ -1236,10 +1236,11 @@ async function handleAction(action,el){
      openModal('match-edit',{id:m.id,isEdit:true,playerA:m.playerA,playerB:m.playerB,
        deckA:m.deckA,deckB:m.deckB,guestDeck:m.guestDeck||guestDefault(),
        firstPlayer:m.firstPlayer||'',winner:m.winner,note:m.note||'',playedAt:localDateTimeValue(matchTimeMs(m))});
+     loadPlayerDecksSoon(m.playerA);loadPlayerDecksSoon(m.playerB);
      break;
    }case 'clear-match-filters':state.playerFilter='';state.matchFrom='';state.matchTo='';render();break;
-  case 'open-quick':state.tab='quick';state.modal=null;state.quickCreate=true;state.quickPending=null;state.quickResultOpen=false;ensureQuickDraft();render();break;
-  case 'quick-new':state.quickCreate=true;state.quickSessionId='';state.quickPending=null;state.quickResultOpen=false;ensureQuickDraft(true);render();break;
+  case 'open-quick':state.tab='quick';state.modal=null;state.quickCreate=true;state.quickPending=null;state.quickResultOpen=false;ensureQuickDraft();render();loadPlayerDecksSoon(state.quickDraft.playerA);loadPlayerDecksSoon(state.quickDraft.playerB);break;
+  case 'quick-new':state.quickCreate=true;state.quickSessionId='';state.quickPending=null;state.quickResultOpen=false;ensureQuickDraft(true);render();loadPlayerDecksSoon(state.quickDraft.playerA);loadPlayerDecksSoon(state.quickDraft.playerB);break;
   case 'deck-combo-toggle':{
     const combo=el.closest('.deck-combo'),list=combo?.querySelector('.deck-combo-options');
     const input=combo?.querySelector('.deck-combo-input');

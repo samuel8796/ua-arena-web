@@ -231,13 +231,14 @@ export const firebaseAdapter = {
     const current={members:[],decks:[],matches:[],quickMatches:[],tournaments:[]};
     const personal=new Map(),remoteLoadedAt=new Map(),memberIds=new Set(),remoteTasks=new Map();
     let stopped=false,scheduled=false;
+    const initialized=new Set();
     const ownUid=auth.currentUser?.uid;
     const emit=()=>{
       if(stopped)return;
       const joined=new Map(current.decks.map(d=>[d.id,{...d,legacy:true}]));
       for(const entries of personal.values())
         for(const d of entries)joined.set(d.id,{...d,personal:true});
-      onChange({...current,decks:[...joined.values()]});
+      onChange({...current,decks:[...joined.values()],coreReady:initialized.has('members')&&initialized.has('matches')});
     };
     const schedule=()=>{
       if(scheduled||stopped)return;
@@ -276,11 +277,12 @@ export const firebaseAdapter = {
     };
     const unsubs=keys.map(k=>onSnapshot(colRef(gid,k),snapshot=>{
       current[k]=snapshot.docs.map(tidy);
-      schedule();
+      initialized.add(k);schedule();
       if(k==='matches')prefetchRecent();
     },onError));
     unsubs.push(onSnapshot(colRef(gid,'members'),snapshot=>{
       current.members=snapshot.docs.map(tidy);
+      initialized.add('members');
       const next=new Set(current.members.map(x=>x.id));
       for(const uid of personal.keys())if(uid!==ownUid&&!next.has(uid)){
         personal.delete(uid);remoteLoadedAt.delete(uid);

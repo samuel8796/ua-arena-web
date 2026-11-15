@@ -1118,7 +1118,13 @@ async function handleAction(action,el){
   case 'approve-entrant':await runBusy(async()=>{await adapter.approveTournamentRequest(state.groupId,state.tournamentId,el.dataset.id,state.user.uid);toast('已核准報名。')});break;
   case 'tournament-start':if(confirm('確定抽籤開賽？開始後無法新增或移除參賽者。'))await runBusy(async()=>{await adapter.changeTournament(state.groupId,state.tournamentId,state.user.uid,'start');toast('賽事已開始！')});break;
   case 'remove-entrant':if(confirm('移除這位參賽者？'))await runBusy(async()=>{await adapter.changeTournament(state.groupId,state.tournamentId,state.user.uid,'remove',el.dataset.id);toast('已移除參賽者')});break;
-  case 'tournament-match':openModal('tournament-match',{round:Number(el.dataset.round),match:Number(el.dataset.match)});break;
+  case 'tournament-match':{
+    const round=Number(el.dataset.round),match=Number(el.dataset.match);
+    openModal('tournament-match',{round,match});
+    const t=state.tournaments.find(x=>x.id===state.tournamentId);
+    const pair=deserializeTournamentRounds(t?.rounds)[round]?.[match];
+    loadPlayerDecksSoon(pair?.a);loadPlayerDecksSoon(pair?.b);break;
+  }
   case 'watch-home':location.assign(location.pathname);break;
   case 'select-existing-group':{const gid=$('#group-select')?.value;if(gid)await runBusy(async()=>await loadGroup(gid));else toast('請先選擇群組。',true);break}
   case 'toggle-image-settings':{
@@ -1358,8 +1364,8 @@ app.addEventListener('change',async event=>{
   if(state.modal==='deck'&&target.name==='ownerUid'){state.draft.ownerUid=target.value;return;}
   if(state.tab==='quick' && state.quickCreate && target.closest('[data-form="quick-setup"]')){
     const d=state.quickDraft;
-    if(target.name==='playerA'){d.playerA=target.value;if(d.playerB===d.playerA)d.playerB=state.players.find(p=>p.id!==d.playerA)?.id||'';d.deckA=pickDeck(d.playerA);d.deckB=pickDeck(d.playerB);}
-    else if(target.name==='playerB'){d.playerB=target.value;d.deckB=pickDeck(d.playerB);}
+    if(target.name==='playerA'){d.playerA=target.value;if(d.playerB===d.playerA)d.playerB=state.players.find(p=>p.id!==d.playerA)?.id||'';d.deckA=pickDeck(d.playerA);d.deckB=pickDeck(d.playerB);loadPlayerDecksSoon(d.playerA);loadPlayerDecksSoon(d.playerB);}
+    else if(target.name==='playerB'){d.playerB=target.value;d.deckB=pickDeck(d.playerB);loadPlayerDecksSoon(d.playerB);}
     else if(target.name==='deckA'||target.name==='deckB')d[target.name]=target.value;
     else if(target.name==='guestDeckColor'){d.guestDeck||=guestDefault();d.guestDeck.color=target.value;}
     else if(target.name==='timerDisabled')d.timerEnabled=!target.checked;
@@ -1371,9 +1377,9 @@ app.addEventListener('change',async event=>{
   if(target.name==='playerA'){
     d.playerA=target.value;
     if(d.playerB===d.playerA)d.playerB=state.players.find(p=>p.id!==d.playerA)?.id||'';
-    d.deckA=pickDeck(d.playerA);d.deckB=pickDeck(d.playerB);d.winner=d.playerA;if(d.firstPlayer&&![d.playerA,d.playerB].includes(d.firstPlayer))d.firstPlayer=d.playerA;render();
+    d.deckA=pickDeck(d.playerA);d.deckB=pickDeck(d.playerB);d.winner=d.playerA;if(d.firstPlayer&&![d.playerA,d.playerB].includes(d.firstPlayer))d.firstPlayer=d.playerA;render();loadPlayerDecksSoon(d.playerA);loadPlayerDecksSoon(d.playerB);
   }else if(target.name==='playerB'){
-    d.playerB=target.value;d.deckB=pickDeck(d.playerB);if(![d.playerA,d.playerB].includes(d.winner))d.winner=d.playerA;if(d.firstPlayer&&![d.playerA,d.playerB].includes(d.firstPlayer))d.firstPlayer=d.playerA;render();
+    d.playerB=target.value;d.deckB=pickDeck(d.playerB);if(![d.playerA,d.playerB].includes(d.winner))d.winner=d.playerA;if(d.firstPlayer&&![d.playerA,d.playerB].includes(d.firstPlayer))d.firstPlayer=d.playerA;render();loadPlayerDecksSoon(d.playerB);
   }else if(target.name==='deckA'){d.deckA=target.value}
   else if(target.name==='deckB'){d.deckB=target.value}
   else if(target.name==='guestDeckColor'){d.guestDeck||=guestDefault();d.guestDeck.color=target.value}

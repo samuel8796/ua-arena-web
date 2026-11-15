@@ -821,11 +821,17 @@ function maybeQueueProgressRewards(progress){
  const lastLevel=Math.max(1,Number(seen.level)||1),lastBest=Math.max(0,Number(seen.bestStreak)||0);
  if(progress.bestStreak>lastBest){
    const earned=STREAK_FRAME_TIERS.filter(t=>t.threshold>lastBest&&t.threshold<=progress.bestStreak);
-   if(earned.length&&!state.rewardQueue.some(x=>x.kind==='frame'))
-     state.rewardQueue.push({kind:'frame',tier:earned.at(-1),bestStreak:progress.bestStreak});
+   if(earned.length){
+     const queued=state.rewardQueue.find(x=>x.kind==='frame');
+     if(queued){queued.tier=earned.at(-1);queued.bestStreak=progress.bestStreak;}
+     else state.rewardQueue.push({kind:'frame',tier:earned.at(-1),bestStreak:progress.bestStreak});
+   }
  }
- if(progress.level>lastLevel&&!state.rewardQueue.some(x=>x.kind==='level'))
-   state.rewardQueue.push({kind:'level',level:progress.level,previous:lastLevel});
+ if(progress.level>lastLevel){
+   const queued=state.rewardQueue.find(x=>x.kind==='level');
+   if(queued)queued.level=Math.max(queued.level,progress.level);
+   else state.rewardQueue.push({kind:'level',level:progress.level,previous:lastLevel});
+ }
 }
 function rewardModal(){
  const reward=state.rewardQueue[0];
@@ -868,7 +874,7 @@ async function maybeSyncProgression(){
    ||Number(state.profile.totalXp)!==progress.totalXp
    ||Number(state.profile.bestStreak)!==progress.bestStreak
    ||state.profile.frameChoice!==progress.frameChoice;
- if(!changed){maybeQueueProgressRewards(progress);return;}
+ if(!changed){const count=state.rewardQueue.length;maybeQueueProgressRewards(progress);if(state.rewardQueue.length>count)render();return;}
  state.progressSyncing=true;
  try{
    const result=await adapter.saveProgression(state.user.uid,state.groupIds,progress);

@@ -204,11 +204,13 @@ export function computeStats(players=[],decks=[],matches=[]) {
   // This keeps the scoreboard roughly linear when groups grow.
   const gamesByPlayer=new Map();
   for(const m of active){
-    for(const uid of [m.playerA,m.playerB]){
-      if(!uid||uid===m.playerB&&uid===m.playerA&&gamesByPlayer.has(uid)&&
-        gamesByPlayer.get(uid).at(-1)===m)continue;
-      if(!gamesByPlayer.has(uid))gamesByPlayer.set(uid,[]);
-      gamesByPlayer.get(uid).push(m);
+    if(m.playerA){
+      if(!gamesByPlayer.has(m.playerA))gamesByPlayer.set(m.playerA,[]);
+      gamesByPlayer.get(m.playerA).push(m);
+    }
+    if(m.playerB&&m.playerB!==m.playerA){
+      if(!gamesByPlayer.has(m.playerB))gamesByPlayer.set(m.playerB,[]);
+      gamesByPlayer.get(m.playerB).push(m);
     }
   }
   const perPlayer=players.map(p=>{

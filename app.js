@@ -5,7 +5,7 @@ import {prepareImageSource} from './image-source.mjs?v=2.4';
 import { COLORS, colorOf, safeText as e, shortId, formatDate, assertMatch, computeStats, aggregatePersonalStats, aggregateDeckWinRates, filterMatches, filteredMatchStats, matchTimeMs, matchDateValue, parsePlayedAt, sideRecordStats, deckDetailStats, topDecksByWinRate, sortDeckLibrary, playerWinStreak, streakTier, resolvePlayerDeckSelection, GUEST_PLAYER_ID, GUEST_DECK_ID, guestPlayer, personalGroupId, isGuestMatch, guestDeckLabel } from './core.mjs?v=2.7';
 import { demoAdapter } from './demo-adapter.js?v=2.6';
 import { QUICK_MATCH_LIMIT_MS, quickClock, mmss } from './quick-core.mjs?v=2.6';
-import { progressionFromMatches, levelFromExperience, highestStreakAcrossGroups, unlockedStreakFrames, validFrameChoice, levelFrameFor, STREAK_FRAME_TIERS } from './progression.mjs?v=2.8';
+import { progressionFromMatches, levelFromExperience, highestStreakAcrossGroups, unlockedStreakFrames, validFrameChoice, levelFrameFor, LEVEL_FRAME_THRESHOLDS, STREAK_FRAME_TIERS } from './progression.mjs?v=2.8';
 import { deserializeTournamentRounds, tournamentPodium, tournamentPlacement, tournamentMedals, publicTournamentSnapshot } from './tournament-core.mjs?v=2.1';
 
 const $=q=>document.querySelector(q);
@@ -589,6 +589,12 @@ function levelProgressPanel(){
    <div class="section-head"><h3>玩家等級</h3><span class="tag">Lv. ${progress.level}</span></div>
    <div class="level-progress-heading"><strong>${n(progress.totalXp)} XP</strong><small>${n(progress.intoLevel)} / ${n(progress.nextLevelXp)} XP · 距離升級還需 ${n(progress.remainingXp)} XP</small></div>
    <div class="level-progress-track"><span style="width:${progress.progress}%"></span></div>
+   <div class="level-milestone-gallery">
+    ${LEVEL_FRAME_THRESHOLDS.map(n=>`<div class="level-milestone-preview ${progress.level>=n?'unlocked':'locked'}">
+      <img src="./assets/level-frame-${n}.svg?v=2.8" alt="${n} 等等級徽章" loading="lazy">
+      <small>${progress.level>=n?'已達成':`Lv. ${n} 解鎖`}</small>
+    </div>`).join('')}
+   </div>
    <p class="hint">勝場 +100 XP，敗場 +40 XP；每升一級，下次所需 XP 增加 20。每達到 100、200、300、400、500 等會獲得對應等級徽章。${milestone?`目前已達 ${milestone} 等徽章階級。`:''}</p>
  </section>`;
 }

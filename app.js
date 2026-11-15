@@ -27,10 +27,11 @@ const getStats=()=>computeStats(state.players,state.decks,state.matches);
 const canRemoveQuick=q=>Boolean(q&&([q.playerA,q.playerB,q.createdBy].includes(state.user?.uid)||isOwner()));
 const ownStats=()=>aggregatePersonalStats(state.user?.uid||'',state.personalHistory);
 function ownProgress(){
- if(state.historyReady&&state.user)return progressionFromMatches(state.user.uid,state.personalHistory);
- const fallback=levelFromExperience(state.profile?.totalXp||0);
- return {...fallback,level:Math.max(fallback.level,Number(state.profile?.level)||1),
-   wins:0,losses:0};
+ const current=state.historyReady&&state.user?
+   progressionFromMatches(state.user.uid,state.personalHistory):{wins:0,losses:0,totalXp:0};
+ const totalXp=Math.max(current.totalXp,Number(state.profile?.totalXp)||0);
+ const computed=levelFromExperience(totalXp);
+ return {...current,...computed,level:Math.max(computed.level,Number(state.profile?.level)||1)};
 }
 function ownedBestStreak(){
  const recorded=Math.max(0,Number(state.profile?.bestStreak)||0);
@@ -851,7 +852,7 @@ function dismissReward(goToFrames=false){
 }
 async function maybeSyncProgression(){
  if(!state.user||!state.historyReady||state.progressSyncing)return;
- const fromHistory=progressionFromMatches(state.user.uid,state.personalHistory);
+ const fromHistory=ownProgress();
  const bestStreak=ownedBestStreak();
  const frameChoice=state.profile.frameChoice===undefined?
    (streakTier(bestStreak)||'none'):state.profile.frameChoice;
@@ -865,11 +866,12 @@ async function maybeSyncProgression(){
  state.progressSyncing=true;
  try{
    const result=await adapter.saveProgression(state.user.uid,state.groupIds,progress);
-   state.profile={...state.profile,level:progress.level,totalXp:progress.totalXp,
-     bestStreak:progress.bestStreak,frameChoice:progress.frameChoice};
+   const saved=result.progress||progress;
+   state.profile={...state.profile,level:saved.level,totalXp:saved.totalXp,
+     bestStreak:saved.bestStreak,frameChoice:saved.frameChoice};
    state.players=state.players.map(p=>p.id===state.user.uid?
-     {...p,level:progress.level,frameChoice:progress.frameChoice}:p);
-   maybeQueueProgressRewards(progress);
+     {...p,level:saved.level,frameChoice:saved.frameChoice}:p);
+   maybeQueueProgressRewards(saved);
    if(result.failures?.length)console.warn('部分戰團等級外框同步失敗',result.failures);
    render();
  }catch(error){console.warn('無法更新進度，可能尚未發布新版 Firestore 規則',error);}
@@ -969,11 +971,11 @@ async function handleAction(action,el){
     await runBusy(async()=>{
       try{
         const result=await adapter.saveProgression(state.user.uid,state.groupIds,{
-          level:progress.level,totalXp:progress.totalXp,bestStreak:best,frameChoice:frame
+          level:progress.level,totalXp:progress.totalXp,bestStreak:best,frameChoice:frame,changingFrame:true
         });
-        state.profile={...state.profile,frameChoice:frame,bestStreak:best,
-          level:progress.level,totalXp:progress.totalXp};
-        state.players=state.players.map(p=>p.id===state.user.uid?{...p,frameChoice:frame,level:progress.level}:p);
+        const saved=result.progress||{level:progress.level,totalXp:progress.totalXp,bestStreak:best,frameChoice:frame};
+        state.profile={...state.profile,...saved};
+        state.players=state.players.map(p=>p.id===state.user.uid?{...p,frameChoice:saved.frameChoice,level:saved.level}:p);
         render();toast(result.failures?.length?'已更換外框，但部分戰團尚未同步。':'已成功更換頭像連勝外框。');
       }catch(err){state.profile.frameChoice=old;throw err;}
     });break;

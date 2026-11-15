@@ -664,13 +664,13 @@ function quickSetupPage(){
 function quickResultForm(s){
   const timed=Boolean(s),d=s||state.quickPending;
   if(!d)return '';
-  return `<section class="card quick-form"><div class="section-head"><h3>🏆 登錄勝負結果</h3><button class="btn btn-ghost btn-sm" data-action="${timed?'quick-result-close':'quick-new'}">取消</button></div>
+  return `${timed?'<div class="modal-backdrop quick-result-backdrop"><div class="modal quick-result-dialog" role="dialog" aria-modal="true" aria-label="登錄計時對戰結果">':''}<section class="card quick-form"><div class="section-head"><h3>🏆 登錄勝負結果</h3><button class="btn btn-ghost btn-sm" data-action="${timed?'quick-result-close':'quick-new'}">取消</button></div>
     <p class="muted sm">${e(playerName(d.playerA))}（${e(battleDeckName(d,'A'))}） VS ${e(playerName(d.playerB))}（${e(battleDeckName(d,'B'))}）</p>
     ${timed?`<p class="hint">提交時會自動結束目前回合，儲存每回合及兩位玩家累計用時。時間用完不會自動判定勝者。</p>`:''}
     <form data-form="quick-result"><div class="field mt"><label>本場勝利者</label><select name="winner" required><option value="${e(d.playerA)}">🏆 ${e(playerName(d.playerA))}</option><option value="${e(d.playerB)}">🏆 ${e(playerName(d.playerB))}</option></select></div>
     ${!timed?firstPlayerSelect(d.playerA,d.playerB,d.playerA):''}
     ${!timed?`<div class="field mt"><label>實際對戰日期與時間</label><input type="datetime-local" name="playedAt" required value="${localDateTimeValue()}"><div class="hint">可回填過去時間；登錄時間另外保存。</div></div>`:`<div class="hint">對戰時間使用計時開始時間。</div>`}<div class="field mt"><label>備註（選填）</label><textarea name="note" maxlength="200" placeholder="例如：時間到、加賽等"></textarea></div>
-    <button class="btn btn-primary" type="submit" style="margin-top:15px">確認儲存結果 →</button></form></section>`;
+    <button class="btn btn-primary" type="submit" style="margin-top:15px">確認儲存結果 →</button></form></section>${timed?'</div></div>':''}`;
 }
 function quickSessionPage(s){
  const c=quickClock(s),playing=['ready','running'].includes(s.status),timedDone=s.status==='finished',paused=!!s.pausedAtMs;
@@ -1092,7 +1092,7 @@ async function handleAction(action,el){
       render();toast('已從速配清單移除。');
     });break;
    }
-  case 'quick-result-open':state.quickResultOpen=true;render();break;
+  case 'quick-result-open':state.quickResultOpen=true;render();document.querySelector('.quick-result-dialog select[name="winner"]')?.focus();break;
   case 'quick-cancel':if(confirm('放棄這場計時對戰？不會產生勝負紀錄，計時資料將保留為已取消。'))await runBusy(async()=>{await adapter.changeQuickMatch(state.groupId,state.quickSessionId,state.user.uid,'cancel');toast('已取消計時對戰。')});break;
   case 'quick-result-close':state.quickResultOpen=false;render();break;
   case 'duel-draw':{

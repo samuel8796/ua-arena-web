@@ -49,7 +49,13 @@ function equippedFrame(uid){
 }
 function playerLevel(uid){
  if(uid===state.user?.uid)return ownProgress().level;
- return Math.max(1,Math.floor(Number(player(uid)?.level)||1));
+ const memberLevel=Math.max(1,Math.floor(Number(player(uid)?.level)||1));
+ // While an opponent is offline, reflect new results from this group immediately.
+ // Their persisted account-wide level remains authoritative whenever higher.
+ const groupMatches=state.matches.filter(m=>m.status==='active'&&
+   (m.playerA===uid||m.playerB===uid)&&[m.playerA,m.playerB].includes(m.winner));
+ const groupXp=groupMatches.reduce((xp,m)=>xp+(m.winner===uid?100:40),0);
+ return Math.max(memberLevel,levelFromExperience(groupXp).level);
 }
 function levelNameBadge(uid){
  const level=playerLevel(uid),milestone=levelFrameFor(level);

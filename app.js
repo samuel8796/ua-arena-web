@@ -38,7 +38,7 @@ function groupStreak(uid){
  if(!streakCache.has(uid))streakCache.set(uid,playerWinStreak(uid,state.matches));
  return streakCache.get(uid);
 }
-let renderScheduled=false;
+let renderScheduled=false,historyStartTimer=null;
 function scheduleRender(){
  if(renderScheduled)return;
  renderScheduled=true;
@@ -876,14 +876,19 @@ async function newDeck(d={}){
   openModal('deck',{id:d.id||'',ownerUid:state.user.uid,name:d.name||'',color:d.color||'PURPLE',imageData:d.imageData||'',imageSourceData:source});
 }
 async function loadGroup(gid){
+  if(historyStartTimer){clearTimeout(historyStartTimer);historyStartTimer=null;}
   tournamentRequestUnsub();tournamentRequestUnsub=()=>{};unsub();unsub=()=>{};state.groupId='';state.group=await adapter.getGroup(gid);
   state.groupDetails[gid]=state.group.name;groupInfoRequested.add(gid);
   state.groupId=gid;state.tab='overview';state.quickDraft={};state.players=[];state.decks=[];state.matches=[];state.quickMatches=[];state.tournaments=[];state.tournamentRequests=[];state.myTournamentRequest=false;state.tournamentId='';state.quickSessionId='';state.quickCreate=true;state.quickResultOpen=false;state.quickPending=null;
   safeStoreSet(`ua-arena-last-${state.user.uid}`,gid);
   unsub=adapter.subscribe(gid,snapshot=>{
-   if(snapshot.coreReady&&!state.historyStarted){
-     state.historyStarted=true;
-     setTimeout(()=>{if(state.user&&state.groupId===gid)restartPersonalHistory()},180);
+   if(snapshot.coreReady&&!state.historyStarted&&!historyStartTimer){
+     historyStartTimer=setTimeout(()=>{
+       historyStartTimer=null;
+       if(state.user&&state.groupId===gid&&!state.historyStarted){
+         state.historyStarted=true;restartPersonalHistory();
+       }
+     },180);
    }
    state.players=isPersonal()?[...snapshot.members.filter(p=>p.id!==GUEST_PLAYER_ID),guestPlayer()]:snapshot.members;
    state.decks=snapshot.decks;state.matches=snapshot.matches;
@@ -1035,6 +1040,7 @@ async function afterAuth(user){
    personalTournamentUnsub();personalTournamentUnsub=()=>{};
    tournamentRequestUnsub();tournamentRequestUnsub=()=>{};
    state.personalHistory={};state.historyReady=false;state.historyStarted=false;
+   if(historyStartTimer){clearTimeout(historyStartTimer);historyStartTimer=null;}
    state.rewardQueue=[];state.progressSyncing=false;
    state.personalTournaments={};state.tournamentHistoryReady=false;state.tournamentHistoryRequested=false;
    state.groupIds=[];state.groupDetails={};state.myCard=null;groupInfoRequested.clear();
@@ -1324,7 +1330,10 @@ app.addEventListener('click',event=>{
   if(!event.target.closest('.deck-combo'))closeDeckCombos();
   const tab=event.target.closest('[data-tab]');if(tab){state.tab=tab.dataset.tab;state.modal=null;if(state.tab==='quick' && !state.quickPending){const live=state.quickMatches.find(q=>q.status==='running'||q.status==='ready');if(live){state.quickSessionId=live.id;state.quickCreate=false;}else{state.quickCreate=true;ensureQuickDraft();}}
    if(state.tab==='profile'){
-     if(!state.historyStarted){state.historyStarted=true;restartPersonalHistory();}
+     if(!state.historyStarted){
+       if(historyStartTimer){clearTimeout(historyStartTimer);historyStartTimer=null;}
+       state.historyStarted=true;restartPersonalHistory();
+     }
      ensurePersonalTournaments();void ensureMyCardLoaded();void loadOtherGroupNames();
    }
    if(state.tab==='groups')void loadOtherGroupNames();

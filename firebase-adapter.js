@@ -48,8 +48,9 @@ async function ensurePersonalGroup(uid, nickname){
     else if(existing.data().createdBy!==uid)throw new Error('個人戰團識別碼被占用，請聯繫管理員。');
     const m=memberRef(id,uid);
     if(!(await getDoc(m)).exists()){
-      const own=await getDoc(userRef(uid)),avatarData=own.exists()?own.data().avatarData||'':'';
-      await setDoc(m,{uid,nickname:name,role:'owner',joinedAt:serverTimestamp(),...(avatarData?{avatarData}:{})});
+      const own=await getDoc(userRef(uid)),ownData=own.exists()?own.data():{};
+      const avatarData=ownData.avatarData||'',level=Number(ownData.level)||1,frameChoice=ownData.frameChoice||'none';
+      await setDoc(m,{uid,nickname:name,role:'owner',joinedAt:serverTimestamp(),...(avatarData?{avatarData}:{}),level,frameChoice});
     }
     await rememberGroup(uid,id,name);
     return id;
@@ -126,6 +127,23 @@ export const firebaseAdapter = {
     }
     return {failures};
   },
+  async saveProgression(uid,groupIds,progress){
+    if(auth.currentUser?.uid!==uid)throw new Error('只能更新自己的等級與外框。');
+    const level=Math.max(1,Math.floor(Number(progress.level)||1));
+    const totalXp=Math.max(0,Math.floor(Number(progress.totalXp)||0));
+    const bestStreak=Math.max(0,Math.floor(Number(progress.bestStreak)||0));
+    const frameChoice=String(progress.frameChoice||'none');
+    const frames={none:0,bronze:2,silver:5,gold:10,prismatic:20};
+    if(level>10000||totalXp>1000000000||bestStreak>100000||
+      !(frameChoice in frames)||frames[frameChoice]>bestStreak)throw new Error('玩家進度或連勝外框尚未解鎖。');
+    await setDoc(userRef(uid),{level,totalXp,bestStreak,frameChoice,updatedAt:serverTimestamp()},{merge:true});
+    const failures=[];
+    for(const gid of groupIds||[]){
+      try{await updateDoc(memberRef(gid,uid),{level,frameChoice});}
+      catch(error){console.warn('無法同步戰團的外框與等級',gid,error);failures.push(gid);}
+    }
+    return {failures};
+  },
   async saveProfileCover(uid,profileCoverData,profileCoverSourceData=''){
     if(auth.currentUser?.uid!==uid)throw new Error('只能修改自己的資料背景。');
     if(typeof profileCoverData!=='string'||profileCoverData.length>90000||
@@ -150,8 +168,9 @@ export const firebaseAdapter = {
   async createGroup(uid,nickname,title){
     const g=doc(collection(db,'groups'));
     await setDoc(g,{name:title.trim(),createdBy:uid,createdAt:serverTimestamp()});
-    const own=await getDoc(userRef(uid)),avatarData=own.exists()?own.data().avatarData||'':'';
-    await setDoc(memberRef(g.id,uid),{uid,nickname:nickname.trim(),role:'owner',joinedAt:serverTimestamp(),...(avatarData?{avatarData}:{})});
+    const own=await getDoc(userRef(uid)),ownData=own.exists()?own.data():{};
+      const avatarData=ownData.avatarData||'',level=Number(ownData.level)||1,frameChoice=ownData.frameChoice||'none';
+    await setDoc(memberRef(g.id,uid),{uid,nickname:nickname.trim(),role:'owner',joinedAt:serverTimestamp(),...(avatarData?{avatarData}:{}),level,frameChoice});
     await rememberGroup(uid,g.id,nickname.trim());
     return g.id;
   },
@@ -159,8 +178,9 @@ export const firebaseAdapter = {
     const g=await this.getGroup(gid);
     const existing=await getDoc(memberRef(gid,uid));
     if(!existing.exists()){
-      const own=await getDoc(userRef(uid)),avatarData=own.exists()?own.data().avatarData||'':'';
-      await setDoc(memberRef(gid,uid),{uid,nickname:nickname.trim(),role:g.createdBy===uid?'owner':'member',joinedAt:serverTimestamp(),...(avatarData?{avatarData}:{})});
+      const own=await getDoc(userRef(uid)),ownData=own.exists()?own.data():{};
+      const avatarData=ownData.avatarData||'',level=Number(ownData.level)||1,frameChoice=ownData.frameChoice||'none';
+      await setDoc(memberRef(gid,uid),{uid,nickname:nickname.trim(),role:g.createdBy===uid?'owner':'member',joinedAt:serverTimestamp(),...(avatarData?{avatarData}:{}),level,frameChoice});
     }
     await rememberGroup(uid,gid,nickname.trim());
     return gid;

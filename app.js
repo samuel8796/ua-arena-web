@@ -128,7 +128,7 @@ function setupPage(){
 const menu=[['overview','總覽'],['quick','Quick Match'],['matches','戰績紀錄'],['decks','我的牌組'],['players','玩家排行'],['tournaments','錦標賽'],['groups','我的對戰團'],['profile','個人資料'],['rules','規則 AI']];
 const mobileMenu=['overview','quick','tournaments','matches','decks'];
 function shell(content){
-  app.innerHTML=`<div class="shell"><aside class="sidebar"><div class="logo"><span class="logo-icon">UA</span><span>UA <span class="arena">ARENA</span></span></div><div class="nav-group">MAIN MENU</div>${menu.map(([id,title])=>`<button class="nav ${state.tab===id?'active':''}" data-tab="${id}"><span class="ico">${pathIcon(id)}</span>${title}</button>`).join('')}<div class="sidebar-bottom"><button class="nav" data-action="share-invite"><span class="ico">↗</span>邀請朋友</button><button class="nav" data-tab="groups"><span class="ico">⇄</span>切換群組</button><button class="nav" data-tab="profile"><span class="ico">◉</span>個人資料</button><button class="nav" data-action="logout"><span class="ico">⇥</span>登出</button><button class="profile profile-button" data-tab="profile" aria-label="查看個人資料">${playerAvatar(state.user?.uid)}<div class="who"><b>${e(userLabel())}</b><small>${e(state.user?.email||'本機展示模式')}</small></div></button></div></aside><main class="main"><div class="topbar"><div class="mobile-head">UA <span>ARENA</span></div><div class="top-label"><span class="label-up">YOUR BATTLESPACE</span></div><div class="top-actions"><button class="group-pill" data-tab="groups">⌘ ${e(state.group?.name||'對戰團')} ▾</button>${adapter?.mode==='demo'?'<span class="tag">DEMO</span>':''}<button class="circle-action" data-action="share-invite" title="分享群組連結">↗</button></div></div>${adapter?.mode==='demo'?'<div class="setup-banner" style="margin-top:16px">展示模式：資料只保存在此瀏覽器。如需多人登入共用，請依 README 連接 Firebase。</div>':''}<div class="page">${content}<div class="copyright">UA ARENA · Community battle tracker · 非 BANDAI 官方網站</div></div></main><nav class="mobile-nav">${mobileMenu.map(id=>`<button data-tab="${id}" class="${state.tab===id?'active':''}"><span class="icon">${pathIcon(id)}</span>${({overview:'總覽',quick:'速配',tournaments:'賽事',matches:'戰績',decks:'牌組'})[id]}</button>`).join('')}<button data-action="more-menu" class="${['profile','groups','players','rules'].includes(state.tab)?'active':''}"><span class="icon">☰</span>更多</button></nav></div>${renderModal()}`;
+  app.innerHTML=`<div class="shell"><aside class="sidebar"><div class="logo"><span class="logo-icon">UA</span><span>UA <span class="arena">ARENA</span></span></div><div class="nav-group">MAIN MENU</div>${menu.map(([id,title])=>`<button class="nav ${state.tab===id?'active':''}" data-tab="${id}"><span class="ico">${pathIcon(id)}</span>${title}</button>`).join('')}<div class="sidebar-bottom"><button class="nav" data-action="share-invite"><span class="ico">↗</span>邀請朋友</button><button class="nav" data-tab="groups"><span class="ico">⇄</span>切換群組</button><button class="nav" data-tab="profile"><span class="ico">◉</span>個人資料</button><button class="nav" data-action="logout"><span class="ico">⇥</span>登出</button><button class="profile profile-button" data-tab="profile" aria-label="查看個人資料">${playerAvatar(state.user?.uid)}<div class="who"><b>${e(userLabel())}</b><small>${e(state.user?.email||'本機展示模式')}</small></div></button></div></aside><main class="main"><div class="topbar"><div class="mobile-head">UA <span>ARENA</span></div><div class="top-label"><span class="label-up">YOUR BATTLESPACE</span></div><div class="top-actions"><button class="group-pill" data-tab="groups">⌘ ${e(state.group?.name||'對戰團')} ▾</button>${adapter?.mode==='demo'?'<span class="tag">DEMO</span>':''}<button class="circle-action" data-action="share-invite" title="分享群組連結">↗</button></div></div>${adapter?.mode==='demo'?'<div class="setup-banner" style="margin-top:16px">展示模式：資料只保存在此瀏覽器。如需多人登入共用，請依 README 連接 Firebase。</div>':''}<div class="page">${content}<div class="copyright">UA ARENA · Community battle tracker · 非 BANDAI 官方網站</div></div></main><nav class="mobile-nav">${mobileMenu.map(id=>`<button data-tab="${id}" class="${state.tab===id?'active':''}"><span class="icon">${pathIcon(id)}</span>${({overview:'總覽',quick:'速配',tournaments:'賽事',matches:'戰績',decks:'牌組'})[id]}</button>`).join('')}<button data-action="more-menu" class="${['profile','groups','players','rules'].includes(state.tab)?'active':''}"><span class="icon">☰</span>更多</button></nav></div>${renderModal()}${rewardModal()}`;
 }
 function overviewPage(){
   const s=getStats(),me=s.players.find(x=>x.id===state.user?.uid)||{games:0,wins:0,rate:0,favorite:null};
@@ -800,6 +800,75 @@ function restartPersonalTournaments(){
    if(['profile','matches'].includes(state.tab)||state.modal==='tournament-detail')render();
  },err=>{console.warn('錦標賽戰績同步失敗',err);toast(readableError(err),true)});
 }
+function maybeQueueProgressRewards(progress){
+ if(!state.user||!state.historyReady)return;
+ const key=`ua-arena-reward-seen-${state.user.uid}`;
+ let seen;
+ try{seen=JSON.parse(safeStoreGet(key)||'{}')||{};}catch{seen={};}
+ const lastLevel=Math.max(1,Number(seen.level)||1),lastBest=Math.max(0,Number(seen.bestStreak)||0);
+ if(progress.bestStreak>lastBest){
+   const earned=STREAK_FRAME_TIERS.filter(t=>t.threshold>lastBest&&t.threshold<=progress.bestStreak);
+   if(earned.length&&!state.rewardQueue.some(x=>x.kind==='frame'))
+     state.rewardQueue.push({kind:'frame',tier:earned.at(-1),bestStreak:progress.bestStreak});
+ }
+ if(progress.level>lastLevel&&!state.rewardQueue.some(x=>x.kind==='level'))
+   state.rewardQueue.push({kind:'level',level:progress.level,previous:lastLevel});
+}
+function rewardModal(){
+ const reward=state.rewardQueue[0];
+ if(!reward||state.modal||(state.tab==='quick'&&state.quickResultOpen))return '';
+ const frame=reward.kind==='frame';
+ const tier=reward.tier;
+ return `<div class="modal-backdrop reward-backdrop"><div class="modal reward-dialog" role="dialog" aria-modal="true" aria-label="${frame?'外框獎勵已解鎖':'玩家升級'}">
+   <div class="reward-sparkles" aria-hidden="true">✦　✧　✦</div>
+   <h2>${frame?'🎉 獲得新連勝外框！':'🎊 玩家等級提升！'}</h2>
+   ${frame?`<div class="reward-visual">${playerAvatar(state.user?.uid,'avatar-tier-preview',tier.id)}</div>
+     <h3>${e(tier.label)}</h3><p>已達成 ${tier.threshold} 場連勝，外框永久加入你的庫存。即使之後輸掉也不會消失。</p>
+     <p class="hint">到「我的個人資料 → 頭像下方的設定外框」即可自由更換。</p>`:
+     `<div class="reward-level-value">Lv. ${reward.level}</div>
+      <p>由 Lv. ${reward.previous} 升至 Lv. ${reward.level}！勝利可獲得 100 XP，敗場也有 40 XP。</p>
+      ${levelFrameFor(reward.level)?`<img class="reward-level-milestone" src="./assets/level-frame-${levelFrameFor(reward.level)}.svg?v=2.8" alt="${levelFrameFor(reward.level)} 等徽章">`:''}
+      <p class="hint">等級與已達成的百等徽章會顯示在玩家名片的名字旁。</p>`}
+   <button type="button" class="btn btn-primary btn-full" data-action="${frame?'reward-visit-frames':'reward-dismiss'}">${frame?'前往設定外框':'太好了！'}</button>
+   ${frame?'<button type="button" class="btn btn-ghost btn-full" data-action="reward-dismiss">稍後再設定</button>':''}
+ </div></div>`;
+}
+function dismissReward(goToFrames=false){
+ const reward=state.rewardQueue.shift();if(!reward||!state.user)return;
+ const key=`ua-arena-reward-seen-${state.user.uid}`;
+ let seen={};try{seen=JSON.parse(safeStoreGet(key)||'{}')||{};}catch{}
+ if(reward.kind==='level')seen.level=Math.max(Number(seen.level)||1,reward.level);
+ if(reward.kind==='frame')seen.bestStreak=Math.max(Number(seen.bestStreak)||0,reward.bestStreak);
+ safeStoreSet(key,JSON.stringify(seen));
+ if(goToFrames){state.tab='profile';state.modal=null;}
+ render();
+}
+async function maybeSyncProgression(){
+ if(!state.user||!state.historyReady||state.progressSyncing)return;
+ const fromHistory=progressionFromMatches(state.user.uid,state.personalHistory);
+ const bestStreak=ownedBestStreak();
+ const frameChoice=state.profile.frameChoice===undefined?
+   (streakTier(bestStreak)||'none'):state.profile.frameChoice;
+ const safeFrame=validFrameChoice(frameChoice,bestStreak)?frameChoice:'none';
+ const progress={...fromHistory,bestStreak,frameChoice:safeFrame};
+ const changed=Number(state.profile.level)!==progress.level
+   ||Number(state.profile.totalXp)!==progress.totalXp
+   ||Number(state.profile.bestStreak)!==progress.bestStreak
+   ||state.profile.frameChoice!==progress.frameChoice;
+ if(!changed){maybeQueueProgressRewards(progress);return;}
+ state.progressSyncing=true;
+ try{
+   const result=await adapter.saveProgression(state.user.uid,state.groupIds,progress);
+   state.profile={...state.profile,level:progress.level,totalXp:progress.totalXp,
+     bestStreak:progress.bestStreak,frameChoice:progress.frameChoice};
+   state.players=state.players.map(p=>p.id===state.user.uid?
+     {...p,level:progress.level,frameChoice:progress.frameChoice}:p);
+   maybeQueueProgressRewards(progress);
+   if(result.failures?.length)console.warn('部分戰團等級外框同步失敗',result.failures);
+   render();
+ }catch(error){console.warn('無法更新進度，可能尚未發布新版 Firestore 規則',error);}
+ finally{state.progressSyncing=false;}
+}
 function restartPersonalHistory(){
   historyUnsub();historyUnsub=()=>{};
   state.personalHistory={};state.historyReady=false;
@@ -808,12 +877,13 @@ function restartPersonalHistory(){
   historyUnsub=adapter.subscribePersonalHistory(state.groupIds,state.user.uid,records=>{
     state.personalHistory=records;
     state.historyReady=state.groupIds.every(id=>Object.prototype.hasOwnProperty.call(records,id));
+    if(state.historyReady)void maybeSyncProgression();
     if((['profile','decks'].includes(state.tab)&&!state.modal)||['deck-detail','turn-stats'].includes(state.modal))render();
   },err=>{console.warn('個人戰績同步失敗',err);toast(readableError(err),true)});
 }
 async function afterAuth(user){
   state.user=user;state.groupId='';state.modal=null;
-  if(!user){unsub();historyUnsub();historyUnsub=()=>{};personalTournamentUnsub();personalTournamentUnsub=()=>{};state.personalHistory={};state.historyReady=false;state.personalTournaments={};state.tournamentHistoryReady=false;state.groupIds=[];state.myCard=null;render();return}
+  if(!user){unsub();historyUnsub();historyUnsub=()=>{};personalTournamentUnsub();personalTournamentUnsub=()=>{};state.personalHistory={};state.historyReady=false;state.rewardQueue=[];state.progressSyncing=false;state.personalTournaments={};state.tournamentHistoryReady=false;state.groupIds=[];state.myCard=null;render();return}
   try{
     state.groupIds=await adapter.getMyGroups(user.uid);
     state.profile=await adapter.getProfile(user.uid);
@@ -884,6 +954,24 @@ async function handleAction(action,el){
     state.tab='matches';state.playerFilter=state.user.uid;render();
   });break;
   case 'more-menu':openModal('more');break;
+  case 'reward-dismiss':dismissReward();break;
+  case 'reward-visit-frames':dismissReward(true);break;
+  case 'choose-streak-frame':{
+    const frame=el.dataset.frame,best=ownedBestStreak();
+    if(!validFrameChoice(frame,best))throw new Error('尚未達到這款外框的連勝條件。');
+    const progress=ownProgress(),old=state.profile.frameChoice;
+    await runBusy(async()=>{
+      try{
+        const result=await adapter.saveProgression(state.user.uid,state.groupIds,{
+          level:progress.level,totalXp:progress.totalXp,bestStreak:best,frameChoice:frame
+        });
+        state.profile={...state.profile,frameChoice:frame,bestStreak:best,
+          level:progress.level,totalXp:progress.totalXp};
+        state.players=state.players.map(p=>p.id===state.user.uid?{...p,frameChoice:frame,level:progress.level}:p);
+        render();toast(result.failures?.length?'已更換外框，但部分戰團尚未同步。':'已成功更換頭像連勝外框。');
+      }catch(err){state.profile.frameChoice=old;throw err;}
+    });break;
+  }
   case 'streak-guide':openModal('streak-guide');break;
   case 'open-card-settings':openModal('card-settings',{cardCoverData:state.myCard?.coverData||'',cardCoverSourceData:validCropSource(state.profile?.cardCoverSourceData)||state.myCard?.coverData||''});break;
   case 'open-account-info':openModal('account-info');break;

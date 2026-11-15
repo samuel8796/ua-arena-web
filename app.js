@@ -64,20 +64,47 @@ function loadPlayerDecksSoon(uid){
 }
 
 const canRemoveQuick=q=>Boolean(q&&([q.playerA,q.playerB,q.createdBy].includes(state.user?.uid)||isOwner()));
-const ownStats=()=>aggregatePersonalStats(state.user?.uid||'',state.personalHistory);
+let personalStatsMemo={uid:null,history:null,value:null};
+const ownStats=()=>{
+ const uid=state.user?.uid||'';
+ if(personalStatsMemo.uid===uid&&personalStatsMemo.history===state.personalHistory&&personalStatsMemo.value)
+   return personalStatsMemo.value;
+ const value=aggregatePersonalStats(uid,state.personalHistory);
+ personalStatsMemo={uid,history:state.personalHistory,value};
+ return value;
+};
+let personalProgressMemo={};
+
 function ownProgress(){
+ const uid=state.user?.uid||'';
+ const previous=personalProgressMemo.progress;
+ if(previous&&personalProgressMemo.uid===uid&&
+    personalProgressMemo.history===state.personalHistory&&
+    personalProgressMemo.historyReady===state.historyReady&&
+    personalProgressMemo.level===state.profile?.level&&
+    personalProgressMemo.totalXp===state.profile?.totalXp)return previous;
  const current=state.historyReady&&state.user?
    progressionFromMatches(state.user.uid,state.personalHistory):{wins:0,losses:0,totalXp:0};
  const totalXp=Math.max(current.totalXp,Number(state.profile?.totalXp)||0);
  const computed=levelFromExperience(totalXp);
- return {...current,...computed,level:Math.max(computed.level,Number(state.profile?.level)||1)};
+ const progress={...current,...computed,level:Math.max(computed.level,Number(state.profile?.level)||1)};
+ personalProgressMemo={uid,history:state.personalHistory,historyReady:state.historyReady,
+   level:state.profile?.level,totalXp:state.profile?.totalXp,progress};
+ return progress;
 }
+let bestStreakMemo={};
 function ownedBestStreak(){
- const recorded=Math.max(0,Number(state.profile?.bestStreak)||0);
- if(!state.user)return recorded;
- return Math.max(recorded,state.historyReady?
-   highestStreakAcrossGroups(state.user.uid,state.personalHistory,playerWinStreak):
-   playerWinStreak(state.user.uid,state.matches).best);
+ const uid=state.user?.uid||'',recorded=Math.max(0,Number(state.profile?.bestStreak)||0);
+ if(bestStreakMemo.uid===uid&&bestStreakMemo.history===state.personalHistory&&
+   bestStreakMemo.ready===state.historyReady&&
+   bestStreakMemo.matches===state.matches&&bestStreakMemo.recorded===recorded)
+     return bestStreakMemo.value;
+ const value=!uid?recorded:Math.max(recorded,state.historyReady?
+   highestStreakAcrossGroups(uid,state.personalHistory,playerWinStreak):
+   groupStreak(uid).best);
+ bestStreakMemo={uid,history:state.personalHistory,ready:state.historyReady,
+   matches:state.matches,recorded,value};
+ return value;
 }
 function equippedFrame(uid){
  if(!uid||uid===GUEST_PLAYER_ID)return null;
@@ -824,7 +851,8 @@ function refreshQuickClock(){
  container.querySelector('.quick-clock')?.classList.toggle('expired',c.expired);
  if(c.expired)container.querySelectorAll('[data-action="quick-turn-start"]').forEach(b=>b.disabled=true);
 }
-setInterval(refreshQuickClock,250);
+// The display shows whole seconds. Avoid 4 UI wakeups per second on every tab.
+setInterval(refreshQuickClock,1000);
 function inviteUrl(){let url=new URL(location.href);url.search='';url.hash='';url.searchParams.set('join',state.groupId);return url.href}
 function render(){if(!state.user){authPage();return}if(!state.groupId){setupPage();return}const pages={overview:overviewPage,quick:quickPage,matches:matchesPage,decks:decksPage,players:playersPage,rules:rulesPage,tournaments:tournamentPage,profile:profilePage,groups:groupHubPage};shell((pages[state.tab]||overviewPage)())}
 function openModal(kind,draft={}){state.modal=kind;state.draft=draft;render()}
@@ -1454,8 +1482,8 @@ app.addEventListener('submit',event=>{
       if(state.authMode==='register')await adapter.signUp(fields.email.trim(),fields.password,fields.nickname.trim());
       else await adapter.signIn(fields.email.trim(),fields.password);
       break;
-    case 'create-group':{const gid=await adapter.createGroup(state.user.uid,fields.nickname,fields.name);state.groupIds=[...new Set([...state.groupIds,gid])];state.inviteId='';restartPersonalHistory();restartPersonalTournaments();await loadGroup(gid);toast('對戰團建立成功！');break;}
-    case 'join-group':{let gid=(fields.code||'').trim();if(gid.includes('://')){try{gid=new URL(gid).searchParams.get('join')||gid}catch{}}await adapter.joinGroup(state.user.uid,fields.nickname,gid);state.groupIds=[...new Set([...state.groupIds,gid])];state.inviteId='';restartPersonalHistory();restartPersonalTournaments();history.replaceState({},'',location.pathname);await loadGroup(gid);toast('成功加入群組！');break;}
+    case 'create-group':{const gid=await adapter.createGroup(state.user.uid,fields.nickname,fields.name);state.groupIds=[...new Set([...state.groupIds,gid])];state.inviteId='';restartPersonalHistory();if(state.tournamentHistoryRequested)restartPersonalTournaments();await loadGroup(gid);toast('對戰團建立成功！');break;}
+    case 'join-group':{let gid=(fields.code||'').trim();if(gid.includes('://')){try{gid=new URL(gid).searchParams.get('join')||gid}catch{}}await adapter.joinGroup(state.user.uid,fields.nickname,gid);state.groupIds=[...new Set([...state.groupIds,gid])];state.inviteId='';restartPersonalHistory();if(state.tournamentHistoryRequested)restartPersonalTournaments();history.replaceState({},'',location.pathname);await loadGroup(gid);toast('成功加入群組！');break;}
     case 'quick-setup':{
       const d=state.quickDraft;
       const match={playerA:d.playerA,playerB:d.playerB,deckA:d.playerA===GUEST_PLAYER_ID?GUEST_DECK_ID:(fields.deckA||pickDeck(d.playerA,d.deckA)),deckB:d.playerB===GUEST_PLAYER_ID?GUEST_DECK_ID:(fields.deckB||pickDeck(d.playerB,d.deckB)),

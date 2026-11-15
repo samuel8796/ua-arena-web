@@ -1,5 +1,5 @@
 import { firebaseConfig, aiSettings } from './firebase-config.js';
-import { RULE_SYSTEM_PROMPT, personalGroupId, personalGroupName, parsePlayedAt } from './core.mjs?v=2.9.2';
+import { RULE_SYSTEM_PROMPT, personalGroupId, personalGroupName, parsePlayedAt } from './core.mjs?v=2.9.3';
 import { createQuickMatch, changeQuickMatch, quickMatchResult } from './quick-core.mjs?v=2.6';
 import { addTournamentEntrant, removeTournamentEntrant, startTournament, recordTournamentWinner, publicTournamentSnapshot, serializeTournamentRounds, deserializeTournamentRounds } from './tournament-core.mjs?v=2.1';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js';

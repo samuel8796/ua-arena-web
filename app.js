@@ -5,6 +5,7 @@ import {prepareImageSource} from './image-source.mjs?v=2.4';
 import { COLORS, colorOf, safeText as e, shortId, formatDate, assertMatch, computeStats, aggregatePersonalStats, aggregateDeckWinRates, filterMatches, filteredMatchStats, matchTimeMs, matchDateValue, parsePlayedAt, sideRecordStats, deckDetailStats, topDecksByWinRate, sortDeckLibrary, playerWinStreak, streakTier, resolvePlayerDeckSelection, GUEST_PLAYER_ID, GUEST_DECK_ID, guestPlayer, personalGroupId, isGuestMatch, guestDeckLabel } from './core.mjs?v=2.7';
 import { demoAdapter } from './demo-adapter.js?v=2.6';
 import { QUICK_MATCH_LIMIT_MS, quickClock, mmss } from './quick-core.mjs?v=2.6';
+import { progressionFromMatches, levelFromExperience, highestStreakAcrossGroups, unlockedStreakFrames, validFrameChoice, levelFrameFor, STREAK_FRAME_TIERS } from './progression.mjs?v=2.8';
 import { deserializeTournamentRounds, tournamentPodium, tournamentPlacement, tournamentMedals, publicTournamentSnapshot } from './tournament-core.mjs?v=2.1';
 
 const $=q=>document.querySelector(q);
@@ -14,7 +15,7 @@ const app=$('#app');
 const configured=Boolean(firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId);
 const params=new URLSearchParams(location.search);
 let adapter=null, unsub=()=>{}, historyUnsub=()=>{}, personalTournamentUnsub=()=>{}, tournamentRequestUnsub=()=>{}, toastTimer;
-const state={user:null,profile:{},personalHistory:{},historyReady:false,personalTournaments:{},tournamentHistoryReady:false,myCard:null,playerCard:null,groupDetails:{},tournaments:[],tournamentRequests:[],myTournamentRequest:false,tournamentId:'',publicTournament:null,publicWatchError:'',groupId:'',groupIds:[],group:null,players:[],decks:[],matches:[],tab:'overview',modal:null,draft:{},filter:'ALL',deckSort:'rate',playerFilter:'',matchFrom:'',matchTo:'',inviteId:params.get('join')||'',authMode:'login',preview:false,rulesReply:'',rulesQuestion:'',rulesEdition:'繁體中文版',busy:false,quickMatches:[],quickSessionId:'',quickCreate:true,quickDraft:{},quickPending:null,quickResultOpen:false,quickHistorySearch:'',quickHistoryFrom:'',quickHistoryTo:'',quickHistoryLimit:5};
+const state={user:null,profile:{},personalHistory:{},historyReady:false,personalTournaments:{},tournamentHistoryReady:false,myCard:null,playerCard:null,groupDetails:{},tournaments:[],tournamentRequests:[],myTournamentRequest:false,tournamentId:'',publicTournament:null,publicWatchError:'',groupId:'',groupIds:[],group:null,players:[],decks:[],matches:[],tab:'overview',modal:null,draft:{},filter:'ALL',deckSort:'rate',playerFilter:'',matchFrom:'',matchTo:'',inviteId:params.get('join')||'',authMode:'login',preview:false,rulesReply:'',rulesQuestion:'',rulesEdition:'繁體中文版',busy:false,quickMatches:[],quickSessionId:'',quickCreate:true,quickDraft:{},quickPending:null,quickResultOpen:false,quickHistorySearch:'',quickHistoryFrom:'',quickHistoryTo:'',quickHistoryLimit:5,rewardQueue:[],progressSyncing:false};
 const player=id=>state.players.find(x=>x.id===id);
 const playerName=id=>player(id)?.nickname||'未知玩家';
 const deck=id=>state.decks.find(x=>x.id===id);
@@ -25,6 +26,38 @@ const pathIcon=(i)=>icon[i]||'◈';
 const getStats=()=>computeStats(state.players,state.decks,state.matches);
 const canRemoveQuick=q=>Boolean(q&&([q.playerA,q.playerB,q.createdBy].includes(state.user?.uid)||isOwner()));
 const ownStats=()=>aggregatePersonalStats(state.user?.uid||'',state.personalHistory);
+function ownProgress(){
+ if(state.historyReady&&state.user)return progressionFromMatches(state.user.uid,state.personalHistory);
+ const fallback=levelFromExperience(state.profile?.totalXp||0);
+ return {...fallback,level:Math.max(fallback.level,Number(state.profile?.level)||1),
+   wins:0,losses:0};
+}
+function ownedBestStreak(){
+ const recorded=Math.max(0,Number(state.profile?.bestStreak)||0);
+ if(!state.user)return recorded;
+ return Math.max(recorded,state.historyReady?
+   highestStreakAcrossGroups(state.user.uid,state.personalHistory,playerWinStreak):
+   playerWinStreak(state.user.uid,state.matches).best);
+}
+function equippedFrame(uid){
+ if(!uid||uid===GUEST_PLAYER_ID)return null;
+ const p=player(uid),selected=uid===state.user?.uid?
+   state.profile?.frameChoice:p?.frameChoice;
+ if(selected!==undefined&&selected!==null)return selected==='none'?null:selected;
+ return streakTier(playerWinStreak(uid,state.matches).current);
+}
+function playerLevel(uid){
+ if(uid===state.user?.uid)return ownProgress().level;
+ return Math.max(1,Math.floor(Number(player(uid)?.level)||1));
+}
+function levelNameBadge(uid){
+ const level=playerLevel(uid),milestone=levelFrameFor(level);
+ return `<span class="player-level-group" aria-label="等級 ${level}">
+   <span class="player-level-chip">Lv. ${level}</span>
+   ${milestone?`<img class="player-level-milestone" src="./assets/level-frame-${milestone}.svg?v=2.8" alt="${milestone} 等等級徽章" loading="lazy">`:''}
+ </span>`;
+}
+
 const isOwner=()=>state.group?.createdBy===state.user?.uid;
 const isPersonal=()=>state.groupId===personalGroupId(state.user?.uid||'');
 const guardedImage=src=>typeof src==='string' && /^data:image\/(webp|jpeg);base64,[A-Za-z0-9+/=]+$/.test(src) ? src : '';
@@ -44,15 +77,14 @@ function imageSettings(kind,hasImage,inputName,label){
   </div>`;
 }
 function playerAvatar(uid,extra='',forcedTier=undefined) {
-  const p=player(uid),label=uid===state.user?.uid?userLabel():p?.nickname||'玩家';
-  const src=guardedAvatar(uid===state.user?.uid?(state.profile?.avatarData||p?.avatarData):p?.avatarData);
-  // The frame is decorative; only the user's profile contains tier explanations.
-  const tier=forcedTier===undefined?(uid&&uid!==GUEST_PLAYER_ID?streakTier(playerWinStreak(uid,state.matches).current):null):forcedTier;
-  const frame=['bronze','silver','gold','prismatic'].includes(tier)?tier:null;
-  return `<span class="avatar-shell${extra?' '+extra:''}${frame?' is-framed':''}">
-    <span class="avatar">${src?`<img src="${src}" alt="${e(label)} 的頭像" decoding="async" loading="lazy">`:e((label[0]||'?').toUpperCase())}</span>
-    ${frame?`<img class="avatar-frame-decoration" src="./assets/streak-${frame}.svg?v=2.0" alt="" aria-hidden="true" loading="lazy" decoding="async">`:''}
-  </span>`;
+ const p=player(uid),label=uid===state.user?.uid?userLabel():p?.nickname||'玩家';
+ const src=guardedAvatar(uid===state.user?.uid?(state.profile?.avatarData||p?.avatarData):p?.avatarData);
+ const tier=forcedTier===undefined?equippedFrame(uid):forcedTier;
+ const frame=['bronze','silver','gold','prismatic'].includes(tier)?tier:null;
+ return `<span class="avatar-shell${extra?' '+extra:''}${frame?' is-framed':''}">
+   <span class="avatar">${src?`<img src="${src}" alt="${e(label)} 的頭像" decoding="async" loading="lazy">`:e((label[0]||'?').toUpperCase())}</span>
+   ${frame?`<img class="avatar-frame-decoration" src="./assets/streak-${frame}.svg?v=2.0" alt="" aria-hidden="true" loading="lazy" decoding="async">`:''}
+ </span>`;
 }
 
 /** Reuse existing personal/legacy deck images without re-encoding them.
@@ -347,7 +379,7 @@ function playerModalBody(){
     :[];
   const favoriteId=favoriteMatches.length===1?favoriteMatches[0].id:'';
   return `<div class="player-card-banner">${guardedCover(card?.coverData)?`<img src="${guardedCover(card.coverData)}" alt="" aria-hidden="true">`:''}<div class="player-line">${playerAvatar(stats.id,'avatar-player')}
-    <div><h2>${e(stats.nickname)}</h2><p class="muted sm">${self?'你自己的玩家名片':'其他玩家的名片'} · ${e(state.group?.name||'')}</p></div></div></div>
+    <div><div class="player-card-name-row"><h2>${e(stats.nickname)}</h2>${levelNameBadge(stats.id)}</div><p class="muted sm">${self?'你自己的玩家名片':'其他玩家的名片'} · ${e(state.group?.name||'')}</p></div></div></div>
     ${card?.showBio&&card.bio?`<section class="card" style="margin-top:14px"><h3>關於我</h3><p class="muted">${e(card.bio)}</p></section>`:''}
     ${card?.showFavoriteDeck&&card.favoriteDeck?.name&&!topDecks.length?`<section class="card" style="margin-top:14px"><h3>♡ 最愛牌組</h3><div class="deck-favorite-feature">${deckArtwork(stats.id,favoriteId,card.favoriteDeck.name,'deck-art-favorite')}<div class="deck-favorite-info"><strong>${e(card.favoriteDeck.name)}</strong><span>${e(colorOf(card.favoriteDeck.color).name)}</span><small>使用此牌組：${Number(card.favoriteDeckStats?.games||0)} 場 · ${Number(card.favoriteDeckStats?.wins||0)} 勝 · ${Number(card.favoriteDeckStats?.rate||0)}% 勝率（公開快照）</small></div></div></section>`:''}
     ${groupVisible?`<h3 style="margin-top:18px">目前戰團戰績</h3><div class="stats-detail">

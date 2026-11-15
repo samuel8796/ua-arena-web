@@ -23,7 +23,7 @@ export function progressionFromMatches(uid,groupMatches={}){
   let wins=0,losses=0;
   for(const matches of Object.values(groupMatches||{})){
     for(const match of matches||[]){
-      if(match.status!=='active'||!match||![match.playerA,match.playerB].includes(uid)
+      if(!match||match.status!=='active'||![match.playerA,match.playerB].includes(uid)
          ||![match.playerA,match.playerB].includes(match.winner))continue;
       if(match.winner===uid)wins++;
       else losses++;

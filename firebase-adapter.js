@@ -81,7 +81,7 @@ async function migrateMyLegacyDecks(uid,groupIds){
   let copied=0;
   for(const gid of groupIds){
     try{
-      const list=await getDocs(colRef(gid,'decks'));
+      const list=await getDocs(query(colRef(gid,'decks'),where('ownerUid','==',uid)));
       for(const legacy of list.docs){
         const old=legacy.data();
         if(old.ownerUid!==uid||old.active===false)continue;
@@ -260,20 +260,24 @@ export const firebaseAdapter = {
       remoteDeckTasks.set(cacheKey,job);
       return job;
     };
+    const prefetchRecent=()=>{
+      if(!memberIds.size||!current.matches.length)return;
+      const ids=new Set();
+      const recent=current.matches.slice().sort((a,b)=>
+        (Number(b.playedAt?.seconds||b.createdAt?.seconds||0)-
+         Number(a.playedAt?.seconds||a.createdAt?.seconds||0))).slice(0,12);
+      for(const m of recent){
+        if(m.playerA!==ownUid)ids.add(m.playerA);
+        if(m.playerB!==ownUid)ids.add(m.playerB);
+      }
+      // No all-member scan: only up to six recent opponents are prefetched.
+      for(const uid of [...ids].filter(id=>memberIds.has(id)).slice(0,6))
+        void remoteLoad(uid);
+    };
     const unsubs=keys.map(k=>onSnapshot(colRef(gid,k),snapshot=>{
       current[k]=snapshot.docs.map(tidy);
       schedule();
-      // Only a few recent opponents' decks are prefetched. All other players
-      // are read when their cards or match forms are opened, not N live listeners.
-      if(k==='matches'&&memberIds.size){
-        const ids=new Set();
-        for(const m of current.matches.slice(-12)){
-          if(m.playerA!==ownUid)ids.add(m.playerA);
-          if(m.playerB!==ownUid)ids.add(m.playerB);
-        }
-        for(const uid of [...ids].filter(x=>memberIds.has(x)).slice(0,6))
-          void remoteLoad(uid);
-      }
+      if(k==='matches')prefetchRecent();
     },onError));
     unsubs.push(onSnapshot(colRef(gid,'members'),snapshot=>{
       current.members=snapshot.docs.map(tidy);
@@ -282,7 +286,7 @@ export const firebaseAdapter = {
         personal.delete(uid);remoteLoaded.delete(uid);
       }
       memberIds.clear();for(const uid of next)memberIds.add(uid);
-      schedule();
+      prefetchRecent();schedule();
     },onError));
     if(ownUid)unsubs.push(onSnapshot(personalDeckCol(ownUid),snapshot=>{
       personal.set(ownUid,snapshot.docs.map(tidy));schedule();

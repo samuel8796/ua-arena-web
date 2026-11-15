@@ -570,7 +570,9 @@ test('v2.0 個人跨戰團獎牌總數與賽事詳情、戰績中的賽事結果
  assert.ok(app.includes('function restartPersonalTournaments()'));
  assert.ok(app.includes('personalTournamentUnsub();personalTournamentUnsub=()=>{}'));
  assert.ok(app.includes('deserializeTournamentRounds(rounds)'));
- assert.ok(app.includes('data-action="streak-guide"'));
+ assert.ok(app.includes('data-action="open-frame-settings"'));
+  assert.ok(app.includes('<div class="frame-inventory-guide">${streakGuide()}</div>'));
+  assert.ok(!app.includes('data-action="streak-guide"'));
  assert.ok(!app.includes('streakGuide() + personalExtras()'));
  const css=readFileSync(new URL('./styles.css',import.meta.url),'utf8');
  assert.ok(css.includes('.tournament-medal-stats'));

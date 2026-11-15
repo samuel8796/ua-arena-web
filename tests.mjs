@@ -1117,3 +1117,24 @@ test('v2.9 首屏效能：帳號資訊單次讀取、個人戰績伺服器篩選
  assert.ok(app.includes('function ensurePersonalTournaments()'));
  assert.ok(app.includes('state.myCard=undefined'));
 });
+
+test('v2.9 大型戰團單次彙總：120 玩家、3000 場與逐玩家掃描的結果相同',()=>{
+ const players=Array.from({length:120},(_,i)=>({id:'u'+i,nickname:'P'+i}));
+ const ds=players.map(p=>({id:'d'+p.id,ownerUid:p.id,name:'Deck '+p.id,color:'BLUE'}));
+ const ms=Array.from({length:3000},(_,i)=>{
+   const a=i%120,b=(a+1+(i%13))%120;
+   return {id:'game'+i,status:i%17===0?'void':'active',
+     playerA:'u'+a,playerB:'u'+b,deckA:'du'+a,deckB:'du'+b,
+     winner:i%3===0?'u'+b:'u'+a};
+ });
+ const s=computeStats(players,ds,ms);
+ const valid=ms.filter(m=>m.status==='active');
+ assert.equal(s.totalMatches,valid.length);
+ assert.equal(s.players.reduce((n,p)=>n+p.games,0),valid.length*2);
+ assert.equal(s.players.reduce((n,p)=>n+p.wins,0),valid.length);
+ for(const p of s.players){
+   const naive=valid.filter(m=>m.playerA===p.id||m.playerB===p.id);
+   assert.equal(p.games,naive.length);
+   assert.equal(p.wins,naive.filter(m=>m.winner===p.id).length);
+ }
+});

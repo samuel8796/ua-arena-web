@@ -333,7 +333,8 @@ test('v1.6 戰績詳情顯示雙方圖片；玩家名片包含最高五副與最
   assert.ok(ui.includes('aria-label="尚未上傳牌組圖片"'));
   assert.ok(css.includes("object-fit:scale-down"));
   assert.ok(css.includes("@media(max-width:380px)"));
-  assert.ok(adapter.includes("onSnapshot(personalDeckCol(uid)"));
+  assert.ok(adapter.includes("onSnapshot(personalDeckCol(ownUid)"));
+   assert.ok(adapter.includes('async loadPlayerDecks(gid,uid)'));
 });
 
 // v1.7 — shared avatars and mobile half-art cards
@@ -1080,4 +1081,36 @@ test('v2.8 五款 SVG 等級框、連勝外框庫存、彈窗、規則及部署�
  assert.ok(rules.includes("['nickname','avatarData','level','frameChoice']"));
  assert.ok(css.includes('.frame-inventory-grid'));
  assert.ok(css.includes('.reward-backdrop'));
+});
+
+test('v2.9 外框與連勝說明收納於同一彈窗；等級為數字加進度條，說明移至資訊按鈕',()=>{
+ const app=readFileSync(new URL('./app.js',import.meta.url),'utf8');
+ const css=readFileSync(new URL('./styles.css',import.meta.url),'utf8');
+ assert.ok(app.includes("case 'frame-settings':title='設定外框';body=frameInventory()"));
+ assert.ok(app.includes("case 'level-guide':title='玩家等級說明';body=levelGuide()"));
+ assert.ok(app.includes('data-action="open-frame-settings"'));
+ assert.ok(app.includes('data-action="level-guide"'));
+ assert.ok(app.includes('<div class="frame-inventory-guide">${streakGuide()}</div>'));
+ assert.ok(app.includes('class="profile-level-panel profile-level-compact"'));
+ assert.ok(app.includes('<div class="level-progress-track">'));
+ assert.ok(!app.includes('${frameInventory()}${levelProgressPanel()}'));
+ assert.ok(css.includes('.level-help-icon'));
+});
+test('v2.9 首屏效能：帳號資訊單次讀取、個人戰績伺服器篩選、其他玩家牌組按需讀取',()=>{
+ const app=readFileSync(new URL('./app.js',import.meta.url),'utf8');
+ const fb=readFileSync(new URL('./firebase-adapter.js',import.meta.url),'utf8');
+ assert.ok(fb.includes('initialProfiles.set(uid'));
+ assert.ok(fb.includes('if(initialProfiles.has(uid))'));
+ assert.ok(!fb.includes('void migrateMyLegacyDecks(uid,groupIds)'));
+ assert.ok(fb.includes("or(where('playerA','==',uid),where('playerB','==',uid))"));
+ assert.ok(fb.includes('async loadPlayerDecks(gid,uid)'));
+ assert.ok(fb.includes('const remoteLoad=async uid=>'));
+ assert.ok(fb.includes('onSnapshot(personalDeckCol(ownUid)'));
+ assert.ok(!fb.includes('personalUnsubs.set(uid,onSnapshot'));
+ assert.ok(app.includes('let groupStatsMemo='));
+ assert.ok(app.includes('function scheduleRender()'));
+ assert.ok(app.includes('async function requestPlayerDecks(uid)'));
+ assert.ok(app.includes('async function loadOtherGroupNames()'));
+ assert.ok(app.includes('function ensurePersonalTournaments()'));
+ assert.ok(app.includes('state.myCard=undefined'));
 });

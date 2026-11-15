@@ -478,7 +478,8 @@ test('v1.9 四款透明連勝外框以獨立 SVG 呈現，圖例僅放在個人�
  const app=readFileSync(new URL('./app.js',import.meta.url),'utf8');
  const css=readFileSync(new URL('./styles.css',import.meta.url),'utf8');
  const wf=readFileSync(new URL('./.github/workflows/pages.yml',import.meta.url),'utf8');
- assert.ok(app.includes("streakTier(playerWinStreak(uid,state.matches).current)"));
+ assert.ok(app.includes("streakTier(groupStreak(uid).current)"));
+ assert.ok(app.includes('let cachedStreakMatches=null,streakCache=new Map()'));
  assert.ok(app.includes("avatar-frame-decoration"));
  assert.ok(app.includes("function streakGuide()"));
  assert.ok(app.includes('tournamentMedalPanel() + personalExtras()'));

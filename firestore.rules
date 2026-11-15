@@ -208,7 +208,7 @@ service cloud.firestore {
                 || (request.resource.data.frameChoice == 'silver' && request.resource.data.bestStreak >= 5)
                 || (request.resource.data.frameChoice == 'gold' && request.resource.data.bestStreak >= 10)
                 || (request.resource.data.frameChoice == 'prismatic' && request.resource.data.bestStreak >= 20)))))
-        ));
+        );
       allow delete: if false;
     }
     // Private public-page ownership metadata: never exposed to spectators.

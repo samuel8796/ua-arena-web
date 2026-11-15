@@ -787,7 +787,7 @@ test('v2.3 剪裁一次並完整顯示，個人與公開名片有獨立背景欄
  assert.ok(adapter.includes("coverData:typeof card.coverData"));
  assert.ok(rules.includes("validWideCover"));
  assert.ok(rules.includes("'profileCoverData'"));
- assert.ok(wf.includes("core.mjs image-source.mjs wide-crop-ui.mjs avatar-crop-ui.mjs"));
+ assert.ok(wf.includes("core.mjs progression.mjs image-source.mjs wide-crop-ui.mjs avatar-crop-ui.mjs"));
 });
 test('v2.3 戰績詳情右上設定允許範圍內的編輯與撤銷',()=>{
  const app=readFileSync(new URL('./app.js',import.meta.url),'utf8');
@@ -1071,7 +1071,7 @@ test('v2.8 五款 SVG 等級框、連勝外框庫存、彈窗、規則及部署�
  assert.ok(app.includes('class="player-card-name-row"'));
  assert.ok(app.includes('function maybeSyncProgression()'));
  assert.ok(app.includes('quick-result-backdrop'));
- assert.ok(app.includes('class="quick-result-dialog"'));
+ assert.ok(app.includes('class="modal quick-result-dialog"'));
  assert.ok(wf.includes('cp assets/level-frame-*.svg dist/assets/'));
  assert.ok(wf.includes('progression.mjs'));
  assert.ok(firebase.includes('async saveProgression(uid,groupIds,progress)'));

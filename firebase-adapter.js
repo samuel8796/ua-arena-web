@@ -38,7 +38,7 @@ async function rememberGroup(uid,gid,nickname){
 const personalGroupTasks = new Map();
 const initialProfiles=new Map();
 const deckMigrationAttempted=new Set();
-const remoteDeckTasks=new Map();
+// Remote deck tasks are scoped to each group subscription to avoid stale results after switching.
 let activeGroupDeckAccess=null;
 async function ensurePersonalGroup(uid, nickname){
   const pending=personalGroupTasks.get(uid);
@@ -229,7 +229,7 @@ export const firebaseAdapter = {
   subscribe(gid,onChange,onError){
     const keys=['decks','matches','quickMatches','tournaments'];
     const current={members:[],decks:[],matches:[],quickMatches:[],tournaments:[]};
-    const personal=new Map(),remoteLoadedAt=new Map(),memberIds=new Set();
+    const personal=new Map(),remoteLoadedAt=new Map(),memberIds=new Set(),remoteTasks=new Map();
     let stopped=false,scheduled=false;
     const ownUid=auth.currentUser?.uid;
     const emit=()=>{
@@ -247,8 +247,7 @@ export const firebaseAdapter = {
     const remoteLoad=async uid=>{
       if(stopped||!uid||uid===ownUid||!memberIds.has(uid)||
         Date.now()-(remoteLoadedAt.get(uid)||0)<60000)return;
-      const cacheKey=`${gid}:${uid}`;
-      if(remoteDeckTasks.has(cacheKey))return remoteDeckTasks.get(cacheKey);
+      if(remoteTasks.has(uid))return remoteTasks.get(uid);
       const job=(async()=>{
         try{
           const snapshot=await getDocs(personalDeckCol(uid));
@@ -256,9 +255,9 @@ export const firebaseAdapter = {
           personal.set(uid,snapshot.docs.map(tidy));
           remoteLoadedAt.set(uid,Date.now());schedule();
         }catch(err){if(!stopped)onError?.(err)}
-        finally{remoteDeckTasks.delete(cacheKey)}
+        finally{remoteTasks.delete(uid)}
       })();
-      remoteDeckTasks.set(cacheKey,job);
+      remoteTasks.set(uid,job);
       return job;
     };
     const prefetchRecent=()=>{
@@ -297,7 +296,7 @@ export const firebaseAdapter = {
       stopped=true;
       unsubs.forEach(stop=>stop());
       if(activeGroupDeckAccess?.gid===gid&&activeGroupDeckAccess.load===remoteLoad)activeGroupDeckAccess=null;
-      personal.clear();remoteLoadedAt.clear();
+      personal.clear();remoteLoadedAt.clear();remoteTasks.clear();
     };
   },
   async loadPlayerDecks(gid,uid){

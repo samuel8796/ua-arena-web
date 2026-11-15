@@ -32,6 +32,12 @@ const getStats=()=>{
  groupStatsMemo={players:state.players,decks:state.decks,matches:state.matches,value};
  return value;
 };
+let cachedStreakMatches=null,streakCache=new Map();
+function groupStreak(uid){
+ if(cachedStreakMatches!==state.matches){cachedStreakMatches=state.matches;streakCache.clear();}
+ if(!streakCache.has(uid))streakCache.set(uid,playerWinStreak(uid,state.matches));
+ return streakCache.get(uid);
+}
 let renderScheduled=false;
 function scheduleRender(){
  if(renderScheduled)return;
@@ -78,7 +84,7 @@ function equippedFrame(uid){
  const p=player(uid),selected=uid===state.user?.uid?
    state.profile?.frameChoice:p?.frameChoice;
  if(selected!==undefined&&selected!==null)return selected==='none'?null:selected;
- return streakTier(playerWinStreak(uid,state.matches).current);
+ return streakTier(groupStreak(uid).current);
 }
 function playerLevel(uid){
  if(uid===state.user?.uid)return ownProgress().level;
@@ -645,7 +651,7 @@ function levelGuide(){
  </section>`;
 }
 function streakGuide(){
- const streak=playerWinStreak(state.user?.uid,state.matches),best=ownedBestStreak();
+ const streak=groupStreak(state.user?.uid),best=ownedBestStreak();
  const unlocks=unlockedStreakFrames(best),selected=state.profile?.frameChoice||'none';
  return `<section class="card streak-guide">
   <div class="section-head"><h3>✦ 永久連勝頭像外框</h3><span class="tag">跨戰團解鎖</span></div>

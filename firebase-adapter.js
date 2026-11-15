@@ -4,7 +4,7 @@ import { createQuickMatch, changeQuickMatch, quickMatchResult } from './quick-co
 import { addTournamentEntrant, removeTournamentEntrant, startTournament, recordTournamentWinner, publicTournamentSnapshot, serializeTournamentRounds, deserializeTournamentRounds } from './tournament-core.mjs?v=2.1';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js';
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signOut, updateProfile } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js';
-import { getFirestore, doc, collection, getDoc, getDocs, setDoc, updateDoc, addDoc, onSnapshot, serverTimestamp, arrayUnion, runTransaction, writeBatch, Timestamp, query, where, deleteField } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js';
+import { getFirestore, doc, collection, getDoc, getDocs, setDoc, updateDoc, addDoc, onSnapshot, serverTimestamp, arrayUnion, runTransaction, writeBatch, Timestamp, query, where, or, deleteField } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js';
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-app-check.js';
 import { getAI, getGenerativeModel, GoogleAIBackend } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-ai.js';
 
@@ -36,6 +36,10 @@ async function rememberGroup(uid,gid,nickname){
 // Auth callbacks and signUp() can overlap. Share one pending initialization
 // per UID to avoid a second create being rejected as a restricted update.
 const personalGroupTasks = new Map();
+const initialProfiles=new Map();
+const deckMigrationAttempted=new Set();
+const remoteDeckTasks=new Map();
+let activeGroupDeckAccess=null;
 async function ensurePersonalGroup(uid, nickname){
   const pending=personalGroupTasks.get(uid);
   if(pending)return pending;
@@ -114,16 +118,29 @@ export const firebaseAdapter = {
   async signOut(){await signOut(auth);},
   async getMyGroups(uid){
     const snap=await getDoc(userRef(uid));
-    const display=snap.exists()?snap.data().nickname:null;
-    const nickname=display||auth.currentUser?.displayName||auth.currentUser?.email?.split('@')[0]||'玩家';
-    await ensurePersonalGroup(uid,nickname);
-    const current=await getDoc(userRef(uid));
-    const groupIds=current.exists()?(current.data().groups||[]):[];
-    // Run best-effort migration without delaying account sign-in.
-    void migrateMyLegacyDecks(uid,groupIds).catch(err=>console.warn('Deck migration',err));
+    const profile=snap.exists()?snap.data():{};
+    const nickname=profile.nickname||auth.currentUser?.displayName||auth.currentUser?.email?.split('@')[0]||'玩家';
+    let groupIds=Array.isArray(profile.groups)?profile.groups.filter(x=>typeof x==='string'):[];
+    const personalId=personalGroupId(uid);
+    // Returning users already own this group: do not run three reads plus
+    // a user-profile write during every sign-in merely to recreate it.
+    if(!groupIds.includes(personalId)){
+      await ensurePersonalGroup(uid,nickname);
+      groupIds=[...new Set([...groupIds,personalId])];
+    }
+    initialProfiles.set(uid,{...profile,groups:groupIds});
     return groupIds;
   },
-  async getProfile(uid){const snap=await getDoc(userRef(uid));return snap.exists()?snap.data():{};},
+  async getProfile(uid){
+    if(initialProfiles.has(uid)){const value=initialProfiles.get(uid);initialProfiles.delete(uid);return value;}
+    const snap=await getDoc(userRef(uid));return snap.exists()?snap.data():{};
+  },
+  async migrateLegacyDecksOnDemand(uid,groupIds){
+    if(auth.currentUser?.uid!==uid||deckMigrationAttempted.has(uid))return 0;
+    deckMigrationAttempted.add(uid);
+    try{return await migrateMyLegacyDecks(uid,groupIds)}
+    catch(err){console.warn('Legacy deck migration skipped',err);return 0;}
+  },
   async saveAvatar(uid,avatarData,groupIds,avatarSourceData=''){
     if(auth.currentUser?.uid!==uid)throw new Error('只能修改自己的頭像。');
     if(typeof avatarData!=='string'||(avatarData!==''&&!/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(avatarData))||avatarData.length>40000)
@@ -212,41 +229,84 @@ export const firebaseAdapter = {
   subscribe(gid,onChange,onError){
     const keys=['decks','matches','quickMatches','tournaments'];
     const current={members:[],decks:[],matches:[],quickMatches:[],tournaments:[]};
-    const personal=new Map(), personalUnsubs=new Map();
+    const personal=new Map(),remoteLoaded=new Set(),memberIds=new Set();
+    let stopped=false,scheduled=false;
+    const ownUid=auth.currentUser?.uid;
     const emit=()=>{
-      // Legacy decks are fallback until the owner logs in. Account-owned decks
-      // win when an ID exists in both places.
+      if(stopped)return;
       const joined=new Map(current.decks.map(d=>[d.id,{...d,legacy:true}]));
-      for(const entries of personal.values())for(const d of entries)joined.set(d.id,{...d,personal:true});
+      for(const entries of personal.values())
+        for(const d of entries)joined.set(d.id,{...d,personal:true});
       onChange({...current,decks:[...joined.values()]});
     };
+    const schedule=()=>{
+      if(scheduled||stopped)return;
+      scheduled=true;
+      queueMicrotask(()=>{scheduled=false;emit()});
+    };
+    const remoteLoad=async uid=>{
+      if(stopped||!uid||uid===ownUid||!memberIds.has(uid)||remoteLoaded.has(uid))return;
+      const cacheKey=`${gid}:${uid}`;
+      if(remoteDeckTasks.has(cacheKey))return remoteDeckTasks.get(cacheKey);
+      const job=(async()=>{
+        try{
+          const snapshot=await getDocs(personalDeckCol(uid));
+          if(stopped)return;
+          personal.set(uid,snapshot.docs.map(tidy));
+          remoteLoaded.add(uid);schedule();
+        }catch(err){if(!stopped)onError?.(err)}
+        finally{remoteDeckTasks.delete(cacheKey)}
+      })();
+      remoteDeckTasks.set(cacheKey,job);
+      return job;
+    };
     const unsubs=keys.map(k=>onSnapshot(colRef(gid,k),snapshot=>{
-      current[k]=snapshot.docs.map(tidy);emit();
+      current[k]=snapshot.docs.map(tidy);
+      schedule();
+      // Only a few recent opponents' decks are prefetched. All other players
+      // are read when their cards or match forms are opened, not N live listeners.
+      if(k==='matches'&&memberIds.size){
+        const ids=new Set();
+        for(const m of current.matches.slice(-12)){
+          if(m.playerA!==ownUid)ids.add(m.playerA);
+          if(m.playerB!==ownUid)ids.add(m.playerB);
+        }
+        for(const uid of [...ids].filter(x=>memberIds.has(x)).slice(0,6))
+          void remoteLoad(uid);
+      }
     },onError));
     unsubs.push(onSnapshot(colRef(gid,'members'),snapshot=>{
       current.members=snapshot.docs.map(tidy);
-      const ids=new Set(current.members.map(x=>x.id));
-      for(const [uid,stop] of personalUnsubs){
-        if(!ids.has(uid)){stop();personalUnsubs.delete(uid);personal.delete(uid);}
+      const next=new Set(current.members.map(x=>x.id));
+      for(const uid of personal.keys())if(uid!==ownUid&&!next.has(uid)){
+        personal.delete(uid);remoteLoaded.delete(uid);
       }
-      for(const uid of ids){
-        if(personalUnsubs.has(uid))continue;
-        personalUnsubs.set(uid,onSnapshot(personalDeckCol(uid),snapshot=>{
-          personal.set(uid,snapshot.docs.map(tidy));emit();
-        },onError));
-      }
-      emit();
+      memberIds.clear();for(const uid of next)memberIds.add(uid);
+      schedule();
     },onError));
-    return ()=>{unsubs.forEach(fn=>fn());personalUnsubs.forEach(fn=>fn());personalUnsubs.clear();};
+    if(ownUid)unsubs.push(onSnapshot(personalDeckCol(ownUid),snapshot=>{
+      personal.set(ownUid,snapshot.docs.map(tidy));schedule();
+    },onError));
+    activeGroupDeckAccess={gid,load:remoteLoad};
+    return ()=>{
+      stopped=true;
+      unsubs.forEach(stop=>stop());
+      if(activeGroupDeckAccess?.gid===gid&&activeGroupDeckAccess.load===remoteLoad)activeGroupDeckAccess=null;
+      personal.clear();remoteLoaded.clear();
+    };
   },
-  // Listen to the current account's records from EVERY joined group. Only
-  // matches involving the account are used for its overall statistics.
+  async loadPlayerDecks(gid,uid){
+    if(activeGroupDeckAccess?.gid!==gid)return;
+    return activeGroupDeckAccess.load(uid);
+  },
   subscribePersonalHistory(groupIds,uid,onChange,onError){
     const byGroup={};
-    const unsubs=groupIds.map(gid=>onSnapshot(colRef(gid,'matches'),snapshot=>{
-      byGroup[gid]=snapshot.docs.map(tidy).filter(m=>m.playerA===uid||m.playerB===uid);
-      onChange({...byGroup});
-    },onError));
+    const unsubs=groupIds.map(gid=>onSnapshot(
+      query(colRef(gid,'matches'),or(where('playerA','==',uid),where('playerB','==',uid))),
+      snapshot=>{
+        byGroup[gid]=snapshot.docs.map(tidy);
+        onChange({...byGroup});
+      },onError));
     return ()=>unsubs.forEach(fn=>fn());
   },
   subscribePersonalTournaments(groupIds,uid,onChange,onError){

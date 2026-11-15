@@ -562,24 +562,52 @@ function tournamentDetailBody(){
  </div>`;
 }
 
+function frameInventory(){
+ const best=ownedBestStreak(),unlocked=unlockedStreakFrames(best);
+ const selected=state.profile?.frameChoice||'none';
+ return `<section class="profile-frame-settings">
+ <div class="section-head"><h3>設定外框</h3><span class="tag">永久收藏 · ${unlocked.length} / 4</span></div>
+ <p class="hint">只要曾達到指定連勝，就永久獲得對應外框。選定後會顯示於頭像及玩家名片，換戰團也會保留。</p>
+ <div class="frame-inventory-grid">
+   <button type="button" class="frame-inventory-item ${selected==='none'?'selected':''}" data-action="choose-streak-frame" data-frame="none">
+     <span class="avatar-frame-none">${playerAvatar(state.user?.uid,'avatar-tier-preview',null)}</span>
+     <strong>不使用外框</strong><small>${selected==='none'?'✓ 使用中':'自由切換'}</small>
+   </button>
+   ${STREAK_FRAME_TIERS.map(t=>{
+      const owned=unlocked.includes(t.id);
+      return `<button type="button" class="frame-inventory-item ${selected===t.id?'selected':''} ${owned?'':'locked'}"
+       data-action="choose-streak-frame" data-frame="${t.id}" ${owned?'':'disabled'} aria-label="${e(t.label)}${owned?'已解鎖':'未解鎖'}">
+       ${playerAvatar(state.user?.uid,'avatar-tier-preview',t.id)}
+       <strong>${e(t.label)}</strong><small>${owned?(selected===t.id?'✓ 使用中':'已解鎖 · 可選擇'):`連勝 ${t.threshold} 場解鎖`}</small>
+      </button>`;
+   }).join('')}
+ </div></section>`;
+}
+function levelProgressPanel(){
+ const progress=ownProgress(),milestone=levelFrameFor(progress.level);
+ return `<section class="profile-level-panel">
+   <div class="section-head"><h3>玩家等級</h3><span class="tag">Lv. ${progress.level}</span></div>
+   <div class="level-progress-heading"><strong>${n(progress.totalXp)} XP</strong><small>${n(progress.intoLevel)} / ${n(progress.nextLevelXp)} XP · 距離升級還需 ${n(progress.remainingXp)} XP</small></div>
+   <div class="level-progress-track"><span style="width:${progress.progress}%"></span></div>
+   <p class="hint">勝場 +100 XP，敗場 +40 XP；每升一級，下次所需 XP 增加 20。每達到 100、200、300、400、500 等會獲得對應等級徽章。${milestone?`目前已達 ${milestone} 等徽章階級。`:''}</p>
+ </section>`;
+}
 function streakGuide(){
-  const streak=playerWinStreak(state.user?.uid,state.matches);
-  const tiers=[{id:'bronze',threshold:2,name:'銅框'},{id:'silver',threshold:5,name:'銀框'},
-    {id:'gold',threshold:10,name:'金框'},{id:'prismatic',threshold:20,name:'彩色框'}];
-  const active=streakTier(streak.current);
-  return `<section class="card streak-guide">
-    <div class="section-head"><h3>✦ 連勝頭像外框</h3><span class="tag">目前戰團</span></div>
-    <div class="streak-status"><strong>目前連勝 ${streak.current} 場</strong><span>${active?'已獲得 '+e(tiers.find(t=>t.id===active)?.name||'外框'):'再連勝 '+Math.max(0,2-streak.current)+' 場即可取得銅框'}</span></div>
-    <div class="streak-tier-grid">${tiers.map(t=>`<div class="streak-tier-card${active===t.id?' achieved':''}">
-      ${playerAvatar(state.user?.uid,'avatar-tier-preview',t.id)}
-      <strong>連贏 ${t.threshold} 場</strong><small>${t.name}</small>
-    </div>`).join('')}</div>
-    <p class="hint">外框會依目前戰團的連續勝場自動變化，輸掉一場就重新累計。只計入有效戰績，並按實際對戰時間排序；已撤銷的對戰不計入。其他頁面只顯示外框，不顯示等級說明。</p>
-  </section>`;
+ const streak=playerWinStreak(state.user?.uid,state.matches),best=ownedBestStreak();
+ const unlocks=unlockedStreakFrames(best),selected=state.profile?.frameChoice||'none';
+ return `<section class="card streak-guide">
+  <div class="section-head"><h3>✦ 永久連勝頭像外框</h3><span class="tag">跨戰團解鎖</span></div>
+  <div class="streak-status"><strong>目前戰團連勝 ${streak.current} 場</strong><span>生涯最高連勝 ${best} 場 · 已永久收藏 ${unlocks.length} 款</span></div>
+  <div class="streak-tier-grid">${STREAK_FRAME_TIERS.map(t=>`<div class="streak-tier-card${unlocks.includes(t.id)?' achieved':''}">
+    ${playerAvatar(state.user?.uid,'avatar-tier-preview',t.id)}
+    <strong>${t.threshold} 場連勝</strong><small>${e(t.label)} · ${unlocks.includes(t.id)?'已擁有':'尚未解鎖'}${selected===t.id?' · 使用中':''}</small>
+  </div>`).join('')}</div>
+  <p class="hint">外框一旦解鎖即永久保留，不因後續輸掉而消失。請到「我的個人資料 → 頭像下方的設定外框」選擇。連勝依各戰團的實際對戰時間計算。</p>
+ </section>`;
 }
 function profilePage(){
   const me=getStats().players.find(p=>p.id===state.user?.uid);
-  return `<div class="page-head"><div><div class="label-up">ACCOUNT / PERSONAL PROFILE</div><h1>我的個人資料</h1><p>編輯你的全站暱稱，並查看帳號所屬的對戰團。</p></div></div><div class="profile-grid profile-grid-single"><section class="card profile-account-card"><div class="profile-cover">${guardedCover(state.profile?.profileCoverData)?`<img src="${guardedCover(state.profile.profileCoverData)}" alt="個人資料背景">`:'<span class="profile-cover-placeholder">尚未設定背景圖片</span>'}${imageSettings('profile-cover',!!guardedCover(state.profile?.profileCoverData),'profileCover','個人資料背景')}</div><div class="profile-heading">${playerAvatar(state.user?.uid,'avatar-large')}<div><h2>${e(userLabel())}</h2><p class="muted sm">個人資料 · 點選「查看帳號資訊」可檢視 Email</p></div>${imageSettings('avatar',!!guardedAvatar(state.profile?.avatarData),'avatar','個人頭像')}</div><button class="btn btn-ghost btn-sm streak-guide-trigger" type="button" data-action="streak-guide">✦ 連勝外框說明</button><div class="avatar-editor"><p class="hint">頭像可再次調整裁切範圍；如需上傳新照片，請先從頭像設定移除舊圖。</p></div><div class="divider"></div><form data-form="save-profile"><div class="field"><label>公開玩家暱稱</label><input name="nickname" minlength="2" maxlength="24" required value="${e(userLabel())}" placeholder="你的顯示名稱"></div><div class="field mt"><label>個人簡介（只有你自己能在此頁查看）</label><textarea name="bio" maxlength="160" rows="4" placeholder="例如：喜歡紫色牌組">${e(state.profile?.bio||'')}</textarea></div><div class="profile-quick-actions"><button type="button" class="btn btn-outline" data-action="open-card-settings">◉ 設定個人名片</button><button type="button" class="btn btn-outline" data-action="open-account-info">▤ 查看帳號資訊</button></div><div class="hint">儲存後會同步更新你已加入對戰團的玩家暱稱；歷史勝負不會因此刪除。</div><button class="btn btn-primary" type="submit" style="margin-top:18px">儲存個人資料</button></form></section></div>` + tournamentMedalPanel() + personalExtras();
+  return `<div class="page-head"><div><div class="label-up">ACCOUNT / PERSONAL PROFILE</div><h1>我的個人資料</h1><p>編輯你的全站暱稱，並查看帳號所屬的對戰團。</p></div></div><div class="profile-grid profile-grid-single"><section class="card profile-account-card"><div class="profile-cover">${guardedCover(state.profile?.profileCoverData)?`<img src="${guardedCover(state.profile.profileCoverData)}" alt="個人資料背景">`:'<span class="profile-cover-placeholder">尚未設定背景圖片</span>'}${imageSettings('profile-cover',!!guardedCover(state.profile?.profileCoverData),'profileCover','個人資料背景')}</div><div class="profile-heading">${playerAvatar(state.user?.uid,'avatar-large')}<div><h2>${e(userLabel())} <span class="profile-level-label">Lv. ${ownProgress().level}</span></h2><p class="muted sm">個人資料 · 點選「查看帳號資訊」可檢視 Email</p></div>${imageSettings('avatar',!!guardedAvatar(state.profile?.avatarData),'avatar','個人頭像')}</div><button class="btn btn-ghost btn-sm streak-guide-trigger" type="button" data-action="streak-guide">✦ 連勝外框說明</button><div class="avatar-editor"><p class="hint">頭像可再次調整裁切範圍；如需上傳新照片，請先從頭像設定移除舊圖。</p></div>${frameInventory()}${levelProgressPanel()}<div class="divider"></div><form data-form="save-profile"><div class="field"><label>公開玩家暱稱</label><input name="nickname" minlength="2" maxlength="24" required value="${e(userLabel())}" placeholder="你的顯示名稱"></div><div class="field mt"><label>個人簡介（只有你自己能在此頁查看）</label><textarea name="bio" maxlength="160" rows="4" placeholder="例如：喜歡紫色牌組">${e(state.profile?.bio||'')}</textarea></div><div class="profile-quick-actions"><button type="button" class="btn btn-outline" data-action="open-card-settings">◉ 設定個人名片</button><button type="button" class="btn btn-outline" data-action="open-account-info">▤ 查看帳號資訊</button></div><div class="hint">儲存後會同步更新你已加入對戰團的玩家暱稱；歷史勝負不會因此刪除。</div><button class="btn btn-primary" type="submit" style="margin-top:18px">儲存個人資料</button></form></section></div>` + tournamentMedalPanel() + personalExtras();
 }
 const tournamentStatus=s=>({registration:'開放報名',running:'進行中',completed:'已完賽',cancelled:'已取消'})[s]||'未知狀態';
 function spectatorUrl(publicId){const u=new URL(location.href);u.search='';u.hash='';u.searchParams.set('watch',publicId);return u.href;}

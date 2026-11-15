@@ -1138,3 +1138,15 @@ test('v2.9 大型戰團單次彙總：120 玩家、3000 場與逐玩家掃描的
    assert.equal(p.wins,naive.filter(m=>m.winner===p.id).length);
  }
 });
+
+test('v2.9.3 計時與戰績編輯延遲取得對手牌組時不會清空表單，也不會跨戰團污染',()=>{
+ const app=readFileSync(new URL('./app.js',import.meta.url),'utf8');
+ const adapter=readFileSync(new URL('./firebase-adapter.js',import.meta.url),'utf8');
+ assert.ok(app.includes("d.playedAt=form.querySelector('[name=\"playedAt\"]')?.value||d.playedAt"));
+ assert.ok(app.includes('if(gid!==state.groupId)return;'));
+ assert.ok(app.includes('loadPlayerDecksSoon(state.quickDraft.playerA)'));
+ assert.ok(app.includes('loadPlayerDecksSoon(m.playerB)'));
+ assert.ok(adapter.includes("coreReady:initialized.has('members')&&initialized.has('matches')"));
+ assert.ok(app.includes('historyStartTimer'));
+ assert.ok(app.includes('clearTimeout(historyStartTimer)'));
+});

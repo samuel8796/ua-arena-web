@@ -437,7 +437,7 @@ function tournamentMatchModalBody(){
    </form>
  </div>`;
 }
-function renderModal(){if(!state.modal)return '';let title,body;switch(state.modal){case 'match':title='新增對戰紀錄';body=matchModalBody();break;case 'match-edit':title='編輯對戰紀錄';body=matchModalBody();break;case 'match-edit-timed':title='編輯計時對戰結果';body=timedMatchEditBody();break;case 'match-detail':title='對戰詳情';body=matchDetailBody();break;case 'deck-detail':title='牌組詳情';body=deckDetailBody();break;case 'turn-stats':title='先後攻戰績';body=firstTurnDetails();break;case 'streak-guide':title='連勝外框說明';body=streakGuide();break;case 'card-settings':title='設定個人名片';body=playerCardSettings();break;case 'account-info':title='帳號資訊';body=accountInfoBody();break;case 'tournament-detail':title='錦標賽詳情';body=tournamentDetailBody();break;case 'tournament-match':title='設定淘汰賽對戰';body=tournamentMatchModalBody();break;case 'deck':title=state.draft.id?'編輯牌組':'新增牌組';body=deckModalBody();break;case 'player':title='玩家詳細戰績';body=playerModalBody();break;case 'tournament-create':title='建立錦標賽';body=`<form data-form="create-tournament"><div class="field"><label>錦標賽名稱</label><input name="title" minlength="2" maxlength="60" required placeholder="例如：UA 週末冠軍盃"></div><div class="field mt"><label>賽事說明（選填）</label><textarea name="description" maxlength="240" rows="3" placeholder="例如：採單敗淘汰，房主確認結果"></textarea></div><div class="field mt"><label>錦標賽舉辦日期與時間</label><input type="datetime-local" name="eventAt" required value="${localDateTimeValue()}"><div class="hint">預設目前時間，可填寫實際舉辦的過去日期；每場淘汰賽還會各自記錄對戰時間。</div></div><div class="alert" style="margin-top:14px">僅房主可新增參賽者、開始賽程與登錄勝者。公開觀賽連結可免登入查看賽程，不會公開私人對戰團與牌組資料。</div><div class="modal-footer"><button type="button" class="btn btn-ghost" data-action="close-modal">取消</button><button type="submit" class="btn btn-primary">建立錦標賽</button></div></form>`;break;case 'more':title='功能選單';body=`<div class="more-links">${[['profile','◉ 個人資料'],['groups','⇄ 我的對戰團'],['players','♟ 玩家排行'],['rules','✦ 規則 AI']].map(([id,label])=>`<button class="nav" data-tab="${id}">${label}</button>`).join('')}</div>`;break;case 'invite':title='邀請朋友';body=`<p class="muted sm">將連結傳給朋友，對方註冊登入後就能加入你的對戰群組。具有連結的人可申請加入，請只傳給信任的朋友。</p><div class="divider"></div><label>對戰團名稱</label><div class="group-pill" style="display:inline-block;margin-bottom:17px">${e(state.group?.name)}</div><label>邀請連結</label><div class="invite-id"><span class="mono">${e(inviteUrl())}</span><button class="btn btn-primary btn-sm" data-action="copy-invite">複製</button></div><div class="hint">好友完成登入後即可進入群組；同一個帳號可參加多個群組。</div>`;break;default:body='';title='';}
+function renderModal(){if(!state.modal)return '';let title,body;switch(state.modal){case 'match':title='新增對戰紀錄';body=matchModalBody();break;case 'match-edit':title='編輯對戰紀錄';body=matchModalBody();break;case 'match-edit-timed':title='編輯計時對戰結果';body=timedMatchEditBody();break;case 'match-detail':title='對戰詳情';body=matchDetailBody();break;case 'deck-detail':title='牌組詳情';body=deckDetailBody();break;case 'turn-stats':title='先後攻戰績';body=firstTurnDetails();break;case 'frame-settings':title='設定外框';body=frameInventory();break;case 'level-guide':title='玩家等級說明';body=levelGuide();break;case 'streak-guide':title='連勝外框說明';body=streakGuide();break;case 'card-settings':title='設定個人名片';body=playerCardSettings();break;case 'account-info':title='帳號資訊';body=accountInfoBody();break;case 'tournament-detail':title='錦標賽詳情';body=tournamentDetailBody();break;case 'tournament-match':title='設定淘汰賽對戰';body=tournamentMatchModalBody();break;case 'deck':title=state.draft.id?'編輯牌組':'新增牌組';body=deckModalBody();break;case 'player':title='玩家詳細戰績';body=playerModalBody();break;case 'tournament-create':title='建立錦標賽';body=`<form data-form="create-tournament"><div class="field"><label>錦標賽名稱</label><input name="title" minlength="2" maxlength="60" required placeholder="例如：UA 週末冠軍盃"></div><div class="field mt"><label>賽事說明（選填）</label><textarea name="description" maxlength="240" rows="3" placeholder="例如：採單敗淘汰，房主確認結果"></textarea></div><div class="field mt"><label>錦標賽舉辦日期與時間</label><input type="datetime-local" name="eventAt" required value="${localDateTimeValue()}"><div class="hint">預設目前時間，可填寫實際舉辦的過去日期；每場淘汰賽還會各自記錄對戰時間。</div></div><div class="alert" style="margin-top:14px">僅房主可新增參賽者、開始賽程與登錄勝者。公開觀賽連結可免登入查看賽程，不會公開私人對戰團與牌組資料。</div><div class="modal-footer"><button type="button" class="btn btn-ghost" data-action="close-modal">取消</button><button type="submit" class="btn btn-primary">建立錦標賽</button></div></form>`;break;case 'more':title='功能選單';body=`<div class="more-links">${[['profile','◉ 個人資料'],['groups','⇄ 我的對戰團'],['players','♟ 玩家排行'],['rules','✦ 規則 AI']].map(([id,label])=>`<button class="nav" data-tab="${id}">${label}</button>`).join('')}</div>`;break;case 'invite':title='邀請朋友';body=`<p class="muted sm">將連結傳給朋友，對方註冊登入後就能加入你的對戰群組。具有連結的人可申請加入，請只傳給信任的朋友。</p><div class="divider"></div><label>對戰團名稱</label><div class="group-pill" style="display:inline-block;margin-bottom:17px">${e(state.group?.name)}</div><label>邀請連結</label><div class="invite-id"><span class="mono">${e(inviteUrl())}</span><button class="btn btn-primary btn-sm" data-action="copy-invite">複製</button></div><div class="hint">好友完成登入後即可進入群組；同一個帳號可參加多個群組。</div>`;break;default:body='';title='';}
   return `<div class="modal-backdrop" data-action="backdrop"><div class="modal" role="dialog" aria-modal="true" aria-label="${e(title)}"><div class="modal-header"><h2>${e(title)}</h2><button class="close" data-action="close-modal" aria-label="關閉視窗">✕</button></div>${body}</div></div>`;
 }
 
@@ -588,21 +588,27 @@ function frameInventory(){
        <strong>${e(t.label)}</strong><small>${owned?(selected===t.id?'✓ 使用中':'已解鎖 · 可選擇'):`連勝 ${t.threshold} 場解鎖`}</small>
       </button>`;
    }).join('')}
- </div></section>`;
+ </div><div class="frame-inventory-guide">${streakGuide()}</div></section>`;
 }
 function levelProgressPanel(){
- const progress=ownProgress(),milestone=levelFrameFor(progress.level);
- return `<section class="profile-level-panel">
-   <div class="section-head"><h3>玩家等級</h3><span class="tag">Lv. ${progress.level}</span></div>
-   <div class="level-progress-heading"><strong>${n(progress.totalXp)} XP</strong><small>${n(progress.intoLevel)} / ${n(progress.nextLevelXp)} XP · 距離升級還需 ${n(progress.remainingXp)} XP</small></div>
+ const progress=ownProgress();
+ return `<section class="profile-level-panel profile-level-compact">
+   <div class="section-head"><h3>玩家等級</h3><div class="profile-level-actions"><span class="tag">Lv. ${progress.level}</span><button type="button" class="level-help-icon" data-action="level-guide" aria-label="查看等級與經驗值說明" title="等級說明">ⓘ</button></div></div>
+   <div class="level-progress-heading"><strong>${n(progress.totalXp)} XP</strong><small>${n(progress.intoLevel)} / ${n(progress.nextLevelXp)} XP</small></div>
    <div class="level-progress-track"><span style="width:${progress.progress}%"></span></div>
-   <div class="level-milestone-gallery">
-    ${LEVEL_FRAME_THRESHOLDS.map(n=>`<div class="level-milestone-preview ${progress.level>=n?'unlocked':'locked'}">
-      <img src="./assets/level-frame-${n}.svg?v=2.8" alt="${n} 等等級徽章" loading="lazy">
-      <small>${progress.level>=n?'已達成':`Lv. ${n} 解鎖`}</small>
-    </div>`).join('')}
-   </div>
-   <p class="hint">勝場 +100 XP，敗場 +40 XP；每升一級，下次所需 XP 增加 20。每達到 100、200、300、400、500 等會獲得對應等級徽章。${milestone?`目前已達 ${milestone} 等徽章階級。`:''}</p>
+ </section>`;
+}
+function levelGuide(){
+ const progress=ownProgress();
+ return `<section class="level-guide-content">
+   <div class="level-guide-overview"><strong>目前 Lv. ${progress.level}</strong><span>${n(progress.totalXp)} XP · 距離下一級還差 ${n(progress.remainingXp)} XP</span></div>
+   <p class="hint">每場勝利獲得 100 XP、失敗獲得 40 XP；從 Lv.1 升 Lv.2 需要 100 XP，之後每升一級，下級所需經驗值增加 20 XP。達到門檻會自動升級。</p>
+   <h3>等級徽章獎勵</h3>
+   <div class="level-milestone-gallery">${LEVEL_FRAME_THRESHOLDS.map(level=>`<div class="level-milestone-preview ${progress.level>=level?'unlocked':'locked'}">
+     <img src="./assets/level-frame-${level}.svg?v=2.8" alt="${level} 等等級徽章" loading="lazy">
+     <small>${progress.level>=level?'已解鎖':`Lv. ${level} 解鎖`}</small>
+   </div>`).join('')}</div>
+   <p class="hint">達到百等里程碑後，玩家名片上會在名字旁顯示對應的最高已解鎖等級徽章。這個徽章和連勝頭像外框是兩套獨立獎勵。</p>
  </section>`;
 }
 function streakGuide(){
@@ -620,7 +626,7 @@ function streakGuide(){
 }
 function profilePage(){
   const me=getStats().players.find(p=>p.id===state.user?.uid);
-  return `<div class="page-head"><div><div class="label-up">ACCOUNT / PERSONAL PROFILE</div><h1>我的個人資料</h1><p>編輯你的全站暱稱，並查看帳號所屬的對戰團。</p></div></div><div class="profile-grid profile-grid-single"><section class="card profile-account-card"><div class="profile-cover">${guardedCover(state.profile?.profileCoverData)?`<img src="${guardedCover(state.profile.profileCoverData)}" alt="個人資料背景">`:'<span class="profile-cover-placeholder">尚未設定背景圖片</span>'}${imageSettings('profile-cover',!!guardedCover(state.profile?.profileCoverData),'profileCover','個人資料背景')}</div><div class="profile-heading">${playerAvatar(state.user?.uid,'avatar-large')}<div><h2>${e(userLabel())} <span class="profile-level-label">Lv. ${ownProgress().level}</span></h2><p class="muted sm">個人資料 · 點選「查看帳號資訊」可檢視 Email</p></div>${imageSettings('avatar',!!guardedAvatar(state.profile?.avatarData),'avatar','個人頭像')}</div><button class="btn btn-ghost btn-sm streak-guide-trigger" type="button" data-action="streak-guide">✦ 連勝外框說明</button><div class="avatar-editor"><p class="hint">頭像可再次調整裁切範圍；如需上傳新照片，請先從頭像設定移除舊圖。</p></div>${frameInventory()}${levelProgressPanel()}<div class="divider"></div><form data-form="save-profile"><div class="field"><label>公開玩家暱稱</label><input name="nickname" minlength="2" maxlength="24" required value="${e(userLabel())}" placeholder="你的顯示名稱"></div><div class="field mt"><label>個人簡介（只有你自己能在此頁查看）</label><textarea name="bio" maxlength="160" rows="4" placeholder="例如：喜歡紫色牌組">${e(state.profile?.bio||'')}</textarea></div><div class="profile-quick-actions"><button type="button" class="btn btn-outline" data-action="open-card-settings">◉ 設定個人名片</button><button type="button" class="btn btn-outline" data-action="open-account-info">▤ 查看帳號資訊</button></div><div class="hint">儲存後會同步更新你已加入對戰團的玩家暱稱；歷史勝負不會因此刪除。</div><button class="btn btn-primary" type="submit" style="margin-top:18px">儲存個人資料</button></form></section></div>` + tournamentMedalPanel() + personalExtras();
+  return `<div class="page-head"><div><div class="label-up">ACCOUNT / PERSONAL PROFILE</div><h1>我的個人資料</h1><p>編輯你的全站暱稱，並查看帳號所屬的對戰團。</p></div></div><div class="profile-grid profile-grid-single"><section class="card profile-account-card"><div class="profile-cover">${guardedCover(state.profile?.profileCoverData)?`<img src="${guardedCover(state.profile.profileCoverData)}" alt="個人資料背景">`:'<span class="profile-cover-placeholder">尚未設定背景圖片</span>'}${imageSettings('profile-cover',!!guardedCover(state.profile?.profileCoverData),'profileCover','個人資料背景')}</div><div class="profile-heading">${playerAvatar(state.user?.uid,'avatar-large')}<div><h2>${e(userLabel())} <span class="profile-level-label">Lv. ${ownProgress().level}</span></h2><p class="muted sm">個人資料 · 點選「查看帳號資訊」可檢視 Email</p></div>${imageSettings('avatar',!!guardedAvatar(state.profile?.avatarData),'avatar','個人頭像')}</div><button class="btn btn-outline btn-sm profile-frame-open" type="button" data-action="open-frame-settings">✦ 設定外框</button><div class="avatar-editor"><p class="hint">頭像可再次調整裁切範圍；如需上傳新照片，請先從頭像設定移除舊圖。</p></div>${levelProgressPanel()}<div class="divider"></div><form data-form="save-profile"><div class="field"><label>公開玩家暱稱</label><input name="nickname" minlength="2" maxlength="24" required value="${e(userLabel())}" placeholder="你的顯示名稱"></div><div class="field mt"><label>個人簡介（只有你自己能在此頁查看）</label><textarea name="bio" maxlength="160" rows="4" placeholder="例如：喜歡紫色牌組">${e(state.profile?.bio||'')}</textarea></div><div class="profile-quick-actions"><button type="button" class="btn btn-outline" data-action="open-card-settings">◉ 設定個人名片</button><button type="button" class="btn btn-outline" data-action="open-account-info">▤ 查看帳號資訊</button></div><div class="hint">儲存後會同步更新你已加入對戰團的玩家暱稱；歷史勝負不會因此刪除。</div><button class="btn btn-primary" type="submit" style="margin-top:18px">儲存個人資料</button></form></section></div>` + tournamentMedalPanel() + personalExtras();
 }
 const tournamentStatus=s=>({registration:'開放報名',running:'進行中',completed:'已完賽',cancelled:'已取消'})[s]||'未知狀態';
 function spectatorUrl(publicId){const u=new URL(location.href);u.search='';u.hash='';u.searchParams.set('watch',publicId);return u.href;}
@@ -992,6 +998,8 @@ async function handleAction(action,el){
       }catch(err){state.profile.frameChoice=old;throw err;}
     });break;
   }
+  case 'open-frame-settings':openModal('frame-settings');break;
+  case 'level-guide':openModal('level-guide');break;
   case 'streak-guide':openModal('streak-guide');break;
   case 'open-card-settings':openModal('card-settings',{cardCoverData:state.myCard?.coverData||'',cardCoverSourceData:validCropSource(state.profile?.cardCoverSourceData)||state.myCard?.coverData||''});break;
   case 'open-account-info':openModal('account-info');break;

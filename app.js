@@ -23,7 +23,40 @@ const deckName=id=>deck(id)?.name||'已封存牌組';
 const battleDeckName=(m,side)=>guestDeckLabel(m,side)||deckName(m[side==='A'?'deckA':'deckB']);
 const icon={overview:'◈',matches:'⚔',decks:'▤',players:'♟',rules:'✦',quick:'⏱',tournaments:'🏆',groups:'⇄',profile:'◉',more:'☰'};
 const pathIcon=(i)=>icon[i]||'◈';
-const getStats=()=>computeStats(state.players,state.decks,state.matches);
+// Cache statistics by source identity; avoid recalculating them for every avatar.
+let groupStatsMemo={players:null,decks:null,matches:null,value:null};
+const getStats=()=>{
+ const m=groupStatsMemo;
+ if(m.players===state.players&&m.decks===state.decks&&m.matches===state.matches&&m.value)return m.value;
+ const value=computeStats(state.players,state.decks,state.matches);
+ groupStatsMemo={players:state.players,decks:state.decks,matches:state.matches,value};
+ return value;
+};
+let renderScheduled=false;
+function scheduleRender(){
+ if(renderScheduled)return;
+ renderScheduled=true;
+ requestAnimationFrame(()=>{renderScheduled=false;if(state.user)render()});
+}
+async function requestPlayerDecks(uid){
+ if(!uid||uid===GUEST_PLAYER_ID||uid===state.user?.uid||!state.groupId||
+    typeof adapter?.loadPlayerDecks!=='function')return;
+ await adapter.loadPlayerDecks(state.groupId,uid);
+ if(['match','match-edit'].includes(state.modal)){
+   const d=state.draft;
+   if(d.playerA===uid&&!d.deckA)d.deckA=pickDeck(uid);
+   if(d.playerB===uid&&!d.deckB)d.deckB=pickDeck(uid);
+ }else if(state.tab==='quick'&&state.quickCreate){
+   const d=state.quickDraft;
+   if(d.playerA===uid&&!d.deckA)d.deckA=pickDeck(uid);
+   if(d.playerB===uid&&!d.deckB)d.deckB=pickDeck(uid);
+ }
+ scheduleRender();
+}
+function loadPlayerDecksSoon(uid){
+ void requestPlayerDecks(uid).catch(err=>console.warn('讀取其他玩家牌組未完成',uid,err));
+}
+
 const canRemoveQuick=q=>Boolean(q&&([q.playerA,q.playerB,q.createdBy].includes(state.user?.uid)||isOwner()));
 const ownStats=()=>aggregatePersonalStats(state.user?.uid||'',state.personalHistory);
 function ownProgress(){
@@ -790,7 +823,14 @@ function inviteUrl(){let url=new URL(location.href);url.search='';url.hash='';ur
 function render(){if(!state.user){authPage();return}if(!state.groupId){setupPage();return}const pages={overview:overviewPage,quick:quickPage,matches:matchesPage,decks:decksPage,players:playersPage,rules:rulesPage,tournaments:tournamentPage,profile:profilePage,groups:groupHubPage};shell((pages[state.tab]||overviewPage)())}
 function openModal(kind,draft={}){state.modal=kind;state.draft=draft;render()}
 function pickDeck(uid,selectedId=''){return resolvePlayerDeckSelection(uid,selectedId,state.decks)}
-function newMatch(){if(state.players.length<2){toast('請先加入群組或使用個人戰團的訪客模式。',true);return}const pa=state.players.find(p=>p.id===state.user.uid)?.id||state.players[0].id;const pb=isPersonal()?GUEST_PLAYER_ID:state.players.find(p=>p.id!==pa)?.id||'';openModal('match',{playerA:pa,playerB:pb,deckA:pickDeck(pa),deckB:pickDeck(pb),guestDeck:guestDefault(),firstPlayer:pa,winner:pa,note:'',playedAt:localDateTimeValue()});}
+function newMatch(){
+ if(state.players.length<2){toast('請先加入群組或使用個人戰團的訪客模式。',true);return}
+ const pa=state.players.find(p=>p.id===state.user.uid)?.id||state.players[0].id;
+ const pb=isPersonal()?GUEST_PLAYER_ID:state.players.find(p=>p.id!==pa)?.id||'';
+ openModal('match',{playerA:pa,playerB:pb,deckA:pickDeck(pa),deckB:pickDeck(pb),
+   guestDeck:guestDefault(),firstPlayer:pa,winner:pa,note:'',playedAt:localDateTimeValue()});
+ loadPlayerDecksSoon(pa);loadPlayerDecksSoon(pb);
+}
 async function newDeck(d={}){
   if(d.ownerUid&&d.ownerUid!==state.user?.uid){toast('只能編輯自己的牌組。',true);return;}
   let source='';
@@ -805,7 +845,13 @@ async function loadGroup(gid){
   tournamentRequestUnsub();tournamentRequestUnsub=()=>{};unsub();unsub=()=>{};state.groupId='';state.group=await adapter.getGroup(gid);
   state.groupId=gid;state.tab='overview';state.quickDraft={};state.players=[];state.decks=[];state.matches=[];state.quickMatches=[];state.tournaments=[];state.tournamentRequests=[];state.myTournamentRequest=false;state.tournamentId='';state.quickSessionId='';state.quickCreate=true;state.quickResultOpen=false;state.quickPending=null;
   safeStoreSet(`ua-arena-last-${state.user.uid}`,gid);
-  unsub=adapter.subscribe(gid,snapshot=>{state.players=isPersonal()?[...snapshot.members.filter(p=>p.id!==GUEST_PLAYER_ID),guestPlayer()]:snapshot.members;state.decks=snapshot.decks;state.matches=snapshot.matches;state.quickMatches=snapshot.quickMatches||[];state.tournaments=snapshot.tournaments||[];render()},error=>toast(readableError(error),true));
+  unsub=adapter.subscribe(gid,snapshot=>{
+   state.players=isPersonal()?[...snapshot.members.filter(p=>p.id!==GUEST_PLAYER_ID),guestPlayer()]:snapshot.members;
+   state.decks=snapshot.decks;state.matches=snapshot.matches;
+   state.quickMatches=snapshot.quickMatches||[];state.tournaments=snapshot.tournaments||[];
+   // Don't erase active form input when unrelated documents change.
+   if(!state.busy&&!state.modal&&!state.quickResultOpen)scheduleRender();
+ },error=>toast(readableError(error),true));
   render();
 }
 function restartPersonalTournaments(){
@@ -816,7 +862,7 @@ function restartPersonalTournaments(){
  personalTournamentUnsub=adapter.subscribePersonalTournaments(state.groupIds,state.user.uid,records=>{
    state.personalTournaments=records;
    state.tournamentHistoryReady=state.groupIds.every(id=>Object.prototype.hasOwnProperty.call(records,id));
-   if(['profile','matches'].includes(state.tab)||state.modal==='tournament-detail')render();
+   if(['profile','matches'].includes(state.tab)||state.modal==='tournament-detail')scheduleRender();
  },err=>{console.warn('錦標賽戰績同步失敗',err);toast(readableError(err),true)});
 }
 function maybeQueueProgressRewards(progress){
@@ -904,7 +950,7 @@ function restartPersonalHistory(){
     state.personalHistory=records;
     state.historyReady=state.groupIds.every(id=>Object.prototype.hasOwnProperty.call(records,id));
     if(state.historyReady)void maybeSyncProgression();
-    if((['profile','decks'].includes(state.tab)&&!state.modal)||['deck-detail','turn-stats'].includes(state.modal))render();
+    if((['profile','decks'].includes(state.tab)&&!state.modal)||['deck-detail','turn-stats'].includes(state.modal))scheduleRender();
   },err=>{console.warn('個人戰績同步失敗',err);toast(readableError(err),true)});
 }
 async function afterAuth(user){

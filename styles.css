@@ -1126,3 +1126,58 @@ input,select,textarea{max-width:100%;min-width:0}
 .first-turn-field>select{display:block;width:100%;margin-top:8px}
 @media(max-width:780px){.quick-history-filters{grid-template-columns:repeat(2,minmax(0,1fr))}.quick-history-filters label:first-child{grid-column:1/-1}.quick-history-filters>.btn{grid-column:1/-1}.quick-session-list .quick-list-entry{grid-template-columns:minmax(0,1fr) auto}}
 @media(max-width:400px){.quick-history-filters{grid-template-columns:1fr}.quick-history-filters label:first-child,.quick-history-filters>.btn{grid-column:auto}.quick-session-list .quick-list-entry{grid-template-columns:minmax(0,1fr) auto}}
+
+/* v2.8 — permanent streak-frame inventory, level milestones and award modals */
+.profile-frame-settings,.profile-level-panel{margin:17px 0 20px;padding:17px;border:1px solid #334c5c;border-radius:14px;background:linear-gradient(145deg,#132535,#13202d)}
+.profile-frame-settings>.section-head,.profile-level-panel>.section-head{display:flex;align-items:center;justify-content:space-between;gap:9px;margin-bottom:10px}
+.frame-inventory-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px;margin-top:15px}
+.frame-inventory-item{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:0;padding:10px 5px 13px;background:#111e2d;color:#cbd8e8;border:1px solid #384e60;border-radius:12px;cursor:pointer}
+.frame-inventory-item.selected{border-color:var(--mint);background:#1a3a34;color:var(--mint)}
+.frame-inventory-item.locked{opacity:.44;cursor:not-allowed;filter:grayscale(.7)}
+.frame-inventory-item .avatar-shell.avatar-tier-preview{width:48px;height:48px;margin:11px auto 15px;font-size:20px}
+.frame-inventory-item strong{font-size:11px;text-align:center;line-height:1.45}
+.frame-inventory-item small{font-size:10px;text-align:center;color:var(--muted);line-height:1.5}
+.avatar-frame-none{display:flex;align-items:center;justify-content:center}
+.profile-level-label{font-size:12px;color:var(--mint);font-weight:850;vertical-align:middle;white-space:nowrap}
+.level-progress-heading{display:flex;align-items:center;justify-content:space-between;gap:9px;margin:12px 0 8px;flex-wrap:wrap}
+.level-progress-heading strong{color:var(--mint);font-size:15px}
+.level-progress-heading small{color:#adbed0;font-size:11px}
+.level-progress-track{width:100%;height:10px;border:1px solid #3e6470;background:#0e1c27;border-radius:999px;overflow:hidden}
+.level-progress-track>span{display:block;height:100%;background:linear-gradient(90deg,#5ace9d,#a2f1d0);transition:width .2s ease}
+.level-milestone-gallery{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:16px 0 13px}
+.level-milestone-preview{display:flex;flex-direction:column;gap:3px;align-items:center;justify-content:center;min-width:0;padding:8px 2px;background:#11212e;border:1px solid #33495b;border-radius:11px}
+.level-milestone-preview.locked{opacity:.46}
+.level-milestone-preview.unlocked{border-color:#72c4a2}
+.level-milestone-preview img{width:65px;max-width:100%;height:65px;object-fit:contain}
+.level-milestone-preview small{font-size:9px;color:#b8c6d7;text-align:center}
+.player-card-name-row{display:flex;align-items:center;flex-wrap:wrap;column-gap:9px;row-gap:3px}
+.player-card-name-row h2{margin:0;min-width:0;overflow-wrap:anywhere}
+.player-level-group{display:inline-flex;align-items:center;gap:3px;flex:0 0 auto;vertical-align:middle}
+.player-level-chip{display:inline-flex;align-items:center;justify-content:center;color:#9df0cb;background:#16382f;border:1px solid #3d8a73;border-radius:6px;padding:3px 6px;font-size:11px;font-weight:850;white-space:nowrap}
+.player-level-milestone{width:41px;height:41px;display:block;object-fit:contain;flex:none}
+.reward-backdrop{z-index:95;padding:18px;background:#030b13e8}
+.reward-dialog{display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;max-width:445px;padding:28px 20px;background:radial-gradient(ellipse at 50% 15%,#214639,#142436 75%);border:1px solid #69cda8}
+.reward-dialog h2{font-size:23px;line-height:1.4;margin:0}
+.reward-dialog h3{font-size:20px;color:#a6f6d5;margin:0}
+.reward-dialog p{color:#d4e4e9;line-height:1.65;font-size:13px;margin:0}
+.reward-dialog .hint{color:#a8b9c7}
+.reward-sparkles{letter-spacing:9px;color:#a5f7d2;font-size:23px}
+.reward-visual{margin:12px auto}
+.reward-visual .avatar-tier-preview{width:75px;height:75px;font-size:29px;margin:16px auto}
+.reward-level-value{color:#a2f5d5;font-size:49px;font-weight:900;letter-spacing:-1px}
+.reward-level-milestone{width:94px;height:94px;object-fit:contain}
+.reward-dialog>.btn{margin-top:5px}
+.quick-result-backdrop{z-index:74;overflow-y:auto;overscroll-behavior:contain;align-items:center}
+.quick-result-dialog{max-width:495px;max-height:calc(100dvh - 40px);padding:12px;overflow-y:auto}
+.quick-result-dialog>.quick-form{margin:0;border:0;background:transparent;box-shadow:none;padding:14px}
+.quick-result-dialog .section-head{align-items:center}
+.quick-result-dialog textarea{min-height:95px}
+@media(max-width:740px){
+ .frame-inventory-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+ .level-milestone-gallery{grid-template-columns:repeat(5,minmax(0,1fr));gap:4px}
+ .level-milestone-preview img{width:52px;height:52px}
+ .profile-frame-settings,.profile-level-panel{padding:12px;margin:14px 0}
+ .quick-result-backdrop{padding:12px}
+ .quick-result-dialog{max-height:calc(100dvh - 24px)}
+}
+@media(max-width:370px){.frame-inventory-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.level-milestone-preview small{font-size:8px}}

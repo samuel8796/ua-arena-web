@@ -200,8 +200,19 @@ export function deckDetailStats(uid,deckId,matches=[],players=[],decks=[]) {
 export function computeStats(players=[],decks=[],matches=[]) {
   const active=matches.filter(m=>m.status==='active');
   const decksById=Object.fromEntries(decks.map(d=>[d.id,d]));
+  // One pass over matches instead of scanning all matches once per player.
+  // This keeps the scoreboard roughly linear when groups grow.
+  const gamesByPlayer=new Map();
+  for(const m of active){
+    for(const uid of [m.playerA,m.playerB]){
+      if(!uid||uid===m.playerB&&uid===m.playerA&&gamesByPlayer.has(uid)&&
+        gamesByPlayer.get(uid).at(-1)===m)continue;
+      if(!gamesByPlayer.has(uid))gamesByPlayer.set(uid,[]);
+      gamesByPlayer.get(uid).push(m);
+    }
+  }
   const perPlayer=players.map(p=>{
-    const games=active.filter(m=>m.playerA===p.id||m.playerB===p.id);
+    const games=gamesByPlayer.get(p.id)||[];
     const wins=games.filter(m=>m.winner===p.id).length;
     const deckSummary={};
     for(const m of games){
@@ -221,10 +232,10 @@ export function computeStats(players=[],decks=[],matches=[]) {
   return {totalMatches:active.length,players:perPlayer,leaderboard,activeMatches:active};
 }
 export function matchupSummary(matches=[], players=[]) {
-  return players.map(p=>{
-    const wins=matches.filter(m=>m.status==='active'&&m.winner===p.id).length;
-    return {name:p.nickname,wins};
-  });
+  const wins=new Map();
+  for(const m of matches)if(m.status==='active'&&m.winner)
+    wins.set(m.winner,(wins.get(m.winner)||0)+1);
+  return players.map(p=>({name:p.nickname,wins:wins.get(p.id)||0}));
 }
 export const RULE_SYSTEM_PROMPT = `你是繁體中文的 BANDAI UNION ARENA（UA）專用規則助手。只討論 UA；不得混用寶可夢、遊戲王、航海王卡牌等其他 TCG。對用戶非 UA 的問題回答「我只回答 UNION ARENA 的相關問題。」。先給簡短結論，再說理由，預設 80–150 字。區分日文、英文、繁體中文、簡體中文與混合版本，必要時要求卡號和效果全文。沒有可靠官方依據時，明確表示無法確認，不得捏造卡片效果、法規或來源連結。不得把不同語言版本的規則視為必然一致。AI 回答不是官方裁定。`;
 

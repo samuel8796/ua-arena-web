@@ -229,7 +229,7 @@ export const firebaseAdapter = {
   subscribe(gid,onChange,onError){
     const keys=['decks','matches','quickMatches','tournaments'];
     const current={members:[],decks:[],matches:[],quickMatches:[],tournaments:[]};
-    const personal=new Map(),remoteLoaded=new Set(),memberIds=new Set();
+    const personal=new Map(),remoteLoadedAt=new Map(),memberIds=new Set();
     let stopped=false,scheduled=false;
     const ownUid=auth.currentUser?.uid;
     const emit=()=>{
@@ -245,7 +245,8 @@ export const firebaseAdapter = {
       queueMicrotask(()=>{scheduled=false;emit()});
     };
     const remoteLoad=async uid=>{
-      if(stopped||!uid||uid===ownUid||!memberIds.has(uid)||remoteLoaded.has(uid))return;
+      if(stopped||!uid||uid===ownUid||!memberIds.has(uid)||
+        Date.now()-(remoteLoadedAt.get(uid)||0)<60000)return;
       const cacheKey=`${gid}:${uid}`;
       if(remoteDeckTasks.has(cacheKey))return remoteDeckTasks.get(cacheKey);
       const job=(async()=>{
@@ -253,7 +254,7 @@ export const firebaseAdapter = {
           const snapshot=await getDocs(personalDeckCol(uid));
           if(stopped)return;
           personal.set(uid,snapshot.docs.map(tidy));
-          remoteLoaded.add(uid);schedule();
+          remoteLoadedAt.set(uid,Date.now());schedule();
         }catch(err){if(!stopped)onError?.(err)}
         finally{remoteDeckTasks.delete(cacheKey)}
       })();
@@ -283,7 +284,7 @@ export const firebaseAdapter = {
       current.members=snapshot.docs.map(tidy);
       const next=new Set(current.members.map(x=>x.id));
       for(const uid of personal.keys())if(uid!==ownUid&&!next.has(uid)){
-        personal.delete(uid);remoteLoaded.delete(uid);
+        personal.delete(uid);remoteLoadedAt.delete(uid);
       }
       memberIds.clear();for(const uid of next)memberIds.add(uid);
       prefetchRecent();schedule();
@@ -296,7 +297,7 @@ export const firebaseAdapter = {
       stopped=true;
       unsubs.forEach(stop=>stop());
       if(activeGroupDeckAccess?.gid===gid&&activeGroupDeckAccess.load===remoteLoad)activeGroupDeckAccess=null;
-      personal.clear();remoteLoaded.clear();
+      personal.clear();remoteLoadedAt.clear();
     };
   },
   async loadPlayerDecks(gid,uid){

@@ -886,7 +886,8 @@ test('v2.5 圖片跨牌組收藏、對戰、計時、錦標賽、名片 TOP5 統
  assert.ok(imageRule.includes('height:auto !important'));
  assert.ok(imageRule.includes('object-fit:cover !important'));
  assert.ok(imageRule.includes('overflow:hidden'));
- assert.ok(!imageRule.includes('object-fit:contain'));
+ assert.ok(imageRule.includes('.deck-art-frame > img'));
+ assert.ok(imageRule.includes('object-fit:cover !important'));
  assert.ok(app.includes("chooseWideCrop(source,'deck')"));
  const crop=readFileSync(new URL('./wide-crop-ui.mjs',import.meta.url),'utf8');
  assert.ok(crop.includes("ratio:16/9,width:960,height:540"));

@@ -344,7 +344,7 @@ test('v1.7 全站頭像同步使用僅本人可寫的帳號與團員文件',()=>
   assert.ok(rules.includes('function validAvatar(data)'));
   assert.ok(rules.includes("'avatarData'"));
   assert.ok(rules.includes("uid == request.auth.uid"));
-  assert.ok(rules.includes("hasOnly(['nickname','avatarData'])"));
+  assert.ok(rules.includes("hasOnly(['nickname','avatarData','level','frameChoice'])"));
   assert.ok(rules.includes("data.avatarData.size() <= 40000"));
   assert.ok(adapter.includes('async saveAvatar(uid,avatarData,groupIds,avatarSourceData'));
   assert.ok(adapter.includes("updateDoc(memberRef(gid,uid),{avatarData})"));
@@ -1014,4 +1014,69 @@ test('v2.7 玩家牌組可在同一欄位搜尋與展開，儲存仍使用牌組
  assert.ok(app.includes('hidden.value=id;search.value='));
  assert.ok(app.includes('if(event.target.matches(\'.deck-combo-input\'))'));
  assert.ok(css.includes('.deck-combo-options[hidden]'));
+});
+
+import {progressionFromMatches,levelFromExperience,xpNeededForNextLevel,
+  highestStreakAcrossGroups,unlockedStreakFrames,levelFrameFor,validFrameChoice} from './progression.mjs';
+
+test('v2.8 XP 勝100敗40，升級需求逐級增加，跨團有效勝負才計算',()=>{
+ assert.equal(xpNeededForNextLevel(1),100);
+ assert.equal(xpNeededForNextLevel(2),120);
+ assert.equal(xpNeededForNextLevel(100),2080);
+ assert.equal(levelFromExperience(0).level,1);
+ assert.equal(levelFromExperience(100).level,2);
+ assert.equal(levelFromExperience(220).level,3);
+ const matches={g1:[
+   {status:'active',playerA:'me',playerB:'p',winner:'me'},
+   {status:'active',playerA:'me',playerB:'p',winner:'p'},
+   {status:'void',playerA:'me',playerB:'p',winner:'me'}],
+   g2:[{status:'active',playerA:'p',playerB:'me',winner:'me'}]};
+ const progress=progressionFromMatches('me',matches);
+ assert.equal(progress.wins,2);assert.equal(progress.losses,1);
+ assert.equal(progress.totalXp,240);assert.equal(progress.level,3);
+ assert.equal(progressionFromMatches('p',matches).totalXp,180);
+});
+test('v2.8 連勝外框曾獲得便可永久選擇，百等徽章使用最高已達階級',()=>{
+ const games=[
+ {id:'1',status:'active',playerA:'me',playerB:'p',winner:'me',playedAt:'2026-11-01T12:00:00'},
+ {id:'2',status:'active',playerA:'me',playerB:'p',winner:'me',playedAt:'2026-11-02T12:00:00'},
+ {id:'3',status:'active',playerA:'me',playerB:'p',winner:'p',playedAt:'2026-11-03T12:00:00'}];
+ assert.equal(highestStreakAcrossGroups('me',{g1:games},playerWinStreak),2);
+ assert.deepEqual(unlockedStreakFrames(2),['bronze']);
+ assert.deepEqual(unlockedStreakFrames(20),['bronze','silver','gold','prismatic']);
+ assert.equal(validFrameChoice('gold',9),false);
+ assert.equal(validFrameChoice('silver',11),true);
+ assert.equal(validFrameChoice('none',0),true);
+ assert.equal(levelFrameFor(99),0);assert.equal(levelFrameFor(100),100);
+ assert.equal(levelFrameFor(201),200);assert.equal(levelFrameFor(507),500);
+});
+test('v2.8 五款 SVG 等級框、連勝外框庫存、彈窗、規則及部署資源',()=>{
+ const app=readFileSync(new URL('./app.js',import.meta.url),'utf8');
+ const rules=readFileSync(new URL('./firestore.rules',import.meta.url),'utf8');
+ const css=readFileSync(new URL('./styles.css',import.meta.url),'utf8');
+ const wf=readFileSync(new URL('./.github/workflows/pages.yml',import.meta.url),'utf8');
+ const firebase=readFileSync(new URL('./firebase-adapter.js',import.meta.url),'utf8');
+ for(const n of [100,200,300,400,500]){
+  const svg=readFileSync(new URL('./assets/level-frame-'+n+'.svg',import.meta.url),'utf8');
+  assert.ok(svg.startsWith('<svg'));
+  assert.ok(svg.includes('viewBox="0 0 240 240"'));
+  assert.ok(svg.includes('>'+n+'</text>'));
+  assert.ok(svg.trim().endsWith('</svg>'));
+ }
+ assert.ok(app.includes('function frameInventory()'));
+ assert.ok(app.includes('data-action="choose-streak-frame"'));
+ assert.ok(app.includes('function rewardModal()'));
+ assert.ok(app.includes("case 'choose-streak-frame'"));
+ assert.ok(app.includes('function levelProgressPanel()'));
+ assert.ok(app.includes('class="player-card-name-row"'));
+ assert.ok(app.includes('function maybeSyncProgression()'));
+ assert.ok(app.includes('quick-result-backdrop'));
+ assert.ok(app.includes('class="quick-result-dialog"'));
+ assert.ok(wf.includes('cp assets/level-frame-*.svg dist/assets/'));
+ assert.ok(wf.includes('progression.mjs'));
+ assert.ok(firebase.includes('async saveProgression(uid,groupIds,progress)'));
+ assert.ok(rules.includes("'bestStreak','frameChoice'"));
+ assert.ok(rules.includes("['nickname','avatarData','level','frameChoice']"));
+ assert.ok(css.includes('.frame-inventory-grid'));
+ assert.ok(css.includes('.reward-backdrop'));
 });

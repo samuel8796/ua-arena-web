@@ -143,16 +143,28 @@ export const firebaseAdapter = {
     const totalXp=Math.max(0,Math.floor(Number(progress.totalXp)||0));
     const bestStreak=Math.max(0,Math.floor(Number(progress.bestStreak)||0));
     const frameChoice=String(progress.frameChoice||'none');
-    const frames={none:0,bronze:2,silver:5,gold:10,prismatic:20};
+    const thresholds={none:0,bronze:2,silver:5,gold:10,prismatic:20};
     if(level>10000||totalXp>1000000000||bestStreak>100000||
-      !(frameChoice in frames)||frames[frameChoice]>bestStreak)throw new Error('玩家進度或連勝外框尚未解鎖。');
-    await setDoc(userRef(uid),{level,totalXp,bestStreak,frameChoice,updatedAt:serverTimestamp()},{merge:true});
+      !(frameChoice in thresholds)||thresholds[frameChoice]>bestStreak)throw new Error('玩家進度或連勝外框尚未解鎖。');
+    // Transactional maximum prevents an older device from removing an earned frame.
+    const stored=await runTransaction(db,async transaction=>{
+      const ref=userRef(uid),snapshot=await transaction.get(ref),previous=snapshot.exists()?snapshot.data():{};
+      const nextBest=Math.max(Number(previous.bestStreak)||0,bestStreak);
+      const nextXp=Math.max(Number(previous.totalXp)||0,totalXp);
+      const nextLevel=Math.max(Number(previous.level)||1,level);
+      const selected=progress.changingFrame===true?frameChoice:
+        (typeof previous.frameChoice==='string'?previous.frameChoice:frameChoice);
+      const nextFrame=(selected in thresholds&&thresholds[selected]<=nextBest)?selected:'none';
+      transaction.set(ref,{level:nextLevel,totalXp:nextXp,bestStreak:nextBest,
+        frameChoice:nextFrame,updatedAt:serverTimestamp()},{merge:true});
+      return {level:nextLevel,totalXp:nextXp,bestStreak:nextBest,frameChoice:nextFrame};
+    });
     const failures=[];
     for(const gid of groupIds||[]){
-      try{await updateDoc(memberRef(gid,uid),{level,frameChoice});}
+      try{await updateDoc(memberRef(gid,uid),{level:stored.level,frameChoice:stored.frameChoice});}
       catch(error){console.warn('無法同步戰團的外框與等級',gid,error);failures.push(gid);}
     }
-    return {failures};
+    return {failures,progress:stored};
   },
   async saveProfileCover(uid,profileCoverData,profileCoverSourceData=''){
     if(auth.currentUser?.uid!==uid)throw new Error('只能修改自己的資料背景。');

@@ -15,7 +15,7 @@ const app=$('#app');
 const configured=Boolean(firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId);
 const params=new URLSearchParams(location.search);
 let adapter=null, unsub=()=>{}, historyUnsub=()=>{}, personalTournamentUnsub=()=>{}, tournamentRequestUnsub=()=>{}, toastTimer;
-const state={user:null,profile:{},personalHistory:{},historyReady:false,personalTournaments:{},tournamentHistoryReady:false,myCard:null,playerCard:null,groupDetails:{},tournaments:[],tournamentRequests:[],myTournamentRequest:false,tournamentId:'',publicTournament:null,publicWatchError:'',groupId:'',groupIds:[],group:null,players:[],decks:[],matches:[],tab:'overview',modal:null,draft:{},filter:'ALL',deckSort:'rate',playerFilter:'',matchFrom:'',matchTo:'',inviteId:params.get('join')||'',authMode:'login',preview:false,rulesReply:'',rulesQuestion:'',rulesEdition:'繁體中文版',busy:false,quickMatches:[],quickSessionId:'',quickCreate:true,quickDraft:{},quickPending:null,quickResultOpen:false,quickHistorySearch:'',quickHistoryFrom:'',quickHistoryTo:'',quickHistoryLimit:5,rewardQueue:[],progressSyncing:false};
+const state={user:null,profile:{},personalHistory:{},historyReady:false,personalTournaments:{},tournamentHistoryReady:false,tournamentHistoryRequested:false,myCard:null,playerCard:null,groupDetails:{},tournaments:[],tournamentRequests:[],myTournamentRequest:false,tournamentId:'',publicTournament:null,publicWatchError:'',groupId:'',groupIds:[],group:null,players:[],decks:[],matches:[],tab:'overview',modal:null,draft:{},filter:'ALL',deckSort:'rate',playerFilter:'',matchFrom:'',matchTo:'',inviteId:params.get('join')||'',authMode:'login',preview:false,rulesReply:'',rulesQuestion:'',rulesEdition:'繁體中文版',busy:false,quickMatches:[],quickSessionId:'',quickCreate:true,quickDraft:{},quickPending:null,quickResultOpen:false,quickHistorySearch:'',quickHistoryFrom:'',quickHistoryTo:'',quickHistoryLimit:5,rewardQueue:[],progressSyncing:false};
 const player=id=>state.players.find(x=>x.id===id);
 const playerName=id=>player(id)?.nickname||'未知玩家';
 const deck=id=>state.decks.find(x=>x.id===id);
@@ -953,21 +953,60 @@ function restartPersonalHistory(){
     if((['profile','decks'].includes(state.tab)&&!state.modal)||['deck-detail','turn-stats'].includes(state.modal))scheduleRender();
   },err=>{console.warn('個人戰績同步失敗',err);toast(readableError(err),true)});
 }
+const groupInfoRequested=new Set();
+async function loadOtherGroupNames(){
+ if(!state.user)return;
+ const uid=state.user.uid;
+ const missing=state.groupIds.filter(gid=>!groupInfoRequested.has(gid)&&
+   (gid!==state.groupId||!state.group?.name));
+ for(const gid of missing)groupInfoRequested.add(gid);
+ if(!missing.length)return;
+ const results=await Promise.allSettled(missing.map(gid=>adapter.getGroup(gid)));
+ if(state.user?.uid!==uid)return;
+ results.forEach((r,i)=>{
+   if(r.status==='fulfilled')state.groupDetails[missing[i]]=r.value.name;
+   else groupInfoRequested.delete(missing[i]);
+ });
+ if(state.tab==='groups'||state.tab==='profile')scheduleRender();
+}
+async function ensureMyCardLoaded(){
+ if(!state.user||state.myCard!==undefined)return;
+ const uid=state.user.uid;
+ try{
+   const card=await adapter.getPlayerCard(uid);
+   if(state.user?.uid===uid){state.myCard=card;if(state.tab==='profile')scheduleRender();}
+ }catch(err){console.warn('名片讀取尚未啟用',err);if(state.user?.uid===uid)state.myCard=null;}
+}
+function ensurePersonalTournaments(){
+ if(!state.user||state.tournamentHistoryRequested)return;
+ state.tournamentHistoryRequested=true;
+ restartPersonalTournaments();
+}
 async function afterAuth(user){
-  state.user=user;state.groupId='';state.modal=null;
-  if(!user){unsub();historyUnsub();historyUnsub=()=>{};personalTournamentUnsub();personalTournamentUnsub=()=>{};state.personalHistory={};state.historyReady=false;state.rewardQueue=[];state.progressSyncing=false;state.personalTournaments={};state.tournamentHistoryReady=false;state.groupIds=[];state.myCard=null;render();return}
-  try{
-    state.groupIds=await adapter.getMyGroups(user.uid);
-    state.profile=await adapter.getProfile(user.uid);
-    try{state.myCard=await adapter.getPlayerCard(user.uid);}catch(err){console.warn('名片讀取尚未啟用',err);state.myCard=null;}
-    restartPersonalHistory();restartPersonalTournaments();
-    const groupInfo=await Promise.allSettled(state.groupIds.map(id=>adapter.getGroup(id)));
-    state.groupDetails=Object.fromEntries(groupInfo.map((res,i)=>[state.groupIds[i],res.status==='fulfilled'?res.value.name:state.groupIds[i]]));
-    if(state.inviteId){render();return}
-    const preferred=safeStoreGet(`ua-arena-last-${user.uid}`);
-    const selected=state.groupIds.includes(preferred)?preferred:state.groupIds[0];
-    if(selected)await loadGroup(selected);else render();
-  }catch(error){console.error(error);toast(readableError(error),true);render();}
+ state.user=user;state.groupId='';state.modal=null;
+ if(!user){
+   unsub();historyUnsub();historyUnsub=()=>{};
+   personalTournamentUnsub();personalTournamentUnsub=()=>{};
+   tournamentRequestUnsub();tournamentRequestUnsub=()=>{};
+   state.personalHistory={};state.historyReady=false;
+   state.rewardQueue=[];state.progressSyncing=false;
+   state.personalTournaments={};state.tournamentHistoryReady=false;state.tournamentHistoryRequested=false;
+   state.groupIds=[];state.groupDetails={};state.myCard=null;groupInfoRequested.clear();
+   render();return;
+ }
+ try{
+   state.groupIds=await adapter.getMyGroups(user.uid);
+   state.profile=await adapter.getProfile(user.uid);
+   state.myCard=undefined;
+   state.groupDetails=Object.fromEntries(state.groupIds.map(gid=>[gid,gid]));
+   state.personalTournaments={};state.tournamentHistoryReady=false;state.tournamentHistoryRequested=false;
+   if(state.inviteId){render();return}
+   const preferred=safeStoreGet(`ua-arena-last-${user.uid}`);
+   const selected=state.groupIds.includes(preferred)?preferred:state.groupIds[0];
+   if(selected)await loadGroup(selected);
+   else render();
+   restartPersonalHistory();
+ }catch(error){console.error(error);toast(readableError(error),true);render();}
 }
 // A saved crop and its editable full-frame source are separate values.
 // Editing never opens the file picker or changes the saved source.
@@ -1047,7 +1086,9 @@ async function handleAction(action,el){
   case 'open-frame-settings':openModal('frame-settings');break;
   case 'level-guide':openModal('level-guide');break;
   case 'streak-guide':openModal('streak-guide');break;
-  case 'open-card-settings':openModal('card-settings',{cardCoverData:state.myCard?.coverData||'',cardCoverSourceData:validCropSource(state.profile?.cardCoverSourceData)||state.myCard?.coverData||''});break;
+  case 'open-card-settings':
+    await ensureMyCardLoaded();
+    openModal('card-settings',{cardCoverData:state.myCard?.coverData||'',cardCoverSourceData:validCropSource(state.profile?.cardCoverSourceData)||state.myCard?.coverData||''});break;
   case 'open-account-info':openModal('account-info');break;
   case 'tournament-detail':openModal('tournament-detail',{id:el.dataset.id,groupId:el.dataset.group||state.groupId});break;
   case 'new-tournament':openModal('tournament-create');break;
@@ -1197,8 +1238,14 @@ async function handleAction(action,el){
   case 'void-match':if(confirm('確定撤銷這筆紀錄？它會保留稽核痕跡，但不計入統計。'))await runBusy(async()=>{await adapter.voidMatch(state.groupId,el.dataset.id);state.modal=null;render();toast('已撤銷對戰紀錄。')});break;
   case 'player-detail':{
     state.playerCard=undefined;openModal('player',{id:el.dataset.id});
-    try{state.playerCard=el.dataset.id===state.user?.uid?state.myCard:await adapter.getPlayerCard(el.dataset.id);render();}
-    catch(err){console.error(err);toast(readableError(err),true)}
+    try{
+      if(el.dataset.id===state.user?.uid)await ensureMyCardLoaded();
+      const fetchCard=el.dataset.id===state.user?.uid?Promise.resolve(state.myCard):adapter.getPlayerCard(el.dataset.id);
+      const results=await Promise.allSettled([fetchCard,requestPlayerDecks(el.dataset.id)]);
+      if(results[0].status==='fulfilled')state.playerCard=results[0].value;
+      else throw results[0].reason;
+      render();
+    }catch(err){console.error(err);toast(readableError(err),true)}
     break;
   }
   case 'share-invite':if(isPersonal()){toast('個人戰團不需邀請對方。請直接選擇「訪客玩家」登錄戰績。');break;}openModal('invite');break;
@@ -1223,7 +1270,13 @@ app.addEventListener('click',event=>{
     return;
   }
   if(!event.target.closest('.deck-combo'))closeDeckCombos();
-  const tab=event.target.closest('[data-tab]');if(tab){state.tab=tab.dataset.tab;state.modal=null;if(state.tab==='quick' && !state.quickPending){const live=state.quickMatches.find(q=>q.status==='running'||q.status==='ready');if(live){state.quickSessionId=live.id;state.quickCreate=false;}else{state.quickCreate=true;ensureQuickDraft();}}render();return}
+  const tab=event.target.closest('[data-tab]');if(tab){state.tab=tab.dataset.tab;state.modal=null;if(state.tab==='quick' && !state.quickPending){const live=state.quickMatches.find(q=>q.status==='running'||q.status==='ready');if(live){state.quickSessionId=live.id;state.quickCreate=false;}else{state.quickCreate=true;ensureQuickDraft();}}
+   if(state.tab==='profile'){ensurePersonalTournaments();void ensureMyCardLoaded();void loadOtherGroupNames();}
+   if(state.tab==='groups')void loadOtherGroupNames();
+   if(state.tab==='decks'&&typeof adapter.migrateLegacyDecksOnDemand==='function')
+     void adapter.migrateLegacyDecksOnDemand(state.user.uid,state.groupIds);
+   if(state.tab==='quick'&&state.quickCreate){loadPlayerDecksSoon(state.quickDraft.playerA);loadPlayerDecksSoon(state.quickDraft.playerB);}
+   render();return}
   const colorFilter=event.target.closest('[data-color-filter]');if(colorFilter){state.filter=colorFilter.dataset.colorFilter;render();return}
   const act=event.target.closest('[data-action]');if(!act)return;
   if(act.dataset.action==='backdrop'&&event.target!==act)return;

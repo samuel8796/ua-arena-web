@@ -47,9 +47,18 @@ function scheduleRender(){
 async function requestPlayerDecks(uid){
  if(!uid||uid===GUEST_PLAYER_ID||uid===state.user?.uid||!state.groupId||
     typeof adapter?.loadPlayerDecks!=='function')return;
- await adapter.loadPlayerDecks(state.groupId,uid);
+ const gid=state.groupId;
+ await adapter.loadPlayerDecks(gid,uid);
+ if(gid!==state.groupId)return;
  if(['match','match-edit'].includes(state.modal)){
    const d=state.draft;
+   // Preserve edits made while an opponent's deck library was loading.
+   const form=document.querySelector('form[data-form="new-match"],form[data-form="edit-match"]');
+   if(form){
+     d.playedAt=form.querySelector('[name="playedAt"]')?.value||d.playedAt;
+     d.note=form.querySelector('[name="note"]')?.value??d.note;
+     d.firstPlayer=form.querySelector('[name="firstPlayer"]')?.value??d.firstPlayer;
+   }
    if(d.playerA===uid&&!d.deckA)d.deckA=pickDeck(uid);
    if(d.playerB===uid&&!d.deckB)d.deckB=pickDeck(uid);
  }else if(state.tab==='quick'&&state.quickCreate){

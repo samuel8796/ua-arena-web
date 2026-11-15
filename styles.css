@@ -1181,3 +1181,24 @@ input,select,textarea{max-width:100%;min-width:0}
  .quick-result-dialog{max-height:calc(100dvh - 24px)}
 }
 @media(max-width:370px){.frame-inventory-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.level-milestone-preview small{font-size:8px}}
+
+/* v2.9: compact profile, dedicated frame inventory and level explanation dialogs. */
+.profile-frame-open{margin:7px 0 15px;display:inline-flex;gap:7px}
+.profile-level-compact{margin:10px 0 18px}
+.profile-level-compact .section-head{margin-bottom:8px}
+.profile-level-actions{display:flex;align-items:center;gap:8px}
+.level-help-icon{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border:1px solid #496c6a;border-radius:9px;background:#15343a;color:#a2eed2;font-weight:850;font-size:20px;line-height:1;cursor:pointer}
+.level-help-icon:focus-visible,.profile-frame-open:focus-visible{outline:2px solid #99f3d0;outline-offset:3px}
+.profile-level-compact .level-progress-heading{margin:8px 0}
+.profile-level-compact .level-progress-track{margin-bottom:2px}
+.frame-inventory-guide{margin-top:22px}
+.frame-inventory-guide .streak-guide{margin:0;padding:16px 12px}
+.frame-inventory-guide .streak-tier-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+.level-guide-content h3{margin:20px 0 10px;font-size:15px}
+.level-guide-overview{display:flex;gap:8px;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:14px;padding:14px;background:#122b31;border:1px solid #345c59;border-radius:11px}
+.level-guide-overview strong{color:#9bf2cc;font-size:18px}
+.level-guide-overview span{color:#c5d6e5;font-size:11px}
+.modal:has(.profile-frame-settings){max-width:720px}
+.modal:has(.level-guide-content){max-width:610px}
+.modal .profile-frame-settings{margin:0;border:0;background:transparent;padding:0}
+@media(max-width:650px){.modal:has(.profile-frame-settings),.modal:has(.level-guide-content){padding:17px}.frame-inventory-guide .streak-tier-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}

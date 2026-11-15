@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" fill="none" role="img" aria-label="Level 500 Champagne frame"><defs><linearGradient id="edge" x1="36" y1="22" x2="194" y2="192" gradientUnits="userSpaceOnUse"><stop stop-color="#E9CC89"/><stop offset="1" stop-color="#AE8453"/></linearGradient></defs>
+<circle cx="120" cy="100" r="54" fill="#102335" stroke="url(#edge)" stroke-width="1.5"/>
+<circle cx="120" cy="100" r="69" fill="none" stroke="#E9CC89" stroke-width="3.5"/><circle cx="120" cy="100" r="59" fill="none" stroke="#E9CC89" stroke-opacity=".5" stroke-width="1"/><path d="M120 18l5 12 13 1-10 8 3 12-11-7-11 7 3-12-10-8 13-1z" fill="#E9CC89"/><path d="M120 153l4 9 10 1-8 6 2 10-8-5-8 5 2-10-8-6 10-1z" fill="#E9CC89" fill-opacity=".8"/><circle cx="50" cy="100" r="3" fill="#E9CC89"/><circle cx="190" cy="100" r="3" fill="#E9CC89"/>
+<path d="M89 87H151M89 113H151" stroke="url(#edge)" stroke-width="1.2" stroke-opacity=".85"/>
+<text x="120" y="106" text-anchor="middle" fill="#E9CC89" font-size="20" font-family="Arial,sans-serif" font-weight="800" letter-spacing="1">LV</text>
+<path d="M63 181H177L169 221H71Z" fill="#111E2D" stroke="url(#edge)" stroke-width="2.5"/>
+<text x="120" y="207" text-anchor="middle" fill="#E9CC89" font-size="23" font-family="Arial,sans-serif" font-weight="800">500</text></svg>

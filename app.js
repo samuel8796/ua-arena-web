@@ -877,6 +877,7 @@ async function newDeck(d={}){
 }
 async function loadGroup(gid){
   tournamentRequestUnsub();tournamentRequestUnsub=()=>{};unsub();unsub=()=>{};state.groupId='';state.group=await adapter.getGroup(gid);
+  state.groupDetails[gid]=state.group.name;groupInfoRequested.add(gid);
   state.groupId=gid;state.tab='overview';state.quickDraft={};state.players=[];state.decks=[];state.matches=[];state.quickMatches=[];state.tournaments=[];state.tournamentRequests=[];state.myTournamentRequest=false;state.tournamentId='';state.quickSessionId='';state.quickCreate=true;state.quickResultOpen=false;state.quickPending=null;
   safeStoreSet(`ua-arena-last-${state.user.uid}`,gid);
   unsub=adapter.subscribe(gid,snapshot=>{
@@ -1003,13 +1004,20 @@ async function loadOtherGroupNames(){
  });
  if(state.tab==='groups'||state.tab==='profile')scheduleRender();
 }
+let myCardTask=null,myCardTaskUid='';
 async function ensureMyCardLoaded(){
  if(!state.user||state.myCard!==undefined)return;
  const uid=state.user.uid;
- try{
-   const card=await adapter.getPlayerCard(uid);
-   if(state.user?.uid===uid){state.myCard=card;if(state.tab==='profile')scheduleRender();}
- }catch(err){console.warn('名片讀取尚未啟用',err);if(state.user?.uid===uid)state.myCard=null;}
+ if(myCardTask&&myCardTaskUid===uid)return myCardTask;
+ myCardTaskUid=uid;
+ const task=(async()=>{
+   try{
+     const card=await adapter.getPlayerCard(uid);
+     if(state.user?.uid===uid){state.myCard=card;if(state.tab==='profile')scheduleRender();}
+   }catch(err){console.warn('名片讀取尚未啟用',err);if(state.user?.uid===uid)state.myCard=null;}
+ })();
+ myCardTask=task;
+ try{await task}finally{if(myCardTask===task)myCardTask=null}
 }
 function ensurePersonalTournaments(){
  if(!state.user||state.tournamentHistoryRequested)return;

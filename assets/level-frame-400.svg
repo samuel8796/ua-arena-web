@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" fill="none" role="img" aria-label="Level 400 Amethyst frame"><defs><linearGradient id="edge" x1="36" y1="22" x2="194" y2="192" gradientUnits="userSpaceOnUse"><stop stop-color="#C5A1FF"/><stop offset="1" stop-color="#7351A3"/></linearGradient></defs>
+<circle cx="120" cy="100" r="54" fill="#102335" stroke="url(#edge)" stroke-width="1.5"/>
+<path d="M120 21L187 100L120 177L53 100Z" fill="none" stroke="#C5A1FF" stroke-width="3"/><path d="M120 37L169 100L120 160L71 100Z" fill="none" stroke="#C5A1FF" stroke-opacity=".55" stroke-width="1.5"/><circle cx="120" cy="100" r="56" fill="none" stroke="#C5A1FF" stroke-opacity=".3" stroke-width="1.5"/>
+<path d="M89 87H151M89 113H151" stroke="url(#edge)" stroke-width="1.2" stroke-opacity=".85"/>
+<text x="120" y="106" text-anchor="middle" fill="#C5A1FF" font-size="20" font-family="Arial,sans-serif" font-weight="800" letter-spacing="1">LV</text>
+<path d="M63 181H177L169 221H71Z" fill="#111E2D" stroke="url(#edge)" stroke-width="2.5"/>
+<text x="120" y="207" text-anchor="middle" fill="#C5A1FF" font-size="23" font-family="Arial,sans-serif" font-weight="800">400</text></svg>

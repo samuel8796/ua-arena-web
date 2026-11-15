@@ -50,6 +50,12 @@ export const demoAdapter={
   async savePlayerCard(uid,card){data.playerCards||={};data.profile||={};data.profile.cardCoverSourceData=card.coverSourceData||'';const {coverSourceData:_privateSource,...publicCard}=card;data.playerCards[uid]={...publicCard,updatedAt:Date.now()};save();},
 
   async saveAvatar(uid,avatarData,groupIds=[],avatarSourceData=''){if(uid!==demoUser.uid)throw new Error('只能修改自己的頭像。');data.profile||={};data.profile.avatarData=avatarData;data.profile.avatarSourceData=avatarSourceData;data.members.filter(m=>m.uid===uid).forEach(m=>m.avatarData=avatarData);save();return {failures:[]};},
+  async saveProgression(uid,groupIds,progress){
+    if(uid!==demoUser.uid)throw new Error('只能更改自己的等級及外框。');
+    data.profile={...data.profile,...progress};
+    data.members.filter(m=>m.uid===uid).forEach(m=>{m.level=progress.level;m.frameChoice=progress.frameChoice;});
+    save();return {failures:[]};
+  },
   async saveProfileCover(uid,profileCoverData,profileCoverSourceData=''){
     if(uid!==demoUser.uid)throw new Error('只能修改自己的資料背景。');
     data.profile||={};data.profile.profileCoverData=profileCoverData;data.profile.profileCoverSourceData=profileCoverSourceData;save();

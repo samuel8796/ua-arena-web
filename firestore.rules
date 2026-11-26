@@ -230,8 +230,8 @@ service cloud.firestore {
       allow get: if resource.data.public == true;
       allow list: if false;
       allow create: if signedIn()
-        && request.resource.data.keys().hasAll(['title','description','hostName','status','public','participants','rounds','champion','eventAt','createdAt','updatedAt'])
-        && request.resource.data.keys().hasOnly(['title','description','hostName','status','public','participants','rounds','champion','eventAt','createdAt','updatedAt'])
+        && request.resource.data.keys().hasAll(['title','description','hostName','status','public','participants','rounds','champion','eventAt','createdAt','updatedAt','format'])
+        && request.resource.data.keys().hasOnly(['title','description','hostName','status','public','participants','rounds','champion','eventAt','createdAt','updatedAt','format'])
         && getAfter(/databases/$(database)/documents/publicTournamentOwners/$(publicId)).data.ownerUid == request.auth.uid
         && request.resource.data.public == true
         && request.resource.data.title is string
@@ -242,6 +242,7 @@ service cloud.firestore {
         && request.resource.data.hostName is string
         && request.resource.data.hostName.size() <= 24
         && request.resource.data.status == 'registration'
+        && (!('format' in request.resource.data) || request.resource.data.format in ['single','swiss'])
         && request.resource.data.participants == []
         && request.resource.data.rounds == []
         && request.resource.data.champion == ''
@@ -316,8 +317,8 @@ service cloud.firestore {
       match /tournaments/{tournamentId} {
         allow get, list: if member(gid);
         allow create: if member(gid)
-          && request.resource.data.keys().hasAll(['title','description','hostName','status','createdBy','publicId','participants','rounds','champion','eventAt','createdAt','updatedAt'])
-          && request.resource.data.keys().hasOnly(['title','description','hostName','status','createdBy','publicId','participants','rounds','champion','eventAt','createdAt','updatedAt'])
+          && request.resource.data.keys().hasAll(['title','description','hostName','status','createdBy','publicId','participants','rounds','champion','eventAt','createdAt','updatedAt','format'])
+          && request.resource.data.keys().hasOnly(['title','description','hostName','status','createdBy','publicId','participants','rounds','champion','eventAt','createdAt','updatedAt','format'])
           && request.resource.data.createdBy == request.auth.uid
           && request.resource.data.title is string
           && request.resource.data.title.size() >= 2
@@ -329,6 +330,7 @@ service cloud.firestore {
           && request.resource.data.publicId is string
           && request.resource.data.publicId.size() >= 12
           && request.resource.data.status == 'registration'
+          && (!('format' in request.resource.data) || request.resource.data.format in ['single','swiss'])
           && request.resource.data.participants == []
           && request.resource.data.rounds == []
           && request.resource.data.champion == ''

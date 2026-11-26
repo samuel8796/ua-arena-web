@@ -1,6 +1,6 @@
 import { createQuickMatch, changeQuickMatch, quickMatchResult } from './quick-core.mjs?v=2.6';
 import { personalGroupId, personalGroupName, parsePlayedAt } from './core.mjs?v=2.9.3';
-import { addTournamentEntrant, removeTournamentEntrant, startTournament, recordTournamentWinner, publicTournamentSnapshot, deserializeTournamentRounds } from './tournament-core.mjs?v=2.1';
+import { addTournamentEntrant, addTournamentGuest, removeTournamentEntrant, startTournament, recordTournamentWinner, publicTournamentSnapshot, deserializeTournamentRounds } from './tournament-core.mjs?v=2.1';
 const K='ua-arena-demo-v1-1';
 const SAMPLE_IMAGE='';
 function seed(){
@@ -119,17 +119,23 @@ export const demoAdapter={
   async hasTournamentRequest(gid,id,uid){return (data.tournamentRequests||[]).some(r=>r.tournamentId===id&&r.uid===uid);},
   async requestTournamentJoin(gid,id,uid,nickname){data.tournamentRequests||=[];data.tournamentRequests.push({tournamentId:id,uid,nickname,status:'pending'});save();},
   async approveTournamentRequest(gid,id,uid,hostUid){await this.changeTournament(gid,id,hostUid,'add',uid);data.tournamentRequests=data.tournamentRequests.filter(r=>!(r.tournamentId===id&&r.uid===uid));save();},
-  async createTournament(gid,uid,title,description,hostName,eventTime){
+  async createTournament(gid,uid,title,description,hostName,eventTime,format='single'){
+     if(!['single','swiss'].includes(format))throw new Error('請選擇有效的賽制。');
     const id=`t-${Date.now().toString(36)}`,publicId=`p-${id}`;
-    data.tournaments ||= [];data.tournaments.push({id,publicId,title,description,hostName,status:'registration',createdBy:uid,participants:[],rounds:[],champion:'',eventAt:parsePlayedAt(eventTime).getTime(),createdAt:Date.now()});save();return id;
+    data.tournaments ||= [];data.tournaments.push({id,publicId,title,description,format,hostName,status:'registration',createdBy:uid,participants:[],rounds:[],champion:'',eventAt:parsePlayedAt(eventTime).getTime(),createdAt:Date.now()});save();return id;
   },
   async changeTournament(gid,id,uid,action,arg){
     const idx=data.tournaments.findIndex(t=>t.id===id);if(idx<0)throw new Error('賽事不存在。');
     const cur=data.tournaments[idx];if(cur.createdBy!==uid)throw new Error('只有房主可操作。');let next;
     if(action==='add')next=addTournamentEntrant(cur,data.members.find(p=>p.uid===arg)||{uid:arg,nickname:'參賽者'});
+    else if(action==='addGuest')next=addTournamentGuest(cur,arg,'guest_'+crypto.randomUUID().replace(/-/g,''));
     else if(action==='remove')next=removeTournamentEntrant(cur,arg);
     else if(action==='start')next=startTournament(cur);
-    else if(action==='result')throw new Error('請先選擇牌組並填寫此場的對戰時間。');
+    else if(action==='result'){
+      const round=Number(arg?.round),match=Number(arg?.match);
+      if(!Number.isInteger(round)||round<0||round>4||!Number.isInteger(match)||match<0||match>15)throw new Error('無效的賽程場次。');
+      next=recordTournamentWinner(cur,round,match,arg.winner);
+    }
     else if(action==='cancel'&&cur.status==='registration')next={...cur,status:'cancelled'};
     else throw new Error('操作不允許。');
     data.tournaments[idx]={...next,id,publicId:cur.publicId};save();

@@ -127,6 +127,80 @@ test('同名參賽者不會繞過 UID 去重驗證',()=>{
   const same=[{uid:'a',nickname:'Sam'},{uid:'a',nickname:'Sam'}];
   assert.throws(()=>createBracket(same));
 });
+import {addTournamentGuest,swissStandings,swissRoundLimit,isTournamentGuest} from './tournament-core.mjs';
+test('新賽制在確認名單前不會產生賽程，手動訪客不需會員帳號',()=>{
+  let t={...tourney(entrants.slice(0,2)),format:'swiss'};
+  assert.equal(t.rounds.length,0);
+  t=addTournamentGuest(t,'訪客 Alice','guest_'+'a'.repeat(24));
+  assert.equal(t.status,'registration');
+  assert.equal(t.rounds.length,0);
+  assert.equal(t.participants.length,3);
+  assert.equal(isTournamentGuest(t.participants[2].uid),true);
+  assert.throws(()=>addTournamentGuest(t,'訪客 alice','guest_'+'b'.repeat(24)));
+  assert.throws(()=>addTournamentGuest(t,'','guest_'+'c'.repeat(24)));
+  const started=startTournament(t,()=>.999);
+  assert.equal(started.rounds.length,1);
+  assert.equal(started.rounds[0].filter(m=>m.bye).length,1);
+  assert.throws(()=>addTournamentGuest(started,'遲到玩家','guest_'+'d'.repeat(24)));
+  const pub=publicTournamentSnapshot(started);
+  assert.equal(pub.format,'swiss');
+  assert.equal(pub.participants.at(-1).name,'訪客 Alice');
+  assert.ok(!JSON.stringify(pub).includes('guest_'));
+});
+test('瑞士制能在所有結果到齊後產生下一輪，按積分與對手分排名',()=>{
+  const eight=Array.from({length:8},(_,i)=>({uid:'u'+i,nickname:'玩家'+i}));
+  let t=startTournament({...tourney(eight),format:'swiss'},()=>.999);
+  assert.equal(swissRoundLimit(8),3);
+  assert.equal(t.rounds.length,1);
+  for(let round=0;round<3;round++){
+    const matches=deserializeTournamentRounds(t.rounds)[round];
+    for(let i=0;i<matches.length;i++){
+      t=recordTournamentWinner(t,round,i,matches[i].a);
+    }
+    assert.equal(t.rounds.length,Math.min(round+2,3));
+  }
+  assert.equal(t.status,'completed');
+  const ranking=swissStandings(t);
+  assert.equal(t.champion,ranking[0].uid);
+  assert.equal(tournamentPodium(t).runnerUp,ranking[1].uid);
+  assert.ok(ranking.every((p,i)=>i===0||p.points<=ranking[i-1].points));
+  const seen=new Set();
+  for(const round of deserializeTournamentRounds(t.rounds))
+    for(const m of round){
+      const key=[m.a,m.b].sort().join('|');
+      assert.ok(!seen.has(key),'不應重複交手：'+key);
+      seen.add(key);
+    }
+  assert.equal(seen.size,12);
+});
+test('瑞士制奇數參賽者輪空不同人，輪空直接得分不產生假對戰',()=>{
+  const five=Array.from({length:5},(_,i)=>({uid:'p'+i,nickname:'五人'+i}));
+  let t=startTournament({...tourney(five),format:'swiss'},()=>.999);
+  const byes=new Set();
+  for(let round=0;round<3;round++){
+    const matches=deserializeTournamentRounds(t.rounds)[round];
+    const bye=matches.find(m=>m.bye);
+    assert.ok(bye&&bye.winner===bye.a&&!bye.b);
+    assert.ok(!byes.has(bye.a));
+    byes.add(bye.a);
+    for(let i=0;i<matches.length;i++)if(!matches[i].bye)t=recordTournamentWinner(t,round,i,matches[i].a);
+  }
+  assert.equal(t.status,'completed');
+  assert.equal(byes.size,3);
+  assert.equal(swissStandings(t).reduce((n,p)=>n+p.byes,0),3);
+});
+test('新錦標賽介面包含賽制、訪客與賽程確認，Firestore 規則限制賽制',()=>{
+  const app=readFileSync(new URL('./app.js',import.meta.url),'utf8');
+  const firebase=readFileSync(new URL('./firebase-adapter.js',import.meta.url),'utf8');
+  const rules=readFileSync(new URL('./firestore.rules',import.meta.url),'utf8');
+  assert.ok(app.includes('name="format"'));
+  assert.ok(app.includes('data-form="tournament-add-guest"'));
+  assert.ok(app.includes('data-form="tournament-result-simple"'));
+  assert.ok(app.includes('確認名單 · 產生對戰順序'));
+  assert.ok(firebase.includes("action==='addGuest'"));
+  assert.ok(rules.includes("request.resource.data.format in ['single','swiss']"));
+});
+
 console.log('Tournament tests completed.');
 
 import { GUEST_PLAYER_ID, GUEST_DECK_ID, personalGroupId, personalGroupName, guestPlayer, guestDeckLabel, isGuestMatch } from './core.mjs';

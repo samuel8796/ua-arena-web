@@ -6,7 +6,7 @@ import { COLORS, colorOf, safeText as e, shortId, formatDate, assertMatch, compu
 import { demoAdapter } from './demo-adapter.js?v=2.9.3';
 import { QUICK_MATCH_LIMIT_MS, quickClock, mmss } from './quick-core.mjs?v=2.6';
 import { progressionFromMatches, levelFromExperience, highestStreakAcrossGroups, unlockedStreakFrames, validFrameChoice, levelFrameFor, LEVEL_FRAME_THRESHOLDS, STREAK_FRAME_TIERS } from './progression.mjs?v=2.8.1';
-import { deserializeTournamentRounds, tournamentPodium, tournamentPlacement, tournamentMedals, publicTournamentSnapshot } from './tournament-core.mjs?v=2.1';
+import { deserializeTournamentRounds, tournamentPodium, tournamentPlacement, tournamentMedals, publicTournamentSnapshot, swissStandings, swissRoundLimit, isTournamentGuest } from './tournament-core.mjs?v=2.1';
 
 const $=q=>document.querySelector(q);
 const safeStoreGet=k=>{try{return localStorage.getItem(k)}catch{return null}};
@@ -45,7 +45,7 @@ function scheduleRender(){
  requestAnimationFrame(()=>{renderScheduled=false;if(state.user)render()});
 }
 async function requestPlayerDecks(uid){
- if(!uid||uid===GUEST_PLAYER_ID||uid===state.user?.uid||!state.groupId||
+ if(!uid||uid===GUEST_PLAYER_ID||isTournamentGuest(uid)||uid===state.user?.uid||!state.groupId||
     typeof adapter?.loadPlayerDecks!=='function')return;
  const gid=state.groupId;
  await adapter.loadPlayerDecks(gid,uid);
@@ -486,24 +486,38 @@ function tournamentMatchModalBody(){
  if(!m?.a||!m?.b||m.winner)return '<div class="empty">這場賽程尚未開放或已完成。</div>';
  const da=state.decks.filter(d=>d.ownerUid===m.a&&d.active!==false);
  const db=state.decks.filter(d=>d.ownerUid===m.b&&d.active!==false);
+ // Guests do not need accounts/decks. Bracket-only results never affect
+ // registered player or deck statistics.
+ if(isTournamentGuest(m.a)||isTournamentGuest(m.b)||!da.length||!db.length){
+   return `<div class="tournament-match-dialog"><p class="hint">${e(t.title)} · 第 ${r+1} 輪第 ${i+1} 場 · ${e(tournamentFormatName(t))}</p>
+     <div class="tournament-fixed-players"><strong>${e(tournamentNickname(t,m.a))}</strong><b>VS</b><strong>${e(tournamentNickname(t,m.b))}</strong></div>
+     <div class="mode-note">此場只記錄錦標賽勝者與晉級／瑞士制積分，不會新增正式對戰戰績或修改個人勝率。</div>
+     <form data-form="tournament-result-simple"><input type="hidden" name="round" value="${r}"><input type="hidden" name="match" value="${i}">
+       <div class="field mt"><label>本場勝者</label><select name="winner" required>
+         <option value="${e(m.a)}">${e(tournamentNickname(t,m.a))} 勝</option>
+         <option value="${e(m.b)}">${e(tournamentNickname(t,m.b))} 勝</option>
+       </select></div>
+       <div class="modal-footer"><button type="button" class="btn btn-ghost" data-action="close-modal">取消</button>
+         <button type="submit" class="btn btn-primary">確認勝負 →</button></div></form></div>`;
+ }
  const selector=(owner,decks,side)=>{
    const first=decks[0];
    return `<div class="tournament-deck-choice">
      ${deckArtwork(owner,first?.id,first?.name||'尚無牌組','deck-art-tournament')}
-     <div class="field"><label>${e(playerName(owner))} 的牌組</label>
+     <div class="field"><label>${e(tournamentNickname(t,owner))} 的牌組</label>
        <select name="deck${side}" required ${decks.length?'':'disabled'}>${decks.map(d=>`<option value="${e(d.id)}">${e(d.name)} · ${e(colorOf(d.color).name)}</option>`).join('')||'<option value="">尚無可用牌組</option>'}</select>
      </div></div>`;
  };
  return `<div class="tournament-match-dialog">
    <p class="hint">${e(t.title)} · 第 ${r+1} 輪第 ${i+1} 場。對戰雙方由抽籤固定，不可更改。</p>
-   <div class="tournament-fixed-players"><strong>${e(playerName(m.a))}</strong><b>VS</b><strong>${e(playerName(m.b))}</strong></div>
+   <div class="tournament-fixed-players"><strong>${e(tournamentNickname(t,m.a))}</strong><b>VS</b><strong>${e(tournamentNickname(t,m.b))}</strong></div>
    <form data-form="tournament-result">
     <input type="hidden" name="round" value="${r}"><input type="hidden" name="match" value="${i}">
     <div class="tournament-deck-choices">${selector(m.a,da,'A')}${selector(m.b,db,'B')}</div>
     ${firstPlayerSelect(m.a,m.b,m.a)}
     <div class="field mt"><label>本場勝者</label><select name="winner" required>
-      <option value="${e(m.a)}">${e(playerName(m.a))} 勝</option>
-      <option value="${e(m.b)}">${e(playerName(m.b))} 勝</option>
+      <option value="${e(m.a)}">${e(tournamentNickname(t,m.a))} 勝</option>
+      <option value="${e(m.b)}">${e(tournamentNickname(t,m.b))} 勝</option>
     </select></div>
     <div class="field mt"><label>實際對戰日期與時間</label><input type="datetime-local" name="playedAt" value="${localDateTimeValue()}" required><div class="hint">預設目前時間，也可以補登過去的對戰。</div></div>
     <div class="field mt"><label>備註（選填）</label><textarea name="note" maxlength="200" placeholder="戰術、轉捩點、加賽等"></textarea></div>
@@ -512,7 +526,7 @@ function tournamentMatchModalBody(){
    </form>
  </div>`;
 }
-function renderModal(){if(!state.modal)return '';let title,body;switch(state.modal){case 'match':title='新增對戰紀錄';body=matchModalBody();break;case 'match-edit':title='編輯對戰紀錄';body=matchModalBody();break;case 'match-edit-timed':title='編輯計時對戰結果';body=timedMatchEditBody();break;case 'match-detail':title='對戰詳情';body=matchDetailBody();break;case 'deck-detail':title='牌組詳情';body=deckDetailBody();break;case 'turn-stats':title='先後攻戰績';body=firstTurnDetails();break;case 'frame-settings':title='設定外框';body=frameInventory();break;case 'level-guide':title='玩家等級說明';body=levelGuide();break;case 'streak-guide':title='連勝外框說明';body=streakGuide();break;case 'card-settings':title='設定個人名片';body=playerCardSettings();break;case 'account-info':title='帳號資訊';body=accountInfoBody();break;case 'tournament-detail':title='錦標賽詳情';body=tournamentDetailBody();break;case 'tournament-match':title='設定淘汰賽對戰';body=tournamentMatchModalBody();break;case 'deck':title=state.draft.id?'編輯牌組':'新增牌組';body=deckModalBody();break;case 'player':title='玩家詳細戰績';body=playerModalBody();break;case 'tournament-create':title='建立錦標賽';body=`<form data-form="create-tournament"><div class="field"><label>錦標賽名稱</label><input name="title" minlength="2" maxlength="60" required placeholder="例如：UA 週末冠軍盃"></div><div class="field mt"><label>賽事說明（選填）</label><textarea name="description" maxlength="240" rows="3" placeholder="例如：採單敗淘汰，房主確認結果"></textarea></div><div class="field mt"><label>錦標賽舉辦日期與時間</label><input type="datetime-local" name="eventAt" required value="${localDateTimeValue()}"><div class="hint">預設目前時間，可填寫實際舉辦的過去日期；每場淘汰賽還會各自記錄對戰時間。</div></div><div class="alert" style="margin-top:14px">僅房主可新增參賽者、開始賽程與登錄勝者。公開觀賽連結可免登入查看賽程，不會公開私人對戰團與牌組資料。</div><div class="modal-footer"><button type="button" class="btn btn-ghost" data-action="close-modal">取消</button><button type="submit" class="btn btn-primary">建立錦標賽</button></div></form>`;break;case 'more':title='功能選單';body=`<div class="more-links">${[['profile','◉ 個人資料'],['groups','⇄ 我的對戰團'],['players','♟ 玩家排行'],['rules','✦ 規則 AI']].map(([id,label])=>`<button class="nav" data-tab="${id}">${label}</button>`).join('')}</div>`;break;case 'invite':title='邀請朋友';body=`<p class="muted sm">將連結傳給朋友，對方註冊登入後就能加入你的對戰群組。具有連結的人可申請加入，請只傳給信任的朋友。</p><div class="divider"></div><label>對戰團名稱</label><div class="group-pill" style="display:inline-block;margin-bottom:17px">${e(state.group?.name)}</div><label>邀請連結</label><div class="invite-id"><span class="mono">${e(inviteUrl())}</span><button class="btn btn-primary btn-sm" data-action="copy-invite">複製</button></div><div class="hint">好友完成登入後即可進入群組；同一個帳號可參加多個群組。</div>`;break;default:body='';title='';}
+function renderModal(){if(!state.modal)return '';let title,body;switch(state.modal){case 'match':title='新增對戰紀錄';body=matchModalBody();break;case 'match-edit':title='編輯對戰紀錄';body=matchModalBody();break;case 'match-edit-timed':title='編輯計時對戰結果';body=timedMatchEditBody();break;case 'match-detail':title='對戰詳情';body=matchDetailBody();break;case 'deck-detail':title='牌組詳情';body=deckDetailBody();break;case 'turn-stats':title='先後攻戰績';body=firstTurnDetails();break;case 'frame-settings':title='設定外框';body=frameInventory();break;case 'level-guide':title='玩家等級說明';body=levelGuide();break;case 'streak-guide':title='連勝外框說明';body=streakGuide();break;case 'card-settings':title='設定個人名片';body=playerCardSettings();break;case 'account-info':title='帳號資訊';body=accountInfoBody();break;case 'tournament-detail':title='錦標賽詳情';body=tournamentDetailBody();break;case 'tournament-match':title='設定錦標賽對戰';body=tournamentMatchModalBody();break;case 'deck':title=state.draft.id?'編輯牌組':'新增牌組';body=deckModalBody();break;case 'player':title='玩家詳細戰績';body=playerModalBody();break;case 'tournament-create':title='建立錦標賽';body=`<form data-form="create-tournament"><div class="field"><label>錦標賽名稱</label><input name="title" minlength="2" maxlength="60" required placeholder="例如：UA 週末冠軍盃"></div><div class="field mt"><label>選擇賽制</label><select name="format" required><option value="single">單淘汰（輸一場即淘汰）</option><option value="swiss">瑞士制（依積分每輪重新配對）</option></select><p class="hint">名單建立完成後才會產生賽程。瑞士制輪次依人數自動決定，最多五輪。</p></div><div class="field mt"><label>賽事說明（選填）</label><textarea name="description" maxlength="240" rows="3" placeholder="例如：友誼賽、集合時間、對戰規則"></textarea></div><div class="field mt"><label>錦標賽舉辦日期與時間</label><input type="datetime-local" name="eventAt" required value="${localDateTimeValue()}"><div class="hint">預設目前時間，可填寫實際舉辦的過去日期；每場淘汰賽還會各自記錄對戰時間。</div></div><div class="alert" style="margin-top:14px">可從戰團挑選正式玩家或輸入訪客名稱。只有房主可確定名單、產生賽程與登錄勝者。公開觀賽連結可免登入查看賽程，不會公開私人對戰團與牌組資料。</div><div class="modal-footer"><button type="button" class="btn btn-ghost" data-action="close-modal">取消</button><button type="submit" class="btn btn-primary">建立錦標賽</button></div></form>`;break;case 'more':title='功能選單';body=`<div class="more-links">${[['profile','◉ 個人資料'],['groups','⇄ 我的對戰團'],['players','♟ 玩家排行'],['rules','✦ 規則 AI']].map(([id,label])=>`<button class="nav" data-tab="${id}">${label}</button>`).join('')}</div>`;break;case 'invite':title='邀請朋友';body=`<p class="muted sm">將連結傳給朋友，對方註冊登入後就能加入你的對戰群組。具有連結的人可申請加入，請只傳給信任的朋友。</p><div class="divider"></div><label>對戰團名稱</label><div class="group-pill" style="display:inline-block;margin-bottom:17px">${e(state.group?.name)}</div><label>邀請連結</label><div class="invite-id"><span class="mono">${e(inviteUrl())}</span><button class="btn btn-primary btn-sm" data-action="copy-invite">複製</button></div><div class="hint">好友完成登入後即可進入群組；同一個帳號可參加多個群組。</div>`;break;default:body='';title='';}
   return `<div class="modal-backdrop" data-action="backdrop"><div class="modal" role="dialog" aria-modal="true" aria-label="${e(title)}"><div class="modal-header"><h2>${e(title)}</h2><button class="close" data-action="close-modal" aria-label="關閉視窗">✕</button></div>${body}</div></div>`;
 }
 
@@ -592,12 +606,19 @@ function personalTournamentEntries(){
  return Object.entries(state.personalTournaments||{}).flatMap(([groupId,ts])=>(ts||[]).map(t=>({...t,groupId})));
 }
 function tournamentNickname(t,uid){return t.participants?.find(p=>p.uid===uid)?.nickname||'未知玩家'}
+const tournamentFormatName=t=>t?.format==='swiss'?'瑞士制':'單淘汰';
+function swissPanel(t,isPublic=false){
+  if(t?.format!=='swiss')return '';
+  const normalized=isPublic?{...t,participants:(t.participants||[]).map(p=>({uid:p.name,nickname:p.name}))}:t;
+  const rows=swissStandings(normalized);
+  return `<section class="swiss-standing-section"><div class="section-head"><h3>📊 瑞士制積分排名</h3><span class="tag">${deserializeTournamentRounds(t.rounds).length} / ${swissRoundLimit(rows.length)} 輪</span></div><div class="table-wrap"><table class="table swiss-standing-table"><thead><tr><th>排名</th><th>玩家</th><th>積分</th><th>勝</th><th>敗</th><th>輪空</th><th>對手分</th></tr></thead><tbody>${rows.map(p=>`<tr><td>${p.rank}</td><td>${e(p.nickname)}${p.guest?' · 訪客':''}</td><td><strong>${p.points}</strong></td><td>${p.wins}</td><td>${p.losses}</td><td>${p.byes}</td><td>${p.buchholz}</td></tr>`).join('')}</tbody></table></div><p class="hint">勝利與輪空各 1 分，失敗 0 分；同分先比對手分（Buchholz），再比勝場數，仍相同依原始名單順序排序。每輪全部完成後自動安排下一輪。</p></section>`;
+}
 function tournamentCompletedTime(t){return dateNum(t.eventAt)||dateNum(t.createdAt)||dateNum(t.updatedAt)}
 function tournamentResultCard(t,groupId){
  const podium=tournamentPodium(t);
  const third=podium.thirdPlace.map(id=>tournamentNickname(t,id)).join('、')||'未產生';
  return `<article class="tournament-result-item">
-  <div class="tournament-result-main"><small>${e(formatDate(t.eventAt||t.createdAt))} · ${t.participants?.length||0} 人參賽</small>
+  <div class="tournament-result-main"><small>${e(formatDate(t.eventAt||t.createdAt))} · ${t.participants?.length||0} 人參賽 · ${e(tournamentFormatName(t))}</small>
    <strong>🏆 ${e(t.title)}</strong>
    <span>🥇 ${e(tournamentNickname(t,podium.champion))}　🥈 ${e(tournamentNickname(t,podium.runnerUp))}　🥉 ${e(third)}</span></div>
   <button class="btn btn-outline btn-sm" type="button" data-action="tournament-detail" data-id="${e(t.id)}" data-group="${e(groupId)}">賽事詳情</button>
@@ -630,8 +651,8 @@ function tournamentDetailBody(){
  return `<div class="tournament-detail">
   <div class="label-up">TOURNAMENT RESULTS</div>
   <h3>${e(t.title)}</h3>
-  <p class="muted sm">${e(state.groupDetails[gid]||gid)} · ${e(formatDate(t.eventAt||t.createdAt))} · ${t.participants?.length||0} 人參加 · ${e(tournamentStatus(t.status))}</p>
-  <p class="muted sm">${e(t.description||'單敗淘汰賽')}</p>
+  <p class="muted sm">${e(state.groupDetails[gid]||gid)} · ${e(formatDate(t.eventAt||t.createdAt))} · ${t.participants?.length||0} 人參加 · ${e(tournamentFormatName(t))} · ${e(tournamentStatus(t.status))}</p>
+  <p class="muted sm">${e(t.description||tournamentFormatName(t)+'錦標賽')}</p>
   <div class="tournament-podium-list">
     <div><b>🥇 冠軍</b><span>${podium.champion?e(tournamentNickname(t,podium.champion)):'尚未產生'}</span></div>
     <div><b>🥈 亞軍</b><span>${podium.runnerUp?e(tournamentNickname(t,podium.runnerUp)):'尚未產生'}</span></div>
@@ -640,7 +661,7 @@ function tournamentDetailBody(){
   <h4>參賽名單 · ${t.participants?.length||0} 人</h4>
   <div class="tournament-detail-entrants">${(t.participants||[]).map(p=>`<span class="tag">${e(p.nickname)}</span>`).join('')}</div>
   <h4>完整賽程與結果</h4>
-  ${tournamentBracket(snapshot.rounds,true,false)}
+  ${swissPanel(snapshot,true)}${tournamentBracket(snapshot.rounds,true,false,t)}
  </div>`;
 }
 
@@ -705,29 +726,29 @@ function profilePage(){
 }
 const tournamentStatus=s=>({registration:'開放報名',running:'進行中',completed:'已完賽',cancelled:'已取消'})[s]||'未知狀態';
 function spectatorUrl(publicId){const u=new URL(location.href);u.search='';u.hash='';u.searchParams.set('watch',publicId);return u.href;}
-function tournamentBracket(rounds,isPublic=false,host=false){
+function tournamentBracket(rounds,isPublic=false,host=false,tournament=null){
   rounds=deserializeTournamentRounds(rounds);
   if(!rounds.length)return '<div class="empty">尚未抽籤產生賽程</div>';
-  const label=uid=>isPublic?uid:(uid?state.players.find(p=>p.id===uid)?.nickname||'參賽者':'待決定');
-  return `<div class="bracket-scroller"><div class="bracket-board">${rounds.map((round,ri)=>`<section class="bracket-round"><h3>ROUND ${ri+1}${ri===rounds.length-1?' · 決賽':''}</h3>${round.map((m,mi)=>{
+  const label=uid=>isPublic?uid:(uid?tournament?.participants?.find(p=>p.uid===uid)?.nickname||state.players.find(p=>p.id===uid)?.nickname||'參賽者':'待決定');
+  return `<div class="bracket-scroller"><div class="bracket-board">${rounds.map((round,ri)=>`<section class="bracket-round"><h3>ROUND ${ri+1}${tournament?.format!=='swiss'&&ri===rounds.length-1?' · 決賽':''}</h3>${round.map((m,mi)=>{
     const a=isPublic?m.a:label(m.a),b=isPublic?m.b:label(m.b),winner=m.winner?(isPublic?m.winner:label(m.winner)):'';
-    return `<div class="bracket-match"><small class="muted">MATCH ${mi+1}${m.bye?' · 輪空':''}</small><div class="bracket-person ${m.winner&&m.winner===m.a?'winner':''}">${e(a||'待定')}${m.winner===m.a&&m.a?' 🏆':''}</div><div class="bracket-person ${m.winner&&m.winner===m.b?'winner':''}">${e(b||(m.bye?'輪空':'待定'))}${m.winner===m.b&&m.b?' 🏆':''}</div>${!isPublic&&host&&m.a&&m.b&&!m.winner?`<div class="bracket-actions"><button class="btn btn-outline btn-sm" data-action="tournament-match" data-round="${ri}" data-match="${mi}">⚔ 詳細設定 · 選擇牌組</button></div>`:winner?`<div class="muted sm">勝者：${e(winner)} ${!isPublic&&m.matchId?`<button class="btn btn-ghost btn-sm" data-action="match-detail" data-id="${e(m.matchId)}">查看對戰詳情</button>`:''} </div>`:''}</div>`;
+    return `<div class="bracket-match"><small class="muted">MATCH ${mi+1}${m.bye?' · 輪空':''}</small><div class="bracket-person ${m.winner&&m.winner===m.a?'winner':''}">${e(a||'待定')}${m.winner===m.a&&m.a?' 🏆':''}</div><div class="bracket-person ${m.winner&&m.winner===m.b?'winner':''}">${e(b||(m.bye?'輪空':'待定'))}${m.winner===m.b&&m.b?' 🏆':''}</div>${!isPublic&&host&&m.a&&m.b&&!m.winner?`<div class="bracket-actions"><button class="btn btn-outline btn-sm" data-action="tournament-match" data-round="${ri}" data-match="${mi}">⚔ 登錄本場勝負</button></div>`:winner?`<div class="muted sm">勝者：${e(winner)} ${!isPublic&&m.matchId?`<button class="btn btn-ghost btn-sm" data-action="match-detail" data-id="${e(m.matchId)}">查看對戰詳情</button>`:''} </div>`:''}</div>`;
   }).join('')}</section>`).join('')}</div></div>`;
 }
 function tournamentPage(){
   const selected=state.tournaments.find(t=>t.id===state.tournamentId);
   if(!selected){
     const tournaments=[...state.tournaments].sort((a,b)=>dateNum(b.createdAt)-dateNum(a.createdAt));
-    return `<div class="page-head"><div><div class="label-up">TOURNAMENTS / BRACKET</div><h1>錦標賽</h1><p>建立單敗淘汰賽，由房主管理參賽者、賽程與每場勝者。</p></div><button class="btn btn-primary" data-action="new-tournament">＋ 建立錦標賽</button></div><div class="tournament-grid">${tournaments.length?tournaments.map(t=>`<button class="card tournament-card" data-action="select-tournament" data-id="${e(t.id)}"><div class="tournament-card-head"><span class="tag">${tournamentStatus(t.status)}</span><span class="muted sm">${(t.participants||[]).length}/32 人</span></div><h3>${e(t.title)}</h3><p>${e(t.description||'單敗淘汰賽')}</p><div class="tournament-card-foot"><span>${t.createdBy===state.user?.uid?'👑 我是房主':'♟ 我是團員'}</span><span>查看賽程 →</span></div></button>`).join(''):`<div class="card empty"><h3>尚無錦標賽</h3><p>開始建立第一場 UA Arena 錦標賽。</p><button class="btn btn-primary" data-action="new-tournament">建立錦標賽</button></div>`}</div>`;
+    return `<div class="page-head"><div><div class="label-up">TOURNAMENTS / BRACKET</div><h1>錦標賽</h1><p>可選單淘汰或瑞士制，先完成參賽名單，再產生對戰順序。</p></div><button class="btn btn-primary" data-action="new-tournament">＋ 建立錦標賽</button></div><div class="tournament-grid">${tournaments.length?tournaments.map(t=>`<button class="card tournament-card" data-action="select-tournament" data-id="${e(t.id)}"><div class="tournament-card-head"><span class="tag">${tournamentStatus(t.status)}</span><span class="muted sm">${e(tournamentFormatName(t))} · ${(t.participants||[]).length}/32 人</span></div><h3>${e(t.title)}</h3><p>${e(t.description||'單敗淘汰賽')}</p><div class="tournament-card-foot"><span>${t.createdBy===state.user?.uid?'👑 我是房主':'♟ 我是團員'}</span><span>查看賽程 →</span></div></button>`).join(''):`<div class="card empty"><h3>尚無錦標賽</h3><p>開始建立第一場 UA Arena 錦標賽。</p><button class="btn btn-primary" data-action="new-tournament">建立錦標賽</button></div>`}</div>`;
   }
   const host=selected.createdBy===state.user?.uid;
   const open=selected.status==='registration';
-  const available=state.players.filter(p=>!selected.participants.some(x=>x.uid===p.id));
-  return `<div class="page-head"><div><button class="text-link" data-action="tournament-back">← 返回錦標賽列表</button><div class="label-up" style="margin-top:15px">TOURNAMENT ROOM / ${host?'HOST':'PARTICIPANT'}</div><h1>${e(selected.title)}</h1><p>${e(selected.description||'單敗淘汰賽')} · ${tournamentStatus(selected.status)} · ${e(formatDate(selected.eventAt||selected.createdAt))} 舉辦</p></div><div class="tournament-head-actions"><button class="btn btn-ghost" data-action="copy-spectator" data-id="${e(selected.publicId)}">↗ 複製公開觀賽連結</button>${host?`<button class="btn btn-danger" type="button" data-action="delete-tournament" data-id="${e(selected.id)}">刪除整場錦標賽</button>`:''}</div></div><div class="tournament-overview"><div class="metric"><div class="metric-label">賽事狀態</div><div class="metric-num mint" style="font-size:21px">${tournamentStatus(selected.status)}</div></div><div class="metric"><div class="metric-label">參賽人數</div><div class="metric-num">${selected.participants.length}</div></div><div class="metric"><div class="metric-label">賽事房主</div><div class="metric-num" style="font-size:19px">${e(selected.hostName||playerName(selected.createdBy))}</div></div><div class="metric"><div class="metric-label">冠軍</div><div class="metric-num gold" style="font-size:19px">${selected.champion?e(playerName(selected.champion)):'尚未產生'}</div></div></div><div class="two-col"><section class="card"><div class="section-head"><h3>♟ 參賽者名單</h3><span class="tag">${selected.participants.length}/32</span></div>${(selected.participants||[]).map((part,i)=>`<div class="tournament-entrant"><span>${i+1}. ${e(part.nickname)} ${part.uid===selected.createdBy?'👑':''}</span>${host&&open?`<button class="btn btn-ghost btn-sm" data-action="remove-entrant" data-id="${e(part.uid)}">移除</button>`:''}</div>`).join('')||'<div class="empty">房主尚未加入參賽者</div>'}${host&&open?`<form data-form="tournament-add" class="tournament-add"><div class="field"><label>從目前對戰團新增參賽者</label><select name="uid" required><option value="">選擇玩家</option>${available.map(p=>`<option value="${e(p.id)}">${e(p.nickname)}</option>`).join('')}</select></div><button class="btn btn-outline" type="submit" ${available.length?'':'disabled'}>加入名單</button></form><div class="divider"></div><button class="btn btn-primary btn-full" data-action="tournament-start" ${selected.participants.length>=2?'':'disabled'}>開始賽事 · 抽籤產生賽程</button>`:''}${host&&open&&state.tournamentRequests.length?`<div class="divider"></div><h3 style="margin-bottom:12px">等待房主核准 · ${state.tournamentRequests.length} 人</h3>${state.tournamentRequests.map(req=>`<div class="tournament-entrant"><span>${e(req.nickname)}</span><button class="btn btn-outline btn-sm" data-action="approve-entrant" data-id="${e(req.uid)}">核准報名</button></div>`).join('')}`:''}${!host&&open&&!selected.participants.some(p=>p.uid===state.user?.uid)?`<div class="divider"></div><button class="btn ${state.myTournamentRequest?'btn-ghost':'btn-primary'} btn-full" data-action="request-entrant" ${state.myTournamentRequest?'disabled':''}>${state.myTournamentRequest?'已送出報名申請 · 等待房主核准':'我要報名參加錦標賽'}</button>`:''}${!host&&selected.participants.some(p=>p.uid===state.user?.uid)?'<div class="alert" style="margin-top:16px">你已列入參賽名單。</div>':''}</section><section class="card"><h3>公開觀賽</h3><p class="muted sm" style="margin:10px 0">無需登入即可觀看賽程與戰況。公開資料僅包含賽事標題、參賽者暱稱及勝負結果。</p><div class="invite-id"><span class="mono">${e(spectatorUrl(selected.publicId))}</span><button class="btn btn-primary btn-sm" data-action="copy-spectator" data-id="${e(selected.publicId)}">複製</button></div><div class="divider"></div><h3>權限說明</h3><p class="muted sm" style="margin-top:12px">房主負責新增參賽者、開始賽事與確認每場勝者；其他團員可查看，持有連結的訪客只能觀看。</p></section></div><section class="card" style="margin-top:20px"><div class="section-head"><h3>🏆 淘汰賽程</h3><span class="tag">單敗淘汰</span></div>${tournamentBracket(selected.rounds,false,host)}</section>`;
+  const available=state.players.filter(p=>p.id!==GUEST_PLAYER_ID&&!selected.participants.some(x=>x.uid===p.id));
+  return `<div class="page-head"><div><button class="text-link" data-action="tournament-back">← 返回錦標賽列表</button><div class="label-up" style="margin-top:15px">TOURNAMENT ROOM / ${host?'HOST':'PARTICIPANT'}</div><h1>${e(selected.title)}</h1><p>${e(selected.description||tournamentFormatName(selected)+'錦標賽')} · ${e(tournamentFormatName(selected))} · ${tournamentStatus(selected.status)} · ${e(formatDate(selected.eventAt||selected.createdAt))} 舉辦</p></div><div class="tournament-head-actions"><button class="btn btn-ghost" data-action="copy-spectator" data-id="${e(selected.publicId)}">↗ 複製公開觀賽連結</button>${host?`<button class="btn btn-danger" type="button" data-action="delete-tournament" data-id="${e(selected.id)}">刪除整場錦標賽</button>`:''}</div></div><div class="tournament-overview"><div class="metric"><div class="metric-label">賽事狀態</div><div class="metric-num mint" style="font-size:21px">${tournamentStatus(selected.status)}</div></div><div class="metric"><div class="metric-label">參賽人數</div><div class="metric-num">${selected.participants.length}</div></div><div class="metric"><div class="metric-label">賽事房主</div><div class="metric-num" style="font-size:19px">${e(selected.hostName||playerName(selected.createdBy))}</div></div><div class="metric"><div class="metric-label">冠軍</div><div class="metric-num gold" style="font-size:19px">${selected.champion?e(tournamentNickname(selected,selected.champion)):'尚未產生'}</div></div></div><div class="two-col"><section class="card"><div class="section-head"><h3>♟ 參賽者名單</h3><span class="tag">${selected.participants.length}/32</span></div>${(selected.participants||[]).map((part,i)=>`<div class="tournament-entrant"><span>${i+1}. ${e(part.nickname)} ${part.guest?'· 訪客':''} ${part.uid===selected.createdBy?'👑':''}</span>${host&&open?`<button class="btn btn-ghost btn-sm" data-action="remove-entrant" data-id="${e(part.uid)}">移除</button>`:''}</div>`).join('')||'<div class="empty">房主尚未加入參賽者</div>'}${host&&open?`<form data-form="tournament-add" class="tournament-add"><div class="field"><label>從目前戰團選擇玩家</label><select name="uid" required><option value="">選擇玩家</option>${available.map(p=>`<option value="${e(p.id)}">${e(p.nickname)}</option>`).join('')}</select></div><button class="btn btn-outline" type="submit" ${available.length?'':'disabled'}>加入名單</button></form><form data-form="tournament-add-guest" class="tournament-add"><div class="field"><label>手動輸入訪客名稱（免註冊）</label><input name="nickname" maxlength="24" required placeholder="例如：現場訪客 Alice"></div><button class="btn btn-outline" type="submit" ${selected.participants.length<32?'':'disabled'}>加入訪客名單</button></form><div class="divider"></div><p class="hint">請先確認所有參賽者；產生賽程後無法更動名單。</p><button class="btn btn-primary btn-full" data-action="tournament-start" ${selected.participants.length>=2?'':'disabled'}>確認名單 · 產生對戰順序</button>`:''}${host&&open&&state.tournamentRequests.length?`<div class="divider"></div><h3 style="margin-bottom:12px">等待房主核准 · ${state.tournamentRequests.length} 人</h3>${state.tournamentRequests.map(req=>`<div class="tournament-entrant"><span>${e(req.nickname)}</span><button class="btn btn-outline btn-sm" data-action="approve-entrant" data-id="${e(req.uid)}">核准報名</button></div>`).join('')}`:''}${!host&&open&&!selected.participants.some(p=>p.uid===state.user?.uid)?`<div class="divider"></div><button class="btn ${state.myTournamentRequest?'btn-ghost':'btn-primary'} btn-full" data-action="request-entrant" ${state.myTournamentRequest?'disabled':''}>${state.myTournamentRequest?'已送出報名申請 · 等待房主核准':'我要報名參加錦標賽'}</button>`:''}${!host&&selected.participants.some(p=>p.uid===state.user?.uid)?'<div class="alert" style="margin-top:16px">你已列入參賽名單。</div>':''}</section><section class="card"><h3>公開觀賽</h3><p class="muted sm" style="margin:10px 0">無需登入即可觀看賽程與戰況。公開資料僅包含賽事標題、參賽者暱稱及勝負結果。</p><div class="invite-id"><span class="mono">${e(spectatorUrl(selected.publicId))}</span><button class="btn btn-primary btn-sm" data-action="copy-spectator" data-id="${e(selected.publicId)}">複製</button></div><div class="divider"></div><h3>權限說明</h3><p class="muted sm" style="margin-top:12px">房主可加入戰團玩家或手動輸入訪客；訪客不需要帳號。僅記錄賽事勝負的場次不計入個人正式戰績；公開觀賽連結仍為唯讀。</p></section></div><section class="card" style="margin-top:20px"><div class="section-head"><h3>🏆 ${e(tournamentFormatName(selected))}賽程</h3><span class="tag">${e(tournamentFormatName(selected))}</span></div>${swissPanel(selected)}${tournamentBracket(selected.rounds,false,host,selected)}</section>`;
 }
 function publicWatchPage(){
   const t=state.publicTournament;
-  app.innerHTML=`<div class="watch-page"><div class="watch-header"><div class="logo" style="margin:0"><span class="logo-icon">UA</span> UA <span class="arena">ARENA</span></div><button class="btn btn-ghost btn-sm" data-action="watch-home">返回 UA Arena</button></div><div class="watch-content"><div class="label-up">LIVE TOURNAMENT / PUBLIC VIEW</div>${t?`<h1>${e(t.title)}</h1><p class="muted">${e(t.description||'公開賽程')} · ${tournamentStatus(t.status)}</p><div class="tournament-overview" style="margin-top:25px"><div class="metric"><div class="metric-label">賽事狀態</div><div class="metric-num mint" style="font-size:21px">${tournamentStatus(t.status)}</div></div><div class="metric"><div class="metric-label">參賽人數</div><div class="metric-num">${t.participants?.length||0}</div></div><div class="metric"><div class="metric-label">賽事房主</div><div class="metric-num" style="font-size:18px">${e(t.hostName||'')}</div></div><div class="metric"><div class="metric-label">冠軍</div><div class="metric-num gold" style="font-size:20px">${e(t.champion||'尚未產生')}</div></div></div><section class="card"><h3>參賽者</h3><div class="public-entrant-list">${(t.participants||[]).map(p=>`<span class="tag">${e(p.name)}</span>`).join('')||'<span class="muted">尚未公布名單</span>'}</div></section><section class="card" style="margin-top:18px"><div class="section-head"><h3>賽程與即時戰況</h3><span class="tag">自動同步</span></div>${tournamentBracket(t.rounds,true,false)}</section><p class="muted sm" style="margin-top:22px">此連結為公開唯讀頁面，不提供修改賽程或存取私人戰績的權限。</p>`:`<div class="card" style="margin-top:30px"><h2>${state.publicWatchError?'無法載入賽事':'正在載入公開賽程…'}</h2><p class="muted">${e(state.publicWatchError||'請確認觀賽連結。')}</p></div>`}</div></div>`;
+  app.innerHTML=`<div class="watch-page"><div class="watch-header"><div class="logo" style="margin:0"><span class="logo-icon">UA</span> UA <span class="arena">ARENA</span></div><button class="btn btn-ghost btn-sm" data-action="watch-home">返回 UA Arena</button></div><div class="watch-content"><div class="label-up">LIVE TOURNAMENT / PUBLIC VIEW</div>${t?`<h1>${e(t.title)}</h1><p class="muted">${e(t.description||'公開賽程')} · ${e(tournamentFormatName(t))} · ${tournamentStatus(t.status)}</p><div class="tournament-overview" style="margin-top:25px"><div class="metric"><div class="metric-label">賽事狀態</div><div class="metric-num mint" style="font-size:21px">${tournamentStatus(t.status)}</div></div><div class="metric"><div class="metric-label">參賽人數</div><div class="metric-num">${t.participants?.length||0}</div></div><div class="metric"><div class="metric-label">賽事房主</div><div class="metric-num" style="font-size:18px">${e(t.hostName||'')}</div></div><div class="metric"><div class="metric-label">冠軍</div><div class="metric-num gold" style="font-size:20px">${e(t.champion||'尚未產生')}</div></div></div><section class="card"><h3>參賽者</h3><div class="public-entrant-list">${(t.participants||[]).map(p=>`<span class="tag">${e(p.name)}</span>`).join('')||'<span class="muted">尚未公布名單</span>'}</div></section><section class="card" style="margin-top:18px"><div class="section-head"><h3>賽程與即時戰況</h3><span class="tag">${e(tournamentFormatName(t))} · 自動同步</span></div>${swissPanel(t,true)}${tournamentBracket(t.rounds,true,false,t)}</section><p class="muted sm" style="margin-top:22px">此連結為公開唯讀頁面，不提供修改賽程或存取私人戰績的權限。</p>`:`<div class="card" style="margin-top:30px"><h2>${state.publicWatchError?'無法載入賽事':'正在載入公開賽程…'}</h2><p class="muted">${e(state.publicWatchError||'請確認觀賽連結。')}</p></div>`}</div></div>`;
 }
 function ensureQuickDraft(force=false){
   const d=state.quickDraft;
@@ -1165,7 +1186,7 @@ async function handleAction(action,el){
   case 'delete-tournament':{
     const t=state.tournaments.find(x=>x.id===el.dataset.id);
     if(!t||t.createdBy!==state.user?.uid)throw new Error('只有賽事房主可以刪除錦標賽。');
-    if(!confirm('確定永久刪除「'+t.title+'」？本場所有淘汰賽對戰、勝負、牌組紀錄、報名申請與公開觀賽頁面都會一起刪除，且無法復原。'))break;
+    if(!confirm('確定永久刪除「'+t.title+'」？本場所有賽制結果、正式對戰戰績、報名申請與公開觀賽頁面都會一起刪除，且無法復原。'))break;
     await runBusy(async()=>{
       await adapter.deleteTournament(state.groupId,t.id,state.user.uid);
       tournamentRequestUnsub();tournamentRequestUnsub=()=>{};
@@ -1177,7 +1198,7 @@ async function handleAction(action,el){
   case 'copy-spectator':await navigator.clipboard.writeText(spectatorUrl(el.dataset.id));toast('公開觀賽連結已複製');break;
   case 'request-entrant':await runBusy(async()=>{await adapter.requestTournamentJoin(state.groupId,state.tournamentId,state.user.uid,playerName(state.user.uid));state.myTournamentRequest=true;render();toast('報名申請已送出，請等待房主核准。')});break;
   case 'approve-entrant':await runBusy(async()=>{await adapter.approveTournamentRequest(state.groupId,state.tournamentId,el.dataset.id,state.user.uid);toast('已核准報名。')});break;
-  case 'tournament-start':if(confirm('確定抽籤開賽？開始後無法新增或移除參賽者。'))await runBusy(async()=>{await adapter.changeTournament(state.groupId,state.tournamentId,state.user.uid,'start');toast('賽事已開始！')});break;
+  case 'tournament-start':if(confirm('確定使用目前賽制與名單產生對戰順序？開始後無法新增或移除參賽者。'))await runBusy(async()=>{await adapter.changeTournament(state.groupId,state.tournamentId,state.user.uid,'start');toast('已產生對戰順序，賽事正式開始！')});break;
   case 'remove-entrant':if(confirm('移除這位參賽者？'))await runBusy(async()=>{await adapter.changeTournament(state.groupId,state.tournamentId,state.user.uid,'remove',el.dataset.id);toast('已移除參賽者')});break;
   case 'tournament-match':{
     const round=Number(el.dataset.round),match=Number(el.dataset.match);
@@ -1491,8 +1512,17 @@ app.addEventListener('submit',event=>{
       state.myCard={...card};state.profile={...state.profile,cardCoverSourceData:card.coverSourceData};state.modal=null;render();toast('公開玩家名片已儲存。');break;
     }
     case 'create-tournament':{
-      const id=await adapter.createTournament(state.groupId,state.user.uid,fields.title,fields.description||'',userLabel(),fields.eventAt);
+      const id=await adapter.createTournament(state.groupId,state.user.uid,fields.title,fields.description||'',userLabel(),fields.eventAt,fields.format);
       state.modal=null;state.tab='tournaments';state.tournamentId=id;render();toast('錦標賽建立成功！');break;
+    }
+    case 'tournament-result-simple':{
+      const t=state.tournaments.find(x=>x.id===state.tournamentId);
+      const round=Number(fields.round),match=Number(fields.match);
+      const pair=deserializeTournamentRounds(t?.rounds)[round]?.[match];
+      if(!t||t.createdBy!==state.user.uid||!pair?.a||!pair?.b||pair.winner||![pair.a,pair.b].includes(fields.winner))
+        throw new Error('這場賽程無法登錄。');
+      await adapter.changeTournament(state.groupId,t.id,state.user.uid,'result',{round,match,winner:fields.winner});
+      state.modal=null;render();toast('已記錄勝負；此場僅計入錦標賽，不影響正式玩家戰績。');break;
     }
     case 'tournament-result':{
       const t=state.tournaments.find(x=>x.id===state.tournamentId);
@@ -1506,6 +1536,11 @@ app.addEventListener('submit',event=>{
       await adapter.saveTournamentMatch(state.groupId,t.id,state.user.uid,data);
       state.modal=null;render();toast('本場勝負、牌組與時間已登錄，勝者自動晉級。');
       break;
+    }
+    case 'tournament-add-guest':{
+      if(!fields.nickname?.trim())throw new Error('請填寫訪客名稱。');
+      await adapter.changeTournament(state.groupId,state.tournamentId,state.user.uid,'addGuest',fields.nickname.trim());
+      toast('訪客已加入參賽名單');break;
     }
     case 'tournament-add':{
       if(!fields.uid)throw new Error('請選擇參賽者。');

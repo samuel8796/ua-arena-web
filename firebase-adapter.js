@@ -1,7 +1,7 @@
 import { firebaseConfig, aiSettings } from './firebase-config.js';
 import { RULE_SYSTEM_PROMPT, personalGroupId, personalGroupName, parsePlayedAt } from './core.mjs?v=2.9.3';
 import { createQuickMatch, changeQuickMatch, quickMatchResult } from './quick-core.mjs?v=2.6';
-import { addTournamentEntrant, removeTournamentEntrant, startTournament, recordTournamentWinner, publicTournamentSnapshot, serializeTournamentRounds, deserializeTournamentRounds } from './tournament-core.mjs?v=2.1';
+import { addTournamentEntrant, addTournamentGuest, removeTournamentEntrant, startTournament, recordTournamentWinner, publicTournamentSnapshot, serializeTournamentRounds, deserializeTournamentRounds } from './tournament-core.mjs?v=2.1';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js';
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signOut, updateProfile } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js';
 import { getFirestore, doc, collection, getDoc, getDocs, setDoc, updateDoc, addDoc, onSnapshot, serverTimestamp, arrayUnion, runTransaction, writeBatch, Timestamp, query, where, or, deleteField } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js';
@@ -481,13 +481,14 @@ export const firebaseAdapter = {
       tx.delete(req);
     });
   },
-  async createTournament(gid,uid,title,description,hostName,eventTime){
+  async createTournament(gid,uid,title,description,hostName,eventTime,format='single'){
     const name=title.trim(),desc=description.trim();
+    if(!['single','swiss'].includes(format))throw new Error('請選擇有效的賽制。');
     const eventAt=Timestamp.fromDate(parsePlayedAt(eventTime));
     if(name.length<2||name.length>60||desc.length>240)throw new Error('錦標賽名稱為 2–60 字，說明最多 240 字。');
     const privateRef=doc(colRef(gid,'tournaments'));
     const publicRef=doc(collection(db,'publicTournaments'));
-    const t={title:name,description:desc,hostName:hostName.trim().slice(0,24),status:'registration',createdBy:uid,
+    const t={title:name,description:desc,format,hostName:hostName.trim().slice(0,24),status:'registration',createdBy:uid,
       publicId:publicRef.id,participants:[],rounds:[],champion:'',eventAt,createdAt:serverTimestamp(),updatedAt:serverTimestamp()};
     const batch=writeBatch(db);
     batch.set(privateRef,t);
@@ -507,9 +508,18 @@ export const firebaseAdapter = {
         const member=await tx.get(memberRef(gid,playerOrResult));
         if(!member.exists())throw new Error('只能加入此對戰團內的玩家。');
         next=addTournamentEntrant(current,{uid:playerOrResult,nickname:member.data().nickname});
+      }else if(action==='addGuest'){
+        next=addTournamentGuest(current,playerOrResult,'guest_'+crypto.randomUUID().replace(/-/g,''));
       }else if(action==='remove')next=removeTournamentEntrant(current,playerOrResult);
       else if(action==='start')next=startTournament(current);
-      else if(action==='result')throw new Error('請透過淘汰賽詳細設定選擇牌組、勝者及對戰時間。');
+      else if(action==='result'){
+        const round=Number(playerOrResult?.round),index=Number(playerOrResult?.match);
+        if(!Number.isInteger(round)||round<0||round>4||!Number.isInteger(index)||index<0||index>15)
+          throw new Error('無效的賽程場次。');
+        const match=deserializeTournamentRounds(current.rounds)[round]?.[index];
+        if(!match?.a||!match?.b||match.winner)throw new Error('這場對戰尚未開放或已完成。');
+        next=recordTournamentWinner(current,round,index,playerOrResult.winner);
+      }
       else if(action==='cancel'){
         if(current.status!=='registration')throw new Error('進行中的錦標賽不能取消。');
         next={...current,status:'cancelled'};
@@ -556,7 +566,7 @@ export const firebaseAdapter = {
       getDocs(query(colRef(gid,'matches'),where('tournamentId','==',id))),
       getDocs(collection(db,'groups',gid,'tournaments',id,'requests'))
     ]);
-    if(matches.size>40||requests.size>40)throw new Error('關聯紀錄數量異常，請先檢查。');
+    if(matches.size>100||requests.size>40)throw new Error('關聯紀錄數量異常，請先檢查。');
     const oldUpdated=t.updatedAt?.toMillis?.()||0;
     await runTransaction(db,async tx=>{
       const latest=await tx.get(tRef);

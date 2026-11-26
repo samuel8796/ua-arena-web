@@ -1,0 +1,25 @@
+name: Validate UA Arena changes
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check JavaScript syntax
+        run: |
+          node --check app.js
+          node --check tournament-core.mjs
+          node --check firebase-adapter.js
+          node --check demo-adapter.js
+          node --check tests.mjs
+      - name: Run tournament and app tests
+        run: |
+          node tests.mjs
+          node scripts/check-card-catalog.mjs
